@@ -1,0 +1,97 @@
+# API-only stack for remote / staging smoke tests (no Next.js, no nginx).
+# From this directory:
+#   cp .env.api-test.example .env.api-test
+#   docker compose -f docker-compose.api-test.yml --env-file .env.api-test up -d --build
+#
+# API: http://<host>:${API_HTTP_PORT:-3001}/
+
+name: appleberry-api-test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - appleberry
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-appleberry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-appleberry}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"${POSTGRES_USER:-appleberry}\" -d \"${POSTGRES_DB:-appleberry}\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - appleberry
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - appleberry
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - '${API_HTTP_PORT:-3001}:3001'
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-appleberry}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-appleberry}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      INBOUND_WEBHOOK_SECRET: ${INBOUND_WEBHOOK_SECRET:-}
+      JWT_ACCESS_SEC: ${JWT_ACCESS_SEC:-900}
+      JWT_REFRESH_SEC: ${JWT_REFRESH_SEC:-604800}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+      WHATSAPP_GRAPH_VERSION: ${WHATSAPP_GRAPH_VERSION:-v21.0}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"require('net').connect(3001,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+networks:
+  appleberry:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:

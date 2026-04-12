@@ -2,6 +2,25 @@
 
 This guide assumes a machine with Docker Engine and Docker Compose v2 (for example a VPS). All steps are plain shell commands—use whatever access you have to that host (SSH, serial console, provider web terminal, CI, etc.).
 
+## API-only test deploy (no Next.js)
+
+Use this when you only have the Nest API (for example `apps/web` is not in the repo yet). It starts Postgres, Redis, and the API and publishes the API on the host.
+
+```bash
+git clone <your-repo-url> appleberry-messaging-os
+cd appleberry-messaging-os/infrastructure/docker
+cp .env.api-test.example .env.api-test
+```
+
+Edit `.env.api-test`: set strong `POSTGRES_PASSWORD` and `JWT_SECRET`, and set `CORS_ORIGIN` to the **exact** origin you use in a browser (scheme + host + port), e.g. `http://203.0.113.10:3001` or `https://api-staging.example.com`. For `API_HTTP_PORT`, pick the host port mapped to the container (default `3001`).
+
+```bash
+docker compose -f docker-compose.api-test.yml --env-file .env.api-test config > /dev/null
+docker compose -f docker-compose.api-test.yml --env-file .env.api-test up -d --build
+```
+
+The API container runs `prisma migrate deploy` on start, then `node dist/main.js`. Smoke test: `curl -sS http://<host>:<API_HTTP_PORT>/`.
+
 ## 1. Clone and configure
 
 ```bash
@@ -25,7 +44,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production config > /d
 
 ## 2. Build and start
 
-From `infrastructure/docker`:
+From `infrastructure/docker`. This stack expects a Next.js app at `../../apps/web` (see the `web` service in `docker-compose.prod.yml`).
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
