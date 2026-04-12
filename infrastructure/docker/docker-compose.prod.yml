@@ -1,0 +1,143 @@
+# Appleberry Messaging OS — production stack
+# Run from this directory:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# Inter-service DNS: postgres, redis, api, web (never use localhost between containers).
+# Only nginx publishes host ports (configurable via NGINX_HTTP_PORT / NGINX_HTTPS_PORT).
+
+name: appleberry-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - appleberry
+    # No host ports — avoids conflict with dev DB or other Postgres on the VPS
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-appleberry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-appleberry}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      # Interpolated from .env at compose parse time (matches POSTGRES_* above)
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"${POSTGRES_USER:-appleberry}\" -d \"${POSTGRES_DB:-appleberry}\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - appleberry
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - appleberry
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-appleberry}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-appleberry}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      INBOUND_WEBHOOK_SECRET: ${INBOUND_WEBHOOK_SECRET:-}
+      JWT_ACCESS_SEC: ${JWT_ACCESS_SEC:-900}
+      JWT_REFRESH_SEC: ${JWT_REFRESH_SEC:-604800}
+    expose:
+      - "3001"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('net').connect(3001,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    networks:
+      - appleberry
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('net').connect(3000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    networks:
+      - appleberry
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/appleberry.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_conf:/etc/letsencrypt:ro
+
+networks:
+  appleberry:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:
+  certbot_www:
+  certbot_conf:

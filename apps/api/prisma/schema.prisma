@@ -1,0 +1,571 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WhatsAppProviderType {
+  MOCK
+  CLOUD
+}
+
+enum MessageLogStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum TemplateType {
+  TEXT
+  MEDIA
+}
+
+enum CampaignStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+}
+
+enum CampaignRecipientStatus {
+  PENDING
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum ChatbotFlowStatus {
+  DRAFT
+  ACTIVE
+}
+
+enum ChatbotNodeType {
+  TEXT
+  QUESTION
+  CONDITION
+  ACTION
+}
+
+enum ChatbotRunStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum KeywordMatchType {
+  EXACT
+  CONTAINS
+}
+
+enum KeywordActionType {
+  START_FLOW
+  SEND_TEMPLATE
+}
+
+enum AutoresponderMatchType {
+  EXACT
+  CONTAINS
+}
+
+enum InboxThreadStatus {
+  OPEN
+  CLOSED
+}
+
+enum InboxMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  name         String?
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships          Membership[]
+  workspaceMemberships WorkspaceMembership[]
+  assignedInboxThreads InboxThread[]
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaces  Workspace[]
+  memberships Membership[]
+}
+
+model Workspace {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  slug           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspaceMemberships WorkspaceMembership[]
+  whatsappAccounts     WhatsAppAccount[]
+  messageLogs          MessageLog[]
+  contacts             Contact[]
+  tags                 Tag[]
+  contactGroups        ContactGroup[]
+  templates            Template[]
+  campaigns            Campaign[]
+  chatbotFlows         ChatbotFlow[]
+  keywordTriggers      KeywordTrigger[]
+  autoresponderRules   AutoresponderRule[]
+  inboxThreads         InboxThread[]
+  chatbotRuns          ChatbotRun[]
+  subscription         Subscription?
+  usageRecords         WorkspaceUsage[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+}
+
+model Plan {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String   @unique
+  /// Outbound messages allowed per calendar month; -1 = unlimited
+  messagesPerMonth Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                 String             @id @default(uuid()) @db.Uuid
+  workspaceId        String             @unique @db.Uuid
+  planId             String             @db.Uuid
+  status             SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan      Plan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([planId])
+}
+
+model WorkspaceUsage {
+  id               String   @id @default(uuid()) @db.Uuid
+  workspaceId      String   @db.Uuid
+  /// Format YYYY-MM (UTC)
+  periodKey        String
+  outboundMessages Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, periodKey])
+  @@index([workspaceId])
+}
+
+model Membership {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  organizationId String   @db.Uuid
+  roleId         String   @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model WorkspaceMembership {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  workspaceId String   @db.Uuid
+  roleId      String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  isSystem    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions          RolePermission[]
+  memberships          Membership[]
+  workspaceMemberships WorkspaceMembership[]
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId         String @db.Uuid
+  permissionId   String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model WhatsAppAccount {
+  id           String               @id @default(uuid()) @db.Uuid
+  workspaceId  String               @db.Uuid
+  name         String
+  phone        String?
+  providerType WhatsAppProviderType @default(MOCK)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messageLogs  MessageLog[]
+  campaigns    Campaign[]
+  inboxThreads InboxThread[]
+
+  @@index([workspaceId])
+}
+
+model Tag {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts  ContactTag[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model Contact {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  firstName   String
+  lastName    String
+  phone       String
+  email       String?
+  isValid     Boolean  @default(false)
+  isDuplicate Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace           Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tags                ContactTag[]
+  groupMembers        ContactGroupMember[]
+  campaignRecipients  CampaignRecipient[]
+  messageLogs         MessageLog[]
+  chatbotRuns         ChatbotRun[]
+  inboxThreads        InboxThread[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, phone])
+}
+
+model ContactTag {
+  contactId String   @db.Uuid
+  tagId     String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
+}
+
+model ContactGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   ContactGroupMember[]
+  campaigns Campaign[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model ContactGroupMember {
+  contactId String   @db.Uuid
+  groupId   String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  contact Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  group   ContactGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, groupId])
+  @@index([groupId])
+}
+
+model Template {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @db.Uuid
+  name        String
+  content     String       @db.Text
+  type        TemplateType @default(TEXT)
+  variables   Json         @default("{}")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model Campaign {
+  id                String         @id @default(uuid()) @db.Uuid
+  workspaceId       String         @db.Uuid
+  name              String
+  templateId        String         @db.Uuid
+  contactGroupId    String         @db.Uuid
+  whatsappAccountId String?        @db.Uuid
+  status            CampaignStatus @default(DRAFT)
+  total             Int            @default(0)
+  sent              Int            @default(0)
+  failed            Int            @default(0)
+  skipped           Int            @default(0)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  template     Template            @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  contactGroup ContactGroup        @relation(fields: [contactGroupId], references: [id], onDelete: Restrict)
+  account      WhatsAppAccount?    @relation(fields: [whatsappAccountId], references: [id], onDelete: SetNull)
+  recipients   CampaignRecipient[]
+  messageLogs  MessageLog[]
+
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model CampaignRecipient {
+  id           String                  @id @default(uuid()) @db.Uuid
+  campaignId   String                  @db.Uuid
+  contactId    String                  @db.Uuid
+  status       CampaignRecipientStatus @default(PENDING)
+  messageLogId String?                 @unique @db.Uuid
+  error        String?                 @db.Text
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  campaign   Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact    Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messageLog MessageLog?  @relation(fields: [messageLogId], references: [id], onDelete: SetNull)
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId])
+  @@index([contactId])
+}
+
+model MessageLog {
+  id                String           @id @default(uuid()) @db.Uuid
+  workspaceId       String           @db.Uuid
+  contactId         String?          @db.Uuid
+  whatsappAccountId String           @db.Uuid
+  message           String           @db.Text
+  status            MessageLogStatus @default(PENDING)
+  provider          String
+  error             String?          @db.Text
+  createdAt         DateTime         @default(now())
+  campaignId        String?          @db.Uuid
+
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account            WhatsAppAccount    @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  contact            Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaign           Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignRecipient  CampaignRecipient?
+
+  @@index([workspaceId])
+  @@index([whatsappAccountId])
+  @@index([status])
+  @@index([campaignId])
+}
+
+model ChatbotFlow {
+  id           String            @id @default(uuid()) @db.Uuid
+  workspaceId  String            @db.Uuid
+  name         String
+  status       ChatbotFlowStatus @default(DRAFT)
+  entryNodeId  String?           @unique @db.Uuid
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entryNode ChatbotNode?  @relation("FlowEntryNode", fields: [entryNodeId], references: [id], onDelete: SetNull)
+  nodes     ChatbotNode[] @relation("FlowNodes")
+  edges     ChatbotEdge[]
+  runs      ChatbotRun[]
+
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model ChatbotNode {
+  id        String          @id @default(uuid()) @db.Uuid
+  flowId    String          @db.Uuid
+  type      ChatbotNodeType
+  content   Json            @default("{}")
+  position  Json            @default("{}")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  flow            ChatbotFlow   @relation("FlowNodes", fields: [flowId], references: [id], onDelete: Cascade)
+  entryForFlow    ChatbotFlow?  @relation("FlowEntryNode")
+  edgesFrom       ChatbotEdge[] @relation("EdgeFrom")
+  edgesTo         ChatbotEdge[] @relation("EdgeTo")
+  runsAtCurrent   ChatbotRun[]  @relation("RunCurrentNode")
+
+  @@index([flowId])
+}
+
+model ChatbotEdge {
+  id         String   @id @default(uuid()) @db.Uuid
+  flowId     String   @db.Uuid
+  fromNodeId String   @db.Uuid
+  toNodeId   String   @db.Uuid
+  condition  Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  flow     ChatbotFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  fromNode ChatbotNode @relation("EdgeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode   ChatbotNode @relation("EdgeTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@index([flowId])
+  @@index([fromNodeId])
+  @@index([toNodeId])
+}
+
+model ChatbotRun {
+  id             String           @id @default(uuid()) @db.Uuid
+  workspaceId    String           @db.Uuid
+  flowId         String           @db.Uuid
+  contactId      String           @db.Uuid
+  currentNodeId  String?          @db.Uuid
+  status         ChatbotRunStatus @default(ACTIVE)
+  variables      Json             @default("{}")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flow        ChatbotFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  currentNode ChatbotNode? @relation("RunCurrentNode", fields: [currentNodeId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, contactId, status])
+  @@index([flowId])
+}
+
+model KeywordTrigger {
+  id          String             @id @default(uuid()) @db.Uuid
+  workspaceId String             @db.Uuid
+  keyword     String
+  matchType   KeywordMatchType   @default(CONTAINS)
+  actionType  KeywordActionType
+  targetId    String             @db.Uuid
+  active      Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active])
+}
+
+model AutoresponderRule {
+  id          String                 @id @default(uuid()) @db.Uuid
+  workspaceId String                 @db.Uuid
+  keyword     String
+  matchType   AutoresponderMatchType @default(CONTAINS)
+  response    String                 @db.Text
+  priority    Int                    @default(0)
+  active      Boolean                @default(true)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active, priority])
+}
+
+model InboxThread {
+  id                String            @id @default(uuid()) @db.Uuid
+  workspaceId       String            @db.Uuid
+  contactId         String            @db.Uuid
+  whatsappAccountId String            @db.Uuid
+  assignedToId      String?           @db.Uuid
+  status            InboxThreadStatus @default(OPEN)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact   Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  account   WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  assignedTo User?          @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages  InboxMessage[]
+
+  @@unique([workspaceId, contactId, whatsappAccountId])
+  @@index([workspaceId])
+  @@index([assignedToId])
+}
+
+model InboxMessage {
+  id         String               @id @default(uuid()) @db.Uuid
+  threadId   String               @db.Uuid
+  direction  InboxMessageDirection
+  message    String               @db.Text
+  createdAt  DateTime             @default(now())
+
+  thread InboxThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
