@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api, getApiErrorMessage } from "@/lib/api/client";
+import { api } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
 import type { WhatsAppAccount } from "@/lib/api/types";
 import { qk } from "@/lib/query-keys";
@@ -42,9 +42,7 @@ interface QrResponse {
   status: "CONNECTING" | "CONNECTED" | "DISCONNECTED";
 }
 
-interface WAAccountWithSession extends WhatsAppAccount {
-  session?: { status: string; lastConnectedAt: string | null } | null;
-}
+type WAAccountWithSession = WhatsAppAccount;
 
 export default function WhatsAppAccountsPage() {
   const queryClient = useQueryClient();
@@ -68,7 +66,7 @@ export default function WhatsAppAccountsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post<WAAccountWithSession>("/whatsapp/accounts", {
+      const { data } = await api.post<WhatsAppAccount>("/whatsapp/accounts", {
         name,
         phone: phone || undefined,
         providerType,
@@ -87,7 +85,7 @@ export default function WhatsAppAccountsPage() {
         toast.success("Account added");
       }
     },
-    onError: (e) => toast.error("Could not add account", getApiErrorMessage(e)),
+    onError: (e) => toast.error("Could not add account", String(e)),
   });
 
   const disconnectMutation = useMutation({
@@ -98,23 +96,10 @@ export default function WhatsAppAccountsPage() {
       void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
       toast.success("Disconnected");
     },
-    onError: (e) => toast.error("Could not disconnect", getApiErrorMessage(e)),
+    onError: (e) => toast.error("Could not disconnect", String(e)),
   });
 
   // Poll QR code when modal is open
-  useQuery({
-    queryKey: ["wa-qr", qrAccountId],
-    enabled: !!qrAccountId && qrStatus !== "CONNECTED",
-    refetchInterval: 3000,
-    queryFn: async () => {
-      const { data } = await api.get<QrResponse>(`/whatsapp/accounts/${qrAccountId}/qr`);
-      return data;
-    },
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    select: (data) => data,
-  });
-
-  // Separate polling effect to draw QR + detect connected
   const { data: qrData } = useQuery({
     queryKey: ["wa-qr", qrAccountId],
     enabled: !!qrAccountId && qrStatus !== "CONNECTED",
