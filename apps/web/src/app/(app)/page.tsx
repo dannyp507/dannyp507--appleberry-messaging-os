@@ -155,14 +155,14 @@ export default function DashboardPage() {
                     </td>
                   </tr>
                 ) : activeCampaigns.map((c) => {
-                  const total = (c.sent ?? 0) + (c.failed ?? 0) + (c.pending ?? 0);
-                  const pct = total > 0 ? Math.round(((c.sent ?? 0) / total) * 100) : 0;
+                  const total = c.total > 0 ? c.total : (c.sent + c.failed + c.skipped);
+                  const pct = total > 0 ? Math.round((c.sent / total) * 100) : 0;
                   return (
                     <tr key={c.id} className="hover:bg-[#262B33]/10 transition-colors">
                       <td className="px-6 py-4">
                         <p className="font-semibold text-white text-sm">{c.name}</p>
                         <p className="text-[10px] text-[#73757d] uppercase tracking-wider mt-0.5">
-                          {c.type} · {total.toLocaleString()} recip.
+                          {total.toLocaleString()} recipients
                         </p>
                       </td>
                       <td className="px-6 py-4">
