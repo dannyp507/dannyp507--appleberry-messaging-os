@@ -7,71 +7,136 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Enums ──────────────────────────────��──────────────────��──────────────────
+
 enum WhatsAppProviderType {
   MOCK
   CLOUD
+  BAILEYS
+}
+
+enum WhatsAppSessionStatus {
+  CONNECTED
+  DISCONNECTED
+  PENDING_QR
+  RECONNECTING
+  ERROR
 }
 
 enum MessageLogStatus {
   PENDING
   SENT
+  DELIVERED
+  READ
   FAILED
 }
 
 enum TemplateType {
   TEXT
   MEDIA
+  BUTTON
+  LIST
+}
+
+enum TemplateCategory {
+  MARKETING
+  UTILITY
+  AUTHENTICATION
+  SERVICE
 }
 
 enum CampaignStatus {
   DRAFT
+  SCHEDULED
   RUNNING
   PAUSED
   COMPLETED
+  FAILED
+  CANCELLED
 }
 
 enum CampaignRecipientStatus {
   PENDING
   QUEUED
   SENT
+  DELIVERED
   FAILED
   SKIPPED
+  INVALID
+  DUPLICATE
 }
 
 enum ChatbotFlowStatus {
   DRAFT
   ACTIVE
+  ARCHIVED
 }
 
 enum ChatbotNodeType {
   TEXT
+  MEDIA
+  BUTTONS
+  LIST
   QUESTION
+  SAVE_ANSWER
   CONDITION
-  ACTION
+  DELAY
+  WEBHOOK
+  AI_REPLY
+  HUMAN_HANDOFF
+  TAG_CONTACT
+  ASSIGN_AGENT
+  ADD_TO_GROUP
+  START_FLOW
+  END
 }
 
 enum ChatbotRunStatus {
   ACTIVE
+  WAITING_INPUT
   COMPLETED
+  FAILED
+  TIMED_OUT
 }
 
 enum KeywordMatchType {
   EXACT
   CONTAINS
+  REGEX
+  STARTS_WITH
 }
 
 enum KeywordActionType {
   START_FLOW
   SEND_TEMPLATE
+  SEND_MESSAGE
+  ASSIGN_AGENT
+  TAG_CONTACT
+  ADD_TO_GROUP
 }
 
 enum AutoresponderMatchType {
   EXACT
   CONTAINS
+  REGEX
+}
+
+enum AutoresponderTrigger {
+  ANY_MESSAGE
+  FIRST_MESSAGE
+  NEW_CONTACT
+  RETURNING_CONTACT
+  OUTSIDE_OFFICE_HOURS
+  INSIDE_OFFICE_HOURS
+  NO_AGENT_ASSIGNED
+  CAMPAIGN_REPLY
+  FALLBACK
 }
 
 enum InboxThreadStatus {
   OPEN
+  PENDING
+  RESOLVED
   CLOSED
 }
 
@@ -82,30 +147,100 @@ enum InboxMessageDirection {
 
 enum SubscriptionStatus {
   ACTIVE
+  TRIALING
   CANCELED
   PAST_DUE
+  UNPAID
 }
 
+enum ContactSource {
+  MANUAL
+  IMPORT
+  API
+  WEBHOOK
+  CHATBOT
+}
+
+enum ContactLeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  CONVERTED
+  LOST
+}
+
+enum ApiKeyScope {
+  READ
+  WRITE
+  ADMIN
+}
+
+enum BillingEventType {
+  SUBSCRIPTION_CREATED
+  SUBSCRIPTION_UPGRADED
+  SUBSCRIPTION_DOWNGRADED
+  SUBSCRIPTION_CANCELLED
+  OVERAGE_MESSAGES
+  OVERAGE_CONTACTS
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+// ─── Users & Orgs ─────────────────────────────���───────────────────────���───────
+
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  passwordHash String
-  name         String?
-  isSuperAdmin Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String   @unique
+  passwordHash    String
+  name            String?
+  avatarUrl       String?
+  isSuperAdmin    Boolean  @default(false)
+  twoFactorSecret String?
+  twoFactorEnabled Boolean @default(false)
+  lastLoginAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   memberships          Membership[]
   workspaceMemberships WorkspaceMembership[]
-  assignedInboxThreads InboxThread[]
+  assignedInboxThreads InboxThread[]         @relation("AssignedThreads")
+  apiKeys              ApiKey[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
 }
 
 model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  brandColor  String?
+  customDomain String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   workspaces  Workspace[]
   memberships Membership[]
@@ -116,6 +251,9 @@ model Workspace {
   organizationId String   @db.Uuid
   name           String
   slug           String
+  timezone       String   @default("UTC")
+  logoUrl        String?
+  isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -131,23 +269,49 @@ model Workspace {
   chatbotFlows         ChatbotFlow[]
   keywordTriggers      KeywordTrigger[]
   autoresponderRules   AutoresponderRule[]
+  fallbackRules        FallbackRule[]
   inboxThreads         InboxThread[]
   chatbotRuns          ChatbotRun[]
   subscription         Subscription?
   usageRecords         WorkspaceUsage[]
+  apiKeys              ApiKey[]
+  auditLogs            AuditLog[]
+  activityLogs         ActivityLog[]
+  webhookEndpoints     WebhookEndpoint[]
+  cannedReplies        CannedReply[]
+  notifications        Notification[]
+  imports              Import[]
+  exports              Export[]
+  billingEvents        BillingEvent[]
+  customFieldDefs      ContactCustomFieldDef[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
 }
 
+// ─── Plans & Billing ──────────────────────────────────────────────────────────
+
 model Plan {
-  id               String   @id @default(uuid()) @db.Uuid
-  name             String
-  slug             String   @unique
-  /// Outbound messages allowed per calendar month; -1 = unlimited
-  messagesPerMonth Int
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                    String   @id @default(uuid()) @db.Uuid
+  name                  String
+  slug                  String   @unique
+  /// Outbound messages per calendar month; -1 = unlimited
+  messagesPerMonth      Int      @default(5000)
+  maxWhatsappAccounts   Int      @default(3)
+  maxCampaignsPerMonth  Int      @default(10)
+  maxContacts           Int      @default(1000)
+  maxChatbotFlows       Int      @default(5)
+  maxApiRequestsPerDay  Int      @default(1000)
+  maxTeamMembers        Int      @default(3)
+  hasAdvancedAnalytics  Boolean  @default(false)
+  hasAiFeatures         Boolean  @default(false)
+  hasApiAccess          Boolean  @default(false)
+  hasWhiteLabel         Boolean  @default(false)
+  hasBaileysProvider    Boolean  @default(false)
+  isPublic              Boolean  @default(true)
+  priceMonthlyUsd       Float?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   subscriptions Subscription[]
 }
@@ -159,6 +323,9 @@ model Subscription {
   status             SubscriptionStatus @default(ACTIVE)
   currentPeriodStart DateTime           @default(now())
   currentPeriodEnd   DateTime?
+  cancelledAt        DateTime?
+  trialEndsAt        DateTime?
+  externalId         String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -169,13 +336,16 @@ model Subscription {
 }
 
 model WorkspaceUsage {
-  id               String   @id @default(uuid()) @db.Uuid
-  workspaceId      String   @db.Uuid
+  id                   String   @id @default(uuid()) @db.Uuid
+  workspaceId          String   @db.Uuid
   /// Format YYYY-MM (UTC)
-  periodKey        String
-  outboundMessages Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  periodKey            String
+  outboundMessages     Int      @default(0)
+  campaignsRun         Int      @default(0)
+  apiRequests          Int      @default(0)
+  contactsCreated      Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -183,11 +353,26 @@ model WorkspaceUsage {
   @@index([workspaceId])
 }
 
+model BillingEvent {
+  id          String           @id @default(uuid()) @db.Uuid
+  workspaceId String           @db.Uuid
+  type        BillingEventType
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+}
+
+// ─── RBAC ───────────────────────���─────────────────────────────────────────────
+
 model Membership {
   id             String   @id @default(uuid()) @db.Uuid
   userId         String   @db.Uuid
   organizationId String   @db.Uuid
   roleId         String   @db.Uuid
+  invitedByUserId String? @db.Uuid
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -240,8 +425,8 @@ model Permission {
 }
 
 model RolePermission {
-  roleId         String @db.Uuid
-  permissionId   String @db.Uuid
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
 
   role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
@@ -250,27 +435,65 @@ model RolePermission {
   @@index([permissionId])
 }
 
-model WhatsAppAccount {
-  id           String               @id @default(uuid()) @db.Uuid
-  workspaceId  String               @db.Uuid
-  name         String
-  phone        String?
-  providerType WhatsAppProviderType @default(MOCK)
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+// ─── WhatsApp Accounts ──────────────────────────────────────���─────────────────
 
-  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+model WhatsAppAccount {
+  id                String               @id @default(uuid()) @db.Uuid
+  workspaceId       String               @db.Uuid
+  name              String
+  phone             String?
+  providerType      WhatsAppProviderType @default(MOCK)
+  sessionStatus     WhatsAppSessionStatus @default(DISCONNECTED)
+  healthScore       Int                  @default(100)
+  qualityRating     String?
+  dailySendCount    Int                  @default(0)
+  monthlySendCount  Int                  @default(0)
+  dailySendLimit    Int                  @default(1000)
+  rateLimitPerMin   Int                  @default(40)
+  webhookUrl        String?
+  webhookVerified   Boolean              @default(false)
+  warmupMode        Boolean              @default(false)
+  isPaused          Boolean              @default(false)
+  isArchived        Boolean              @default(false)
+  defaultChatbotId  String?              @db.Uuid
+  lastSyncAt        DateTime?
+  credentials       Json?
+  tags              String[]             @default([])
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   messageLogs  MessageLog[]
   campaigns    Campaign[]
   inboxThreads InboxThread[]
+  session      WhatsAppSession?
 
   @@index([workspaceId])
 }
+
+model WhatsAppSession {
+  id                String                @id @default(uuid()) @db.Uuid
+  whatsappAccountId String                @unique @db.Uuid
+  qrCode            String?               @db.Text
+  sessionData       Json?
+  status            WhatsAppSessionStatus @default(DISCONNECTED)
+  lastConnectedAt   DateTime?
+  disconnectedAt    DateTime?
+  errorMessage      String?               @db.Text
+  retryCount        Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  account WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+}
+
+// ─── Contacts & CRM ───────────────────────────────────────────────────────────
 
 model Tag {
   id          String   @id @default(uuid()) @db.Uuid
   workspaceId String   @db.Uuid
   name        String
+  color       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -282,27 +505,60 @@ model Tag {
 }
 
 model Contact {
-  id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @db.Uuid
-  firstName   String
-  lastName    String
-  phone       String
-  email       String?
-  isValid     Boolean  @default(false)
-  isDuplicate Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String           @id @default(uuid()) @db.Uuid
+  workspaceId     String           @db.Uuid
+  firstName       String
+  lastName        String           @default("")
+  phone           String
+  email           String?
+  city            String?
+  notes           String?          @db.Text
+  source          ContactSource    @default(MANUAL)
+  optIn           Boolean          @default(false)
+  optOut          Boolean          @default(false)
+  consentAt       DateTime?
+  isBlacklisted   Boolean          @default(false)
+  leadStage       ContactLeadStage @default(NEW)
+  assignedAgentId String?          @db.Uuid
+  lastContactedAt DateTime?
+  lastRepliedAt   DateTime?
+  isValid         Boolean          @default(false)
+  isDuplicate     Boolean          @default(false)
+  customFields    Json             @default("{}")
+  externalId      String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
-  workspace           Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  tags                ContactTag[]
-  groupMembers        ContactGroupMember[]
-  campaignRecipients  CampaignRecipient[]
-  messageLogs         MessageLog[]
-  chatbotRuns         ChatbotRun[]
-  inboxThreads        InboxThread[]
+  workspace          Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tags               ContactTag[]
+  groupMembers       ContactGroupMember[]
+  campaignRecipients CampaignRecipient[]
+  messageLogs        MessageLog[]
+  chatbotRuns        ChatbotRun[]
+  inboxThreads       InboxThread[]
 
   @@index([workspaceId])
   @@index([workspaceId, phone])
+  @@index([workspaceId, optOut])
+  @@index([workspaceId, isBlacklisted])
+  @@index([workspaceId, leadStage])
+}
+
+model ContactCustomFieldDef {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  key         String
+  label       String
+  fieldType   String   @default("text")
+  options     Json?
+  isRequired  Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
 }
 
 model ContactTag {
@@ -321,6 +577,9 @@ model ContactGroup {
   id          String   @id @default(uuid()) @db.Uuid
   workspaceId String   @db.Uuid
   name        String
+  description String?
+  isDynamic   Boolean  @default(false)
+  filterRules Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -344,37 +603,65 @@ model ContactGroupMember {
   @@index([groupId])
 }
 
+// ─── Templates ────────────────────────────��───────────────────────────────────
+
 model Template {
-  id          String       @id @default(uuid()) @db.Uuid
-  workspaceId String       @db.Uuid
+  id          String           @id @default(uuid()) @db.Uuid
+  workspaceId String           @db.Uuid
   name        String
-  content     String       @db.Text
-  type        TemplateType @default(TEXT)
-  variables   Json         @default("{}")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  description String?
+  content     String           @db.Text
+  type        TemplateType     @default(TEXT)
+  category    TemplateCategory @default(MARKETING)
+  header      String?
+  footer      String?
+  buttons     Json?
+  sections    Json?
+  variables   Json             @default("{}")
+  isArchived  Boolean          @default(false)
+  usageCount  Int              @default(0)
+  tags        String[]         @default([])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaigns Campaign[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
+  @@index([workspaceId, isArchived])
 }
 
+// ─── Campaigns ───────────────────────────────────────────────────────────��────
+
 model Campaign {
-  id                String         @id @default(uuid()) @db.Uuid
-  workspaceId       String         @db.Uuid
-  name              String
-  templateId        String         @db.Uuid
-  contactGroupId    String         @db.Uuid
-  whatsappAccountId String?        @db.Uuid
-  status            CampaignStatus @default(DRAFT)
-  total             Int            @default(0)
-  sent              Int            @default(0)
-  failed            Int            @default(0)
-  skipped           Int            @default(0)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id                   String         @id @default(uuid()) @db.Uuid
+  workspaceId          String         @db.Uuid
+  name                 String
+  description          String?        @db.Text
+  templateId           String         @db.Uuid
+  contactGroupId       String         @db.Uuid
+  whatsappAccountId    String?        @db.Uuid
+  status               CampaignStatus @default(DRAFT)
+  scheduledAt          DateTime?
+  timezone             String         @default("UTC")
+  rotateAccounts       Boolean        @default(false)
+  dailyCap             Int?
+  throttleMs           Int            @default(1000)
+  deduplicateContacts  Boolean        @default(true)
+  testMode             Boolean        @default(false)
+  sendWindowStart      String?
+  sendWindowEnd        String?
+  clonedFromId         String?        @db.Uuid
+  total                Int            @default(0)
+  sent                 Int            @default(0)
+  delivered            Int            @default(0)
+  failed               Int            @default(0)
+  skipped              Int            @default(0)
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   template     Template            @relation(fields: [templateId], references: [id], onDelete: Restrict)
@@ -385,6 +672,8 @@ model Campaign {
 
   @@index([workspaceId])
   @@index([status])
+  @@index([workspaceId, status])
+  @@index([scheduledAt])
 }
 
 model CampaignRecipient {
@@ -394,6 +683,8 @@ model CampaignRecipient {
   status       CampaignRecipientStatus @default(PENDING)
   messageLogId String?                 @unique @db.Uuid
   error        String?                 @db.Text
+  sentAt       DateTime?
+  deliveredAt  DateTime?
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 
@@ -404,7 +695,10 @@ model CampaignRecipient {
   @@unique([campaignId, contactId])
   @@index([campaignId])
   @@index([contactId])
+  @@index([campaignId, status])
 }
+
+// ─── Messaging ────────────────────────────────────────────────────────────���───
 
 model MessageLog {
   id                String           @id @default(uuid()) @db.Uuid
@@ -412,32 +706,44 @@ model MessageLog {
   contactId         String?          @db.Uuid
   whatsappAccountId String           @db.Uuid
   message           String           @db.Text
+  mediaUrl          String?
   status            MessageLogStatus @default(PENDING)
   provider          String
+  providerMessageId String?
   error             String?          @db.Text
-  createdAt         DateTime         @default(now())
+  deliveredAt       DateTime?
+  readAt            DateTime?
   campaignId        String?          @db.Uuid
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
-  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  account            WhatsAppAccount    @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
-  contact            Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  campaign           Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  campaignRecipient  CampaignRecipient?
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account           WhatsAppAccount    @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  contact           Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaign          Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignRecipient CampaignRecipient?
 
   @@index([workspaceId])
   @@index([whatsappAccountId])
   @@index([status])
   @@index([campaignId])
+  @@index([workspaceId, createdAt])
 }
 
+// ─── Chatbot ─────────────────────────────��────────────────────────────��───────
+
 model ChatbotFlow {
-  id           String            @id @default(uuid()) @db.Uuid
-  workspaceId  String            @db.Uuid
-  name         String
-  status       ChatbotFlowStatus @default(DRAFT)
-  entryNodeId  String?           @unique @db.Uuid
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id          String            @id @default(uuid()) @db.Uuid
+  workspaceId String            @db.Uuid
+  name        String
+  description String?
+  status      ChatbotFlowStatus @default(DRAFT)
+  entryNodeId String?           @unique @db.Uuid
+  version     Int               @default(1)
+  runCount    Int               @default(0)
+  completionRate Float          @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   entryNode ChatbotNode?  @relation("FlowEntryNode", fields: [entryNodeId], references: [id], onDelete: SetNull)
@@ -453,16 +759,17 @@ model ChatbotNode {
   id        String          @id @default(uuid()) @db.Uuid
   flowId    String          @db.Uuid
   type      ChatbotNodeType
+  label     String?
   content   Json            @default("{}")
   position  Json            @default("{}")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  flow            ChatbotFlow   @relation("FlowNodes", fields: [flowId], references: [id], onDelete: Cascade)
-  entryForFlow    ChatbotFlow?  @relation("FlowEntryNode")
-  edgesFrom       ChatbotEdge[] @relation("EdgeFrom")
-  edgesTo         ChatbotEdge[] @relation("EdgeTo")
-  runsAtCurrent   ChatbotRun[]  @relation("RunCurrentNode")
+  flow          ChatbotFlow   @relation("FlowNodes", fields: [flowId], references: [id], onDelete: Cascade)
+  entryForFlow  ChatbotFlow?  @relation("FlowEntryNode")
+  edgesFrom     ChatbotEdge[] @relation("EdgeFrom")
+  edgesTo       ChatbotEdge[] @relation("EdgeTo")
+  runsAtCurrent ChatbotRun[]  @relation("RunCurrentNode")
 
   @@index([flowId])
 }
@@ -472,7 +779,9 @@ model ChatbotEdge {
   flowId     String   @db.Uuid
   fromNodeId String   @db.Uuid
   toNodeId   String   @db.Uuid
+  label      String?
   condition  Json?
+  sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -486,47 +795,60 @@ model ChatbotEdge {
 }
 
 model ChatbotRun {
-  id             String           @id @default(uuid()) @db.Uuid
-  workspaceId    String           @db.Uuid
-  flowId         String           @db.Uuid
-  contactId      String           @db.Uuid
-  currentNodeId  String?          @db.Uuid
-  status         ChatbotRunStatus @default(ACTIVE)
-  variables      Json             @default("{}")
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id            String           @id @default(uuid()) @db.Uuid
+  workspaceId   String           @db.Uuid
+  flowId        String           @db.Uuid
+  contactId     String           @db.Uuid
+  currentNodeId String?          @db.Uuid
+  status        ChatbotRunStatus @default(ACTIVE)
+  variables     Json             @default("{}")
+  stepCount     Int              @default(0)
+  startedAt     DateTime         @default(now())
+  completedAt   DateTime?
+  timeoutAt     DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
-  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  flow        ChatbotFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
-  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flow        ChatbotFlow  @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  contact     Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
   currentNode ChatbotNode? @relation("RunCurrentNode", fields: [currentNodeId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, contactId, status])
   @@index([flowId])
+  @@index([workspaceId, status])
 }
 
+// ─── Automation ───────────────────────────────────────────────────────────────
+
 model KeywordTrigger {
-  id          String             @id @default(uuid()) @db.Uuid
-  workspaceId String             @db.Uuid
+  id          String            @id @default(uuid()) @db.Uuid
+  workspaceId String            @db.Uuid
   keyword     String
-  matchType   KeywordMatchType   @default(CONTAINS)
+  matchType   KeywordMatchType  @default(CONTAINS)
   actionType  KeywordActionType
-  targetId    String             @db.Uuid
-  active      Boolean            @default(true)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  targetId    String?           @db.Uuid
+  response    String?           @db.Text
+  priority    Int               @default(0)
+  active      Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, active])
+  @@index([workspaceId, active, priority])
 }
 
 model AutoresponderRule {
   id          String                 @id @default(uuid()) @db.Uuid
   workspaceId String                 @db.Uuid
+  name        String?
   keyword     String
   matchType   AutoresponderMatchType @default(CONTAINS)
+  trigger     AutoresponderTrigger   @default(ANY_MESSAGE)
   response    String                 @db.Text
+  mediaUrl    String?
   priority    Int                    @default(0)
   active      Boolean                @default(true)
   createdAt   DateTime               @default(now())
@@ -537,6 +859,27 @@ model AutoresponderRule {
   @@index([workspaceId, active, priority])
 }
 
+model FallbackRule {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  trigger     String
+  action      String
+  response    String?  @db.Text
+  webhookUrl  String?
+  tagName     String?
+  priority    Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active, priority])
+}
+
+// ─── Inbox ─────────────────────────────���────────────────────────────────���─────
+
 model InboxThread {
   id                String            @id @default(uuid()) @db.Uuid
   workspaceId       String            @db.Uuid
@@ -544,28 +887,225 @@ model InboxThread {
   whatsappAccountId String            @db.Uuid
   assignedToId      String?           @db.Uuid
   status            InboxThreadStatus @default(OPEN)
+  isStarred         Boolean           @default(false)
+  isRead            Boolean           @default(false)
+  botActive         Boolean           @default(false)
+  unreadCount       Int               @default(0)
+  lastMessageAt     DateTime?
+  lastMessagePreview String?
+  tags              String[]          @default([])
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact   Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  account   WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
-  assignedTo User?          @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
-  messages  InboxMessage[]
+  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  account    WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  assignedTo User?           @relation("AssignedThreads", fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages   InboxMessage[]
 
   @@unique([workspaceId, contactId, whatsappAccountId])
   @@index([workspaceId])
+  @@index([workspaceId, status])
   @@index([assignedToId])
+  @@index([workspaceId, lastMessageAt])
 }
 
 model InboxMessage {
-  id         String               @id @default(uuid()) @db.Uuid
-  threadId   String               @db.Uuid
-  direction  InboxMessageDirection
-  message    String               @db.Text
-  createdAt  DateTime             @default(now())
+  id          String                @id @default(uuid()) @db.Uuid
+  threadId    String                @db.Uuid
+  direction   InboxMessageDirection
+  message     String                @db.Text
+  mediaUrl    String?
+  mediaType   String?
+  isNote      Boolean               @default(false)
+  isRead      Boolean               @default(false)
+  providerMessageId String?
+  createdAt   DateTime              @default(now())
 
   thread InboxThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
+}
+
+model CannedReply {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  shortcut    String
+  title       String
+  content     String   @db.Text
+  mediaUrl    String?
+  tags        String[] @default([])
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, shortcut])
+  @@index([workspaceId])
+}
+
+// ─── API Keys ───────────────────────────��──────────────────────────────��──────
+
+model ApiKey {
+  id           String       @id @default(uuid()) @db.Uuid
+  workspaceId  String       @db.Uuid
+  userId       String       @db.Uuid
+  name         String
+  keyHash      String       @unique
+  keyPrefix    String
+  scopes       ApiKeyScope[] @default([READ])
+  ipAllowlist  String[]     @default([])
+  lastUsedAt   DateTime?
+  lastUsedIp   String?
+  expiresAt    DateTime?
+  isActive     Boolean      @default(true)
+  requestCount BigInt       @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([keyHash])
+}
+
+// ─── Webhooks ───────────────────────────���──────────────────────────────���──────
+
+model WebhookEndpoint {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  url         String
+  secret      String?
+  events      String[] @default([])
+  isActive    Boolean  @default(true)
+  failCount   Int      @default(0)
+  lastTriggeredAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  logs      WebhookLog[]
+
+  @@index([workspaceId])
+}
+
+model WebhookLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  endpointId     String   @db.Uuid
+  event          String
+  payload        Json
+  responseStatus Int?
+  responseBody   String?  @db.Text
+  durationMs     Int?
+  success        Boolean  @default(false)
+  attempts       Int      @default(1)
+  nextRetryAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+}
+
+// ─── Audit & Activity ─────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String?  @db.Uuid
+  userId      String?  @db.Uuid
+  action      String
+  resource    String
+  resourceId  String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
+  @@index([resource, resourceId])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  userId      String?  @db.Uuid
+  type        String
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  workspaceId String           @db.Uuid
+  userId      String?          @db.Uuid
+  type        NotificationType @default(INFO)
+  title       String
+  body        String           @db.Text
+  link        String?
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, isRead])
+  @@index([userId, isRead])
+}
+
+// ─── Imports & Exports ───────────────────��────────────────────────────────────
+
+model Import {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @db.Uuid
+  type        String       @default("contacts")
+  filename    String
+  originalName String
+  status      ImportStatus @default(PENDING)
+  totalRows   Int          @default(0)
+  processed   Int          @default(0)
+  created     Int          @default(0)
+  updated     Int          @default(0)
+  failed      Int          @default(0)
+  skipped     Int          @default(0)
+  errors      Json?
+  fieldMap    Json?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+}
+
+model Export {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @db.Uuid
+  type        String
+  status      ExportStatus @default(PENDING)
+  fileUrl     String?
+  rowCount    Int          @default(0)
+  filters     Json?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }

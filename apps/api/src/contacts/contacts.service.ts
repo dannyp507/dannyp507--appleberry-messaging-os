@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
 import { CONTACTS_IMPORT_QUEUE, type ContactsImportJob } from '../queue/queue.constants';
 import { normalizePhoneE164 } from './phone.util';
 import type { CreateContactDto } from './dto/create-contact.dto';
@@ -15,6 +16,7 @@ import type { ListContactsQueryDto } from './dto/list-contacts.query';
 export class ContactsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly billing: BillingService,
     @InjectQueue(CONTACTS_IMPORT_QUEUE) private readonly importQueue: Queue,
   ) {}
 
@@ -50,6 +52,8 @@ export class ContactsService {
   }
 
   async create(workspaceId: string, dto: CreateContactDto) {
+    await this.billing.assertCanCreateContact(workspaceId);
+
     const { e164, isValid } = normalizePhoneE164(
       dto.phone,
       dto.defaultCountry ?? 'ZA',

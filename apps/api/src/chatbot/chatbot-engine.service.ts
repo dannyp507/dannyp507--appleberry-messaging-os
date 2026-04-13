@@ -260,7 +260,7 @@ export class ChatbotEngineService {
           });
           continue;
         }
-        case ChatbotNodeType.ACTION: {
+        case ChatbotNodeType.WEBHOOK: {
           await this.executeAction(run.workspaceId, run.contactId, node.content);
           const next = await this.pickNextLinear(node.id);
           if (!next) {

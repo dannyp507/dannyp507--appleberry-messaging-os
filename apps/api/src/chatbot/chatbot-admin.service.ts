@@ -5,11 +5,15 @@ import {
 } from '@nestjs/common';
 import { ChatbotFlowStatus, ChatbotNodeType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
 import type { UpdateFlowGeometryDto } from './dto/update-flow-geometry.dto';
 
 @Injectable()
 export class ChatbotAdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly billing: BillingService,
+  ) {}
 
   list(workspaceId: string) {
     return this.prisma.chatbotFlow.findMany({
@@ -32,7 +36,8 @@ export class ChatbotAdminService {
     return flow;
   }
 
-  createFlow(workspaceId: string, name: string) {
+  async createFlow(workspaceId: string, name: string) {
+    await this.billing.assertCanCreateChatbotFlow(workspaceId);
     return this.prisma.chatbotFlow.create({
       data: { workspaceId, name, status: ChatbotFlowStatus.DRAFT },
     });

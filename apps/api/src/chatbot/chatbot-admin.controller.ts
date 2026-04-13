@@ -18,6 +18,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { WorkspaceContextGuard } from '../common/guards/workspace-context.guard';
 import type { Workspace } from '@prisma/client';
 import { ChatbotAdminService } from './chatbot-admin.service';
+import { ChatbotFlowIoService, ExternalFlowJson } from './chatbot-flow-io.service';
 import { CreateChatbotEdgeDto } from './dto/chatbot-edge.dto';
 import { CreateChatbotNodeDto } from './dto/chatbot-node.dto';
 import { CreateChatbotFlowDto } from './dto/create-flow.dto';
@@ -30,11 +31,30 @@ import { UpdateFlowGeometryDto } from './dto/update-flow-geometry.dto';
 @Roles('owner', 'admin', 'agent')
 @Permissions('manage_chatbot')
 export class ChatbotAdminController {
-  constructor(private readonly admin: ChatbotAdminService) {}
+  constructor(
+    private readonly admin: ChatbotAdminService,
+    private readonly flowIo: ChatbotFlowIoService,
+  ) {}
 
   @Get()
   list(@CurrentWorkspace() workspace: Workspace) {
     return this.admin.list(workspace.id);
+  }
+
+  @Post('import')
+  importFlow(
+    @CurrentWorkspace() workspace: Workspace,
+    @Body() body: { name: string; data: ExternalFlowJson },
+  ) {
+    return this.flowIo.importFlow(workspace.id, body.name, body.data);
+  }
+
+  @Get(':id/export')
+  exportFlow(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.flowIo.exportFlow(workspace.id, id);
   }
 
   @Put(':id/geometry')

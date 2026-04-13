@@ -4,6 +4,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AiModule } from './ai/ai.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { AutomationModule } from './automation/automation.module';
@@ -38,6 +40,8 @@ import { AppController } from './app.controller';
     ]),
     PrismaModule,
     BillingModule,
+    AuditModule,
+    ApiKeysModule,
     RbacModule,
     RedisModule,
     AiModule,

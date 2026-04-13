@@ -7,6 +7,7 @@ import {
 import { Queue } from 'bullmq';
 import { CampaignStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
 import {
   CAMPAIGN_ORCHESTRATE_QUEUE,
   type CampaignOrchestrateJob,
@@ -18,6 +19,7 @@ import type { StartCampaignDto } from './dto/start-campaign.dto';
 export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly billing: BillingService,
     @InjectQueue(CAMPAIGN_ORCHESTRATE_QUEUE)
     private readonly orchestrateQueue: Queue,
   ) {}
@@ -34,6 +36,8 @@ export class CampaignsService {
   }
 
   async create(workspaceId: string, dto: CreateCampaignDto) {
+    await this.billing.assertCanCreateCampaign(workspaceId);
+
     const template = await this.prisma.template.findFirst({
       where: { id: dto.templateId, workspaceId },
     });
@@ -68,6 +72,8 @@ export class CampaignsService {
   }
 
   async start(workspaceId: string, id: string, dto: StartCampaignDto) {
+    await this.billing.assertCanSendOutbound(workspaceId);
+
     const campaign = await this.prisma.campaign.findFirst({
       where: { id, workspaceId },
     });
@@ -80,6 +86,8 @@ export class CampaignsService {
     ) {
       throw new BadRequestException('Campaign cannot be started from this state');
     }
+
+    await this.billing.recordCampaignRun(workspaceId);
 
     const minDelayMs = dto.minDelayMs ?? 1000;
     const maxDelayMs = dto.maxDelayMs ?? 3000;
