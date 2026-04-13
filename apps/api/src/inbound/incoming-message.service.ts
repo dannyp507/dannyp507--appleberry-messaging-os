@@ -55,22 +55,24 @@ export class IncomingMessageService {
       });
     }
 
-    const thread = await this.prisma.inboxThread.upsert({
-      where: {
-        workspaceId_contactId_whatsappAccountId: {
+    let thread = await this.prisma.inboxThread.findFirst({
+      where: { workspaceId, contactId: contact.id, whatsappAccountId: account.id },
+    });
+    if (!thread) {
+      thread = await this.prisma.inboxThread.create({
+        data: {
           workspaceId,
           contactId: contact.id,
           whatsappAccountId: account.id,
+          status: InboxThreadStatus.OPEN,
         },
-      },
-      update: { status: InboxThreadStatus.OPEN, updatedAt: new Date() },
-      create: {
-        workspaceId,
-        contactId: contact.id,
-        whatsappAccountId: account.id,
-        status: InboxThreadStatus.OPEN,
-      },
-    });
+      });
+    } else {
+      thread = await this.prisma.inboxThread.update({
+        where: { id: thread.id },
+        data: { status: InboxThreadStatus.OPEN },
+      });
+    }
 
     await this.prisma.inboxMessage.create({
       data: {
