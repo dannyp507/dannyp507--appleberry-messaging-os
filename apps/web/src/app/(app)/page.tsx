@@ -74,7 +74,7 @@ export default function DashboardPage() {
   const dashOffset = circumference - (circumference * quotaPercent) / 100;
 
   const activeCampaigns = campaigns
-    .filter((c) => c.status === "RUNNING" || c.status === "ACTIVE")
+    .filter((c) => c.status === "RUNNING")
     .slice(0, 3);
 
   if (loading) {
