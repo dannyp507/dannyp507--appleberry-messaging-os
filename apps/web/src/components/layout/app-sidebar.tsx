@@ -25,6 +25,7 @@ const automationNav = [
 
 const toolsNav = [
   { href: "/whatsapp-accounts", label: "WA Accounts", icon: "cell_tower" },
+  { href: "/telegram-accounts", label: "Telegram Bots", icon: "send" },
   { href: "/link-generator", label: "Link & QR", icon: "qr_code_2" },
 ];
 

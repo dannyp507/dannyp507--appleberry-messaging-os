@@ -9,6 +9,7 @@ export const qk = {
     ["contact-group-members", id, params] as const,
   templates: ["templates"] as const,
   whatsappAccounts: ["whatsapp-accounts"] as const,
+  telegramAccounts: ["telegram-accounts"] as const,
   inboxThreads: ["inbox-threads"] as const,
   inboxMessages: (threadId: string) => ["inbox-messages", threadId] as const,
   chatbotFlows: ["chatbot-flows"] as const,

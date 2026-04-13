@@ -113,11 +113,24 @@ export interface WhatsAppAccount {
   createdAt: string;
 }
 
+export interface TelegramAccount {
+  id: string;
+  name: string;
+  botUsername: string | null;
+  botId: string | null;
+  isActive: boolean;
+  webhookSet: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface InboxThread {
   id: string;
   workspaceId: string;
   contactId: string;
-  whatsappAccountId: string;
+  channel: "WHATSAPP" | "TELEGRAM";
+  whatsappAccountId: string | null;
+  telegramAccountId: string | null;
   status: "OPEN" | "CLOSED";
   assignedToId: string | null;
   createdAt: string;

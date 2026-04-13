@@ -26,6 +26,7 @@ import { RedisModule } from './redis/redis.module';
 import { TemplatesModule } from './templates/templates.module';
 import { WhatsappAccountsModule } from './whatsapp-accounts/whatsapp-accounts.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
+import { TelegramAccountsModule } from './telegram-accounts/telegram-accounts.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -61,6 +62,7 @@ import { AppController } from './app.controller';
     AutomationModule,
     InboxModule,
     AnalyticsModule,
+    TelegramAccountsModule,
   ],
   providers: [
     {

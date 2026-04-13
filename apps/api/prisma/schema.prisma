@@ -9,6 +9,11 @@ datasource db {
 
 // ─── Enums ──────────────────────────────��──────────────────��──────────────────
 
+enum ChannelType {
+  WHATSAPP
+  TELEGRAM
+}
+
 enum WhatsAppProviderType {
   MOCK
   CLOUD
@@ -260,6 +265,7 @@ model Workspace {
   organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspaceMemberships WorkspaceMembership[]
   whatsappAccounts     WhatsAppAccount[]
+  telegramAccounts     TelegramAccount[]
   messageLogs          MessageLog[]
   contacts             Contact[]
   tags                 Tag[]
@@ -485,6 +491,26 @@ model WhatsAppSession {
   updatedAt         DateTime              @updatedAt
 
   account WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+}
+
+// ─── Telegram ─────────────────────────────────────────────────────────────────
+
+model TelegramAccount {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  botToken    String   @db.Text
+  botUsername String?
+  botId       BigInt?
+  isActive    Boolean  @default(true)
+  webhookSet  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inboxThreads InboxThread[]
+
+  @@index([workspaceId])
 }
 
 // ─── Contacts & CRM ───────────────────────────────────────────────────────────
@@ -881,31 +907,35 @@ model FallbackRule {
 // ─── Inbox ─────────────────────────────���────────────────────────────────���─────
 
 model InboxThread {
-  id                String            @id @default(uuid()) @db.Uuid
-  workspaceId       String            @db.Uuid
-  contactId         String            @db.Uuid
-  whatsappAccountId String            @db.Uuid
-  assignedToId      String?           @db.Uuid
-  status            InboxThreadStatus @default(OPEN)
-  isStarred         Boolean           @default(false)
-  isRead            Boolean           @default(false)
-  botActive         Boolean           @default(false)
-  unreadCount       Int               @default(0)
-  lastMessageAt     DateTime?
-  lastMessagePreview String?
-  tags              String[]          @default([])
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id                  String            @id @default(uuid()) @db.Uuid
+  workspaceId         String            @db.Uuid
+  contactId           String            @db.Uuid
+  channel             ChannelType       @default(WHATSAPP)
+  whatsappAccountId   String?           @db.Uuid
+  telegramAccountId   String?           @db.Uuid
+  externalChatId      String?
+  assignedToId        String?           @db.Uuid
+  status              InboxThreadStatus @default(OPEN)
+  isStarred           Boolean           @default(false)
+  isRead              Boolean           @default(false)
+  botActive           Boolean           @default(false)
+  unreadCount         Int               @default(0)
+  lastMessageAt       DateTime?
+  lastMessagePreview  String?
+  tags                String[]          @default([])
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
-  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  account    WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
-  assignedTo User?           @relation("AssignedThreads", fields: [assignedToId], references: [id], onDelete: SetNull)
-  messages   InboxMessage[]
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact         Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  waAccount       WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  tgAccount       TelegramAccount? @relation(fields: [telegramAccountId], references: [id], onDelete: Cascade)
+  assignedTo      User?            @relation("AssignedThreads", fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages        InboxMessage[]
 
-  @@unique([workspaceId, contactId, whatsappAccountId])
   @@index([workspaceId])
   @@index([workspaceId, status])
+  @@index([workspaceId, channel])
   @@index([assignedToId])
   @@index([workspaceId, lastMessageAt])
 }
