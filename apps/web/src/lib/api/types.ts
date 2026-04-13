@@ -109,8 +109,12 @@ export interface WhatsAppAccount {
   id: string;
   name: string;
   phone: string | null;
-  providerType: string;
+  providerType: "MOCK" | "CLOUD" | "BAILEYS";
   createdAt: string;
+  session?: {
+    status: "CONNECTING" | "CONNECTED" | "DISCONNECTED";
+    lastConnectedAt: string | null;
+  } | null;
 }
 
 export interface TelegramAccount {

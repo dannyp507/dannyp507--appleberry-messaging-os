@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentWorkspace } from '../common/decorators/current-workspace.decorator';
@@ -17,6 +17,36 @@ export class WhatsappAccountsController {
   @Get()
   list(@CurrentWorkspace() workspace: Workspace) {
     return this.accounts.list(workspace.id);
+  }
+
+  @Get(':id/qr')
+  getQr(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.accounts.getQrCode(workspace.id, id);
+  }
+
+  @Post(':id/connect')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  connect(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.accounts.startBaileysSession(workspace.id, id);
+  }
+
+  @Post(':id/disconnect')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  disconnect(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.accounts.disconnectBaileysSession(workspace.id, id);
   }
 
   @Post()

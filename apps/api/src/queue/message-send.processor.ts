@@ -115,7 +115,7 @@ export class MessageSendProcessor extends WorkerHost {
         throw err;
       }
 
-      await provider.sendText(to, message);
+      await provider.sendText(to, message, accountId);
       await this.prisma.$transaction(async (tx) => {
         await tx.messageLog.update({
           where: { id: messageLogId },
