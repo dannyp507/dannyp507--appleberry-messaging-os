@@ -100,7 +100,7 @@ export default function AutoresponderPage() {
                     {TRIGGER_LABELS[rule.triggerType] ?? rule.triggerType}
                   </span>
                   {rule.keyword && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">"{rule.keyword}"</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">&ldquo;{rule.keyword}&rdquo;</span>
                   )}
                 </div>
                 <p className="text-xs text-[#73757d] mt-0.5 truncate">
