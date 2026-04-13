@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ChannelType } from '@prisma/client';
 
 interface TelegramUpdate {
   update_id: number;
@@ -29,21 +30,24 @@ export class TelegramInboundService {
 
     const chatId = String(msg.chat.id);
     const from = msg.from;
-
-    // Upsert contact by phone/externalId (use Telegram user id as identifier)
     const phone = `tg:${from?.id ?? chatId}`;
-    const contact = await this.prisma.contact.upsert({
-      where: { workspaceId_phone: { workspaceId: account.workspaceId, phone } },
-      create: {
-        workspaceId: account.workspaceId,
-        phone,
-        firstName: from?.first_name ?? 'Telegram',
-        lastName: from?.last_name ?? '',
-      },
-      update: {},
-    });
 
-    // Upsert inbox thread
+    // Find or create contact
+    let contact = await this.prisma.contact.findFirst({
+      where: { workspaceId: account.workspaceId, phone },
+    });
+    if (!contact) {
+      contact = await this.prisma.contact.create({
+        data: {
+          workspaceId: account.workspaceId,
+          phone,
+          firstName: from?.first_name ?? 'Telegram',
+          lastName: from?.last_name ?? '',
+        },
+      });
+    }
+
+    // Find or create inbox thread
     let thread = await this.prisma.inboxThread.findFirst({
       where: {
         workspaceId: account.workspaceId,
@@ -57,7 +61,7 @@ export class TelegramInboundService {
         data: {
           workspaceId: account.workspaceId,
           contactId: contact.id,
-          channel: 'TELEGRAM',
+          channel: ChannelType.TELEGRAM,
           telegramAccountId: accountId,
           externalChatId: chatId,
           lastMessagePreview: msg.text,
@@ -76,7 +80,6 @@ export class TelegramInboundService {
       });
     }
 
-    // Save the message
     await this.prisma.inboxMessage.create({
       data: {
         threadId: thread.id,
