@@ -40,12 +40,60 @@ export interface ContactGroup {
   _count?: { members: number };
 }
 
+export type TemplateType = "TEXT" | "MEDIA" | "BUTTON" | "LIST";
+
+export interface TemplateButton {
+  type: "QUICK_REPLY" | "URL" | "PHONE";
+  text: string;
+  value?: string;
+}
+
+export interface TemplateSection {
+  title: string;
+  rows: Array<{ id: string; title: string; description?: string }>;
+}
+
 export interface Template {
   id: string;
   name: string;
   content: string;
-  type: string;
+  type: TemplateType;
+  header?: string | null;
+  footer?: string | null;
+  buttons?: TemplateButton[] | null;
+  sections?: TemplateSection[] | null;
   variables: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AutoresponderRule {
+  id: string;
+  name: string;
+  triggerType: "ALWAYS" | "KEYWORD" | "OUTSIDE_HOURS";
+  keyword?: string | null;
+  templateId: string | null;
+  message: string | null;
+  isActive: boolean;
+  createdAt: string;
+  template?: { id: string; name: string } | null;
+}
+
+export interface KeywordTrigger {
+  id: string;
+  keyword: string;
+  replyMessage: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CampaignReport {
+  id: string;
+  name: string;
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  status: CampaignStatus;
   createdAt: string;
 }
 

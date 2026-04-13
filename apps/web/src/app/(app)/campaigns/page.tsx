@@ -42,6 +42,7 @@ import { toast } from "@/lib/toast";
 import { qk } from "@/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Megaphone } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 function statusVariant(
@@ -348,6 +349,9 @@ export default function CampaignsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Link href={`/campaigns/${c.id}`}>
+                          <Button size="sm" variant="ghost" className="rounded-xl text-[#6366F1]">Report</Button>
+                        </Link>
                         {(c.status === "DRAFT" || c.status === "PAUSED") && (
                           <Button
                             size="sm"

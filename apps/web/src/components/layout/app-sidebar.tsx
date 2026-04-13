@@ -14,9 +14,18 @@ const nav = [
   { href: "/contacts", label: "Contacts", icon: "group" },
   { href: "/campaigns", label: "Campaigns", icon: "send" },
   { href: "/templates", label: "Templates", icon: "layers" },
-  { href: "/chatbot", label: "Chatbot", icon: "account_tree" },
   { href: "/inbox", label: "Inbox", icon: "inbox" },
-  { href: "/whatsapp-accounts", label: "WhatsApp", icon: "cell_tower" },
+];
+
+const automationNav = [
+  { href: "/chatbot", label: "Chatbot Flows", icon: "account_tree" },
+  { href: "/autoresponder", label: "Autoresponder", icon: "reply_all" },
+  { href: "/keyword-triggers", label: "Keyword Triggers", icon: "tag" },
+];
+
+const toolsNav = [
+  { href: "/whatsapp-accounts", label: "WA Accounts", icon: "cell_tower" },
+  { href: "/link-generator", label: "Link & QR", icon: "qr_code_2" },
 ];
 
 const settingsNav = [
@@ -26,17 +35,9 @@ const settingsNav = [
 ];
 
 function NavItem({
-  href,
-  label,
-  icon,
-  active,
-  onClick,
+  href, label, icon, active, onClick,
 }: {
-  href: string;
-  label: string;
-  icon: string;
-  active: boolean;
-  onClick?: () => void;
+  href: string; label: string; icon: string; active: boolean; onClick?: () => void;
 }) {
   return (
     <Link
@@ -62,7 +63,6 @@ function NavItem({
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -72,71 +72,55 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="p-6">
         <Link href="/" className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg stitch-gradient flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.4)] shrink-0">
-            <span
-              className="material-symbols-outlined text-white text-xl"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              bolt
-            </span>
+            <span className="material-symbols-outlined text-white text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
           </div>
           <div>
-            <h1 className="text-base font-bold tracking-tight stitch-text leading-none">
-              Appleberry
-            </h1>
-            <p className="text-[10px] text-[#73757d] tracking-widest font-bold mt-0.5">
-              MESSAGING OS
-            </p>
+            <h1 className="text-base font-bold tracking-tight stitch-text leading-none">Appleberry</h1>
+            <p className="text-[10px] text-[#73757d] tracking-widest font-bold mt-0.5">MESSAGING OS</p>
           </div>
         </Link>
       </div>
 
       {/* CTA */}
-      <div className="px-4 mb-6">
-        <Link
-          href="/campaigns"
-          className="w-full py-2.5 rounded-xl stitch-gradient text-white text-sm font-semibold shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-2"
-        >
-          <span className="material-symbols-outlined text-sm">add</span>
-          New Campaign
+      <div className="px-4 mb-4">
+        <Link href="/campaigns"
+          className="w-full py-2.5 rounded-xl stitch-gradient text-white text-sm font-semibold shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-2">
+          <span className="material-symbols-outlined text-sm">add</span>New Campaign
         </Link>
       </div>
 
-      {/* Main nav */}
       <ScrollArea className="flex-1 px-3">
-        <nav className="flex flex-col gap-0.5">
+        <nav className="flex flex-col gap-0.5 pb-4">
+          {/* Main */}
           {nav.map(({ href, label, icon }) => (
-            <NavItem
-              key={href}
-              href={href}
-              label={label}
-              icon={icon}
-              active={isActive(href)}
-              onClick={onNavigate}
-            />
+            <NavItem key={href} href={href} label={label} icon={icon} active={isActive(href)} onClick={onNavigate} />
           ))}
 
+          {/* Automation */}
           <div className="my-3 border-t border-[#262B33]/30" />
+          <p className="px-4 py-1 text-[10px] font-bold text-[#73757d] uppercase tracking-widest">Automation</p>
+          {automationNav.map(({ href, label, icon }) => (
+            <NavItem key={href} href={href} label={label} icon={icon} active={isActive(href)} onClick={onNavigate} />
+          ))}
 
-          <p className="px-4 py-1 text-[10px] font-bold text-[#73757d] uppercase tracking-widest">
-            Account
-          </p>
+          {/* Tools */}
+          <div className="my-3 border-t border-[#262B33]/30" />
+          <p className="px-4 py-1 text-[10px] font-bold text-[#73757d] uppercase tracking-widest">Tools</p>
+          {toolsNav.map(({ href, label, icon }) => (
+            <NavItem key={href} href={href} label={label} icon={icon} active={isActive(href)} onClick={onNavigate} />
+          ))}
 
+          {/* Account */}
+          <div className="my-3 border-t border-[#262B33]/30" />
+          <p className="px-4 py-1 text-[10px] font-bold text-[#73757d] uppercase tracking-widest">Account</p>
           {settingsNav.map(({ href, label, icon }) => (
-            <NavItem
-              key={href}
-              href={href}
-              label={label}
-              icon={icon}
-              active={isActive(href)}
-              onClick={onNavigate}
-            />
+            <NavItem key={href} href={href} label={label} icon={icon} active={isActive(href)} onClick={onNavigate} />
           ))}
         </nav>
       </ScrollArea>
 
-      {/* Bottom */}
       <div className="px-3 py-4 border-t border-[#262B33]/20">
-        <NavItem href="/help" label="Help" icon="help" active={false} onClick={onNavigate} />
+        <NavItem href="/help" label="Help & Support" icon="help" active={false} onClick={onNavigate} />
       </div>
     </div>
   );
@@ -144,13 +128,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export function AppSidebar() {
   const { mobileNavOpen, setMobileNavOpen } = useUiStore();
-
   return (
     <>
       <aside className="hidden md:flex w-64 shrink-0 flex-col h-screen sticky top-0 border-r border-[#262B33]/20 bg-[#151921]/80 backdrop-blur-md">
         <SidebarContent />
       </aside>
-
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetContent side="left" className="w-64 p-0 bg-[#151921] border-[#262B33]/20">
           <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
@@ -163,14 +145,9 @@ export function AppSidebar() {
 export function MobileMenuButton() {
   const setOpen = useUiStore((s) => s.setMobileNavOpen);
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
+    <Button type="button" variant="ghost" size="icon"
       className="md:hidden text-[#a9abb3] hover:text-white hover:bg-[#262B33]/30"
-      onClick={() => setOpen(true)}
-      aria-label="Open menu"
-    >
+      onClick={() => setOpen(true)} aria-label="Open menu">
       <Menu className="size-5" />
     </Button>
   );
