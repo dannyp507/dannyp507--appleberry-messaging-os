@@ -17,7 +17,7 @@ const SESSION_DIR = process.env.BAILEYS_SESSION_DIR ?? '/tmp/baileys-sessions';
 interface SessionEntry {
   socket: WASocket;
   qrCode: string | null;
-  status: 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED';
+  status: 'PENDING_QR' | 'CONNECTED' | 'DISCONNECTED';
   accountId: string;
 }
 
@@ -82,7 +82,7 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     const entry: SessionEntry = {
       socket,
       qrCode: null,
-      status: 'CONNECTING',
+      status: 'PENDING_QR',
       accountId,
     };
     this.sessions.set(accountId, entry);
@@ -90,8 +90,8 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     // Upsert session record
     await this.prisma.whatsAppSession.upsert({
       where: { whatsappAccountId: accountId },
-      create: { whatsappAccountId: accountId, status: 'CONNECTING' },
-      update: { status: 'CONNECTING', qrCode: null },
+      create: { whatsappAccountId: accountId, status: 'PENDING_QR' },
+      update: { status: 'PENDING_QR', qrCode: null },
     });
 
     socket.ev.on('creds.update', saveCreds);
@@ -104,7 +104,7 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`QR code generated for account ${accountId}`);
         await this.prisma.whatsAppSession.updateMany({
           where: { whatsappAccountId: accountId },
-          data: { qrCode: qr, status: 'CONNECTING' },
+          data: { qrCode: qr, status: 'PENDING_QR' },
         });
       }
 
