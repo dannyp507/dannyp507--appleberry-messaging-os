@@ -283,7 +283,7 @@ export default function WhatsAppAccountsPage() {
                           ? <Wifi className="size-4 text-emerald-500" />
                           : <WifiOff className="size-4 text-muted-foreground" />}
                         <span className={isConnected ? "text-sm font-medium text-emerald-500" : "text-sm text-muted-foreground"}>
-                          {isConnected ? "Connected" : sessionStatus === "PENDING_QR" ? "Connecting…" : "Disconnected"}
+                          {isConnected ? "Connected" : "Disconnected"}
                         </span>
                       </div>
                     </TableCell>
