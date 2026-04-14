@@ -1,8 +1,10 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import makeWASocket, {
+import {
+  makeWASocket,
   DisconnectReason,
   useMultiFileAuthState,
   makeCacheableSignalKeyStore,
+  Browsers,
   WASocket,
   BaileysEventMap,
 } from '@whiskeysockets/baileys';
@@ -75,8 +77,9 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
         keys: makeCacheableSignalKeyStore(state.keys, logger),
       },
       logger,
-      browser: ['Appleberry', 'Chrome', '121.0'],
+      browser: Browsers.ubuntu('Chrome'),
       printQRInTerminal: false,
+      syncFullHistory: false,
     });
 
     const entry: SessionEntry = {
