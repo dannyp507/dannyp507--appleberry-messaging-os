@@ -34,32 +34,26 @@ import type { WhatsAppAccount } from "@/lib/api/types";
 import { qk } from "@/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, PhoneCall, QrCode, Wifi, WifiOff } from "lucide-react";
-import QRCode from "qrcode";
-import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 
 interface QrResponse {
-  qrCode: string | null;
-  status: "CONNECTING" | "CONNECTED" | "DISCONNECTED";
+  qrDataUrl: string | null;
+  status: "PENDING_QR" | "CONNECTED" | "DISCONNECTED";
 }
-
-type WAAccountWithSession = WhatsAppAccount;
 
 export default function WhatsAppAccountsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [providerType, setProviderType] = useState("BAILEYS");
-
-  // QR modal state
   const [qrAccountId, setQrAccountId] = useState<string | null>(null);
-  const [qrStatus, setQrStatus] = useState<string>("CONNECTING");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [qrStatus, setQrStatus] = useState<string>("PENDING_QR");
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: qk.whatsappAccounts,
     queryFn: async () => {
-      const { data } = await api.get<WAAccountWithSession[]>("/whatsapp/accounts");
+      const { data } = await api.get<WhatsAppAccount[]>("/whatsapp/accounts");
       return data;
     },
   });
@@ -68,7 +62,6 @@ export default function WhatsAppAccountsPage() {
     mutationFn: async () => {
       const { data } = await api.post<WhatsAppAccount>("/whatsapp/accounts", {
         name,
-        phone: phone || undefined,
         providerType,
       });
       return data;
@@ -77,7 +70,6 @@ export default function WhatsAppAccountsPage() {
       void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
       setOpen(false);
       setName("");
-      setPhone("");
       setProviderType("BAILEYS");
       if (account.providerType === "BAILEYS") {
         setQrAccountId(account.id);
@@ -85,7 +77,7 @@ export default function WhatsAppAccountsPage() {
         toast.success("Account added");
       }
     },
-    onError: (e) => toast.error("Could not add account", String(e)),
+    onError: () => toast.error("Could not add account"),
   });
 
   const disconnectMutation = useMutation({
@@ -96,10 +88,10 @@ export default function WhatsAppAccountsPage() {
       void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
       toast.success("Disconnected");
     },
-    onError: (e) => toast.error("Could not disconnect", String(e)),
+    onError: () => toast.error("Could not disconnect"),
   });
 
-  // Poll QR code when modal is open
+  // Poll QR every 3s while modal open and not yet connected
   const { data: qrData } = useQuery({
     queryKey: ["wa-qr", qrAccountId],
     enabled: !!qrAccountId && qrStatus !== "CONNECTED",
@@ -113,26 +105,15 @@ export default function WhatsAppAccountsPage() {
   useEffect(() => {
     if (!qrData) return;
     setQrStatus(qrData.status);
-
     if (qrData.status === "CONNECTED") {
       void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
       toast.success("WhatsApp connected!");
-      return;
-    }
-
-    if (qrData.qrCode && canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, qrData.qrCode, {
-        width: 260,
-        margin: 2,
-        color: { dark: "#000000", light: "#ffffff" },
-      }).catch(() => null);
     }
   }, [qrData, queryClient]);
 
-  // Reset QR state on modal close
   const closeQrModal = () => {
     setQrAccountId(null);
-    setQrStatus("CONNECTING");
+    setQrStatus("PENDING_QR");
   };
 
   return (
@@ -144,13 +125,13 @@ export default function WhatsAppAccountsPage() {
           <>
             <Button
               type="button"
-              className="rounded-xl shadow-sm transition-shadow duration-200 hover:shadow-md"
+              className="rounded-xl shadow-sm hover:shadow-md"
               onClick={() => setOpen(true)}
             >
               Add account
             </Button>
 
-            {/* Create account dialog */}
+            {/* Create dialog */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogContent className="rounded-xl sm:max-w-md">
                 <DialogHeader>
@@ -173,9 +154,7 @@ export default function WhatsAppAccountsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl">
-                        <SelectItem value="BAILEYS">
-                          QR Code scan (Baileys)
-                        </SelectItem>
+                        <SelectItem value="BAILEYS">QR Code scan (Baileys)</SelectItem>
                         <SelectItem value="CLOUD">Meta Cloud API</SelectItem>
                         <SelectItem value="MOCK">Mock (testing)</SelectItem>
                       </SelectContent>
@@ -193,16 +172,14 @@ export default function WhatsAppAccountsPage() {
                     disabled={createMutation.isPending || name.length < 2}
                     onClick={() => createMutation.mutate()}
                   >
-                    {createMutation.isPending ? (
-                      <Loader2 className="mr-2 size-4 animate-spin" />
-                    ) : null}
+                    {createMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                     {providerType === "BAILEYS" ? "Save & show QR" : "Save"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
 
-            {/* QR Code modal */}
+            {/* QR modal */}
             <Dialog open={!!qrAccountId} onOpenChange={closeQrModal}>
               <DialogContent className="rounded-xl sm:max-w-sm">
                 <DialogHeader>
@@ -217,39 +194,39 @@ export default function WhatsAppAccountsPage() {
                     <div className="flex size-16 items-center justify-center rounded-full bg-emerald-500/10">
                       <Wifi className="size-8 text-emerald-500" />
                     </div>
-                    <p className="text-center font-semibold text-emerald-500">
-                      Connected successfully!
-                    </p>
+                    <p className="font-semibold text-emerald-500">Connected successfully!</p>
                     <p className="text-center text-sm text-muted-foreground">
-                      Your WhatsApp number is now live.
+                      Your WhatsApp number is now live and ready.
                     </p>
-                    <Button className="rounded-xl" onClick={closeQrModal}>
-                      Done
-                    </Button>
+                    <Button className="rounded-xl" onClick={closeQrModal}>Done</Button>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-4 py-2">
-                    <div className="relative flex items-center justify-center">
-                      <canvas
-                        ref={canvasRef}
-                        className="rounded-xl border border-border/60 bg-white shadow-md"
-                        width={260}
-                        height={260}
-                      />
-                      {!qrData?.qrCode && (
-                        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/80">
-                          <Loader2 className="size-8 animate-spin text-muted-foreground" />
-                        </div>
+                    {/* QR image rendered server-side — guaranteed white bg + black modules */}
+                    <div className="relative flex h-[280px] w-[280px] items-center justify-center rounded-xl border border-border bg-white p-3 shadow-md">
+                      {qrData?.qrDataUrl ? (
+                        <Image
+                          src={qrData.qrDataUrl}
+                          alt="WhatsApp QR Code"
+                          width={260}
+                          height={260}
+                          className="rounded-lg"
+                          unoptimized
+                        />
+                      ) : (
+                        <Loader2 className="size-10 animate-spin text-muted-foreground" />
                       )}
                     </div>
-                    <div className="space-y-1.5 text-center">
+
+                    <div className="space-y-1 text-center">
                       <p className="text-sm font-medium">
-                        Open WhatsApp → Linked Devices → Link a device
+                        Open WhatsApp → Linked Devices → Link a Device
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        QR refreshes automatically every 20 seconds
+                        QR refreshes every 20 seconds automatically
                       </p>
                     </div>
+
                     <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
                       Waiting for scan…
@@ -290,10 +267,7 @@ export default function WhatsAppAccountsPage() {
                 const sessionStatus = a.session?.status ?? "DISCONNECTED";
                 const isConnected = sessionStatus === "CONNECTED";
                 return (
-                  <TableRow
-                    key={a.id}
-                    className="border-border/60 transition-colors duration-150 hover:bg-muted/40"
-                  >
+                  <TableRow key={a.id} className="border-border/60 transition-colors hover:bg-muted/40">
                     <TableCell className="font-medium">{a.name}</TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">
                       {a.phone ?? "—"}
@@ -305,56 +279,32 @@ export default function WhatsAppAccountsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {isConnected ? (
-                          <Wifi className="size-4 text-emerald-500" />
-                        ) : (
-                          <WifiOff className="size-4 text-muted-foreground" />
-                        )}
-                        <span
-                          className={
-                            isConnected
-                              ? "text-sm font-medium text-emerald-500"
-                              : "text-sm text-muted-foreground"
-                          }
-                        >
-                          {sessionStatus === "CONNECTED"
-                            ? "Connected"
-                            : sessionStatus === "CONNECTING"
-                              ? "Connecting…"
-                              : "Disconnected"}
+                        {isConnected
+                          ? <Wifi className="size-4 text-emerald-500" />
+                          : <WifiOff className="size-4 text-muted-foreground" />}
+                        <span className={isConnected ? "text-sm font-medium text-emerald-500" : "text-sm text-muted-foreground"}>
+                          {isConnected ? "Connected" : sessionStatus === "PENDING_QR" ? "Connecting…" : "Disconnected"}
                         </span>
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {a.providerType === "BAILEYS" && !isConnected && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl"
-                            onClick={() => setQrAccountId(a.id)}
-                          >
+                          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setQrAccountId(a.id)}>
                             <QrCode className="mr-1.5 size-3.5" />
                             Show QR
                           </Button>
                         )}
                         {a.providerType === "BAILEYS" && isConnected && (
                           <Button
-                            size="sm"
-                            variant="ghost"
+                            size="sm" variant="ghost"
                             className="rounded-xl text-destructive hover:text-destructive"
-                            disabled={
-                              disconnectMutation.isPending &&
-                              disconnectMutation.variables === a.id
-                            }
+                            disabled={disconnectMutation.isPending && disconnectMutation.variables === a.id}
                             onClick={() => disconnectMutation.mutate(a.id)}
                           >
-                            {disconnectMutation.isPending &&
-                            disconnectMutation.variables === a.id ? (
-                              <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                              "Disconnect"
-                            )}
+                            {disconnectMutation.isPending && disconnectMutation.variables === a.id
+                              ? <Loader2 className="size-4 animate-spin" />
+                              : "Disconnect"}
                           </Button>
                         )}
                       </div>

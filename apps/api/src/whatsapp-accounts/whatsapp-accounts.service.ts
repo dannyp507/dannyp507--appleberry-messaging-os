@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
 import { BaileysSessionService } from '../baileys/baileys-session.service';
 import type { CreateWhatsAppAccountDto } from './dto/create-whatsapp-account.dto';
+import * as QRCode from 'qrcode';
 
 @Injectable()
 export class WhatsappAccountsService {
@@ -49,11 +50,23 @@ export class WhatsappAccountsService {
     return account;
   }
 
-  getQrCode(workspaceId: string, id: string) {
-    // Return live QR code from in-memory session (refreshes every ~20s)
-    const qr = this.baileys.getQrCode(id);
+  async getQrCode(workspaceId: string, id: string) {
+    const qrString = this.baileys.getQrCode(id);
     const status = this.baileys.getStatus(id);
-    return { qrCode: qr, status };
+
+    if (!qrString) {
+      return { qrDataUrl: null, status };
+    }
+
+    // Generate QR as proper PNG data URL server-side (white bg, black modules)
+    const qrDataUrl = await QRCode.toDataURL(qrString, {
+      width: 300,
+      margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    });
+
+    return { qrDataUrl, status };
   }
 
   async startBaileysSession(workspaceId: string, id: string) {
