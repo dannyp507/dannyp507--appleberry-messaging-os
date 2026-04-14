@@ -135,7 +135,10 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
 
       if (connection === 'close') {
         const reason = (lastDisconnect?.error as Boom)?.output?.statusCode;
-        const shouldReconnect = reason !== DisconnectReason.loggedOut;
+        const loggedOut = reason === DisconnectReason.loggedOut;
+        // Only reconnect if we were previously connected (have session data)
+        const hasSessionData = fs.existsSync(path.join(sessionDir, 'creds.json'));
+        const shouldReconnect = !loggedOut && hasSessionData;
 
         entry.status = 'DISCONNECTED';
         await this.prisma.whatsAppSession.updateMany({
@@ -153,12 +156,14 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
 
         this.sessions.delete(accountId);
 
-        if (shouldReconnect) {
+        if (loggedOut) {
+          this.logger.warn(`Account ${accountId} logged out — deleting session files`);
+          fs.rmSync(sessionDir, { recursive: true, force: true });
+        } else if (shouldReconnect) {
           this.logger.log(`Reconnecting account ${accountId} in 5s…`);
           setTimeout(() => void this.startSession(accountId), 5000);
         } else {
-          this.logger.warn(`Account ${accountId} logged out — deleting session files`);
-          fs.rmSync(sessionDir, { recursive: true, force: true });
+          this.logger.log(`Account ${accountId} closed before QR scan — not reconnecting`);
         }
       }
     });
