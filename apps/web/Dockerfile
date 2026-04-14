@@ -9,7 +9,7 @@ RUN npm ci
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ARG NEXT_PUBLIC_API_URL=https://example.com/api
+ARG NEXT_PUBLIC_API_URL=https://appleberry-api.duckdns.org
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
