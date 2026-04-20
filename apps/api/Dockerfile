@@ -4,7 +4,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 FROM base AS deps
-RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y openssl ca-certificates git && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 RUN NODE_ENV=development npm install --legacy-peer-deps

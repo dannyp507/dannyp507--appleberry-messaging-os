@@ -38,7 +38,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^5.22.0",
     "@types/papaparse": "^5.5.2",
-    "@whiskeysockets/baileys": "^6.7.21",
+    "@whiskeysockets/baileys": "^6.17.16",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.73.4",
     "class-transformer": "^0.5.1",
@@ -55,7 +55,8 @@
     "pino": "^10.3.1",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "socks-proxy-agent": "^5.0.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

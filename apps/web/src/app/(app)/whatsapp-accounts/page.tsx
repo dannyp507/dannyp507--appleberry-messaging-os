@@ -33,22 +33,20 @@ import { toast } from "@/lib/toast";
 import type { WhatsAppAccount } from "@/lib/api/types";
 import { qk } from "@/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, PhoneCall, QrCode, Wifi, WifiOff } from "lucide-react";
-import Image from "next/image";
+import { Loader2, PhoneCall, Smartphone, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
-
-interface QrResponse {
-  qrDataUrl: string | null;
-  status: "PENDING_QR" | "CONNECTED" | "DISCONNECTED";
-}
 
 export default function WhatsAppAccountsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [providerType, setProviderType] = useState("BAILEYS");
-  const [qrAccountId, setQrAccountId] = useState<string | null>(null);
-  const [qrStatus, setQrStatus] = useState<string>("PENDING_QR");
+
+  // Pairing flow state
+  const [pairingAccountId, setPairingAccountId] = useState<string | null>(null);
+  const [pairingPhone, setPairingPhone] = useState("");
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [pairingStatus, setPairingStatus] = useState<string>("PENDING_PAIRING");
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: qk.whatsappAccounts,
@@ -72,12 +70,28 @@ export default function WhatsAppAccountsPage() {
       setName("");
       setProviderType("BAILEYS");
       if (account.providerType === "BAILEYS") {
-        setQrAccountId(account.id);
+        setPairingAccountId(account.id);
+        setPairingCode(null);
+        setPairingStatus("PENDING_PAIRING");
       } else {
         toast.success("Account added");
       }
     },
     onError: () => toast.error("Could not add account"),
+  });
+
+  const pairingMutation = useMutation({
+    mutationFn: async ({ id, phone }: { id: string; phone: string }) => {
+      const { data } = await api.post<{ code: string }>(
+        `/whatsapp/accounts/${id}/pairing-code`,
+        { phone }
+      );
+      return data.code;
+    },
+    onSuccess: (code) => {
+      setPairingCode(code);
+    },
+    onError: () => toast.error("Could not get pairing code. Make sure the account session is starting."),
   });
 
   const disconnectMutation = useMutation({
@@ -91,29 +105,40 @@ export default function WhatsAppAccountsPage() {
     onError: () => toast.error("Could not disconnect"),
   });
 
-  // Poll QR every 3s while modal open and not yet connected
-  const { data: qrData } = useQuery({
-    queryKey: ["wa-qr", qrAccountId],
-    enabled: !!qrAccountId && qrStatus !== "CONNECTED",
+  // Poll status while pairing modal open and not yet connected
+  const { data: statusData } = useQuery({
+    queryKey: ["wa-pairing-status", pairingAccountId],
+    enabled: !!pairingAccountId && pairingStatus !== "CONNECTED",
     refetchInterval: 3000,
     queryFn: async () => {
-      const { data } = await api.get<QrResponse>(`/whatsapp/accounts/${qrAccountId}/qr`);
+      const { data } = await api.get<{ qrDataUrl: string | null; status: string }>(
+        `/whatsapp/accounts/${pairingAccountId}/qr`
+      );
       return data;
     },
   });
 
   useEffect(() => {
-    if (!qrData) return;
-    setQrStatus(qrData.status);
-    if (qrData.status === "CONNECTED") {
+    if (!statusData) return;
+    setPairingStatus(statusData.status);
+    if (statusData.status === "CONNECTED") {
       void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
       toast.success("WhatsApp connected!");
     }
-  }, [qrData, queryClient]);
+  }, [statusData, queryClient]);
 
-  const closeQrModal = () => {
-    setQrAccountId(null);
-    setQrStatus("PENDING_QR");
+  const closePairingModal = () => {
+    setPairingAccountId(null);
+    setPairingCode(null);
+    setPairingPhone("");
+    setPairingStatus("PENDING_PAIRING");
+  };
+
+  const openPairingModal = (id: string) => {
+    setPairingAccountId(id);
+    setPairingCode(null);
+    setPairingPhone("");
+    setPairingStatus("PENDING_PAIRING");
   };
 
   return (
@@ -154,14 +179,14 @@ export default function WhatsAppAccountsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl">
-                        <SelectItem value="BAILEYS">QR Code scan (Baileys)</SelectItem>
+                        <SelectItem value="BAILEYS">Phone pairing code (Baileys)</SelectItem>
                         <SelectItem value="CLOUD">Meta Cloud API</SelectItem>
                         <SelectItem value="MOCK">Mock (testing)</SelectItem>
                       </SelectContent>
                     </Select>
                     {providerType === "BAILEYS" && (
                       <p className="text-xs text-muted-foreground">
-                        After saving, scan the QR code with WhatsApp on your phone.
+                        After saving, enter your phone number to get a pairing code for WhatsApp.
                       </p>
                     )}
                   </div>
@@ -173,23 +198,23 @@ export default function WhatsAppAccountsPage() {
                     onClick={() => createMutation.mutate()}
                   >
                     {createMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                    {providerType === "BAILEYS" ? "Save & show QR" : "Save"}
+                    {providerType === "BAILEYS" ? "Save & link phone" : "Save"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
 
-            {/* QR modal */}
-            <Dialog open={!!qrAccountId} onOpenChange={closeQrModal}>
+            {/* Pairing code modal */}
+            <Dialog open={!!pairingAccountId} onOpenChange={closePairingModal}>
               <DialogContent className="rounded-xl sm:max-w-sm">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-xl">
-                    <QrCode className="size-5" />
-                    Scan with WhatsApp
+                    <Smartphone className="size-5" />
+                    Link WhatsApp
                   </DialogTitle>
                 </DialogHeader>
 
-                {qrStatus === "CONNECTED" ? (
+                {pairingStatus === "CONNECTED" ? (
                   <div className="flex flex-col items-center gap-4 py-6">
                     <div className="flex size-16 items-center justify-center rounded-full bg-emerald-500/10">
                       <Wifi className="size-8 text-emerald-500" />
@@ -198,39 +223,53 @@ export default function WhatsAppAccountsPage() {
                     <p className="text-center text-sm text-muted-foreground">
                       Your WhatsApp number is now live and ready.
                     </p>
-                    <Button className="rounded-xl" onClick={closeQrModal}>Done</Button>
+                    <Button className="rounded-xl" onClick={closePairingModal}>Done</Button>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-4 py-2">
-                    {/* QR image rendered server-side — guaranteed white bg + black modules */}
-                    <div className="relative flex h-[280px] w-[280px] items-center justify-center rounded-xl border border-border bg-white p-3 shadow-md">
-                      {qrData?.qrDataUrl ? (
-                        <Image
-                          src={qrData.qrDataUrl}
-                          alt="WhatsApp QR Code"
-                          width={260}
-                          height={260}
-                          className="rounded-lg"
-                          unoptimized
-                        />
-                      ) : (
-                        <Loader2 className="size-10 animate-spin text-muted-foreground" />
-                      )}
+                ) : pairingCode ? (
+                  <div className="flex flex-col items-center gap-4 py-4">
+                    <p className="text-sm text-center text-muted-foreground">
+                      Open WhatsApp → Settings → Linked Devices → Link a Device → Link with phone number instead
+                    </p>
+                    <div className="flex items-center justify-center rounded-xl border-2 border-primary/30 bg-primary/5 px-6 py-4">
+                      <span className="font-mono text-4xl font-bold tracking-[0.3em] text-primary">
+                        {pairingCode}
+                      </span>
                     </div>
-
-                    <div className="space-y-1 text-center">
-                      <p className="text-sm font-medium">
-                        Open WhatsApp → Linked Devices → Link a Device
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        QR refreshes every 20 seconds automatically
-                      </p>
-                    </div>
-
+                    <p className="text-xs text-muted-foreground text-center">
+                      Enter this code in WhatsApp when prompted.
+                    </p>
                     <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
-                      Waiting for scan…
+                      Waiting for confirmation…
                     </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 py-2">
+                    <p className="text-sm text-muted-foreground">
+                      Enter your WhatsApp phone number (with country code) to generate a pairing code.
+                    </p>
+                    <div className="grid gap-2">
+                      <Label>Phone number</Label>
+                      <Input
+                        className="rounded-xl font-mono"
+                        placeholder="+27821234567"
+                        value={pairingPhone}
+                        onChange={(e) => setPairingPhone(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      className="rounded-xl"
+                      disabled={pairingMutation.isPending || pairingPhone.length < 7}
+                      onClick={() =>
+                        pairingMutation.mutate({
+                          id: pairingAccountId!,
+                          phone: pairingPhone,
+                        })
+                      }
+                    >
+                      {pairingMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                      Get pairing code
+                    </Button>
                   </div>
                 )}
               </DialogContent>
@@ -243,7 +282,7 @@ export default function WhatsAppAccountsPage() {
         <EmptyState
           icon={PhoneCall}
           title="No WhatsApp accounts yet"
-          description="Add an account and scan the QR code to connect your WhatsApp number."
+          description="Add an account and link your phone to connect your WhatsApp number."
           action={
             <Button className="rounded-xl" type="button" onClick={() => setOpen(true)}>
               Add your first account
@@ -290,9 +329,9 @@ export default function WhatsAppAccountsPage() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {a.providerType === "BAILEYS" && !isConnected && (
-                          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setQrAccountId(a.id)}>
-                            <QrCode className="mr-1.5 size-3.5" />
-                            Show QR
+                          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => openPairingModal(a.id)}>
+                            <Smartphone className="mr-1.5 size-3.5" />
+                            Link phone
                           </Button>
                         )}
                         {a.providerType === "BAILEYS" && isConnected && (

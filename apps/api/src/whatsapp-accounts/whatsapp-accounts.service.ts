@@ -69,6 +69,15 @@ export class WhatsappAccountsService {
     return { qrDataUrl, status };
   }
 
+  async requestPairingCode(workspaceId: string, id: string, phone: string) {
+    const account = await this.findOne(workspaceId, id);
+    if (account.providerType !== 'BAILEYS') {
+      throw new Error('Account is not a BAILEYS provider');
+    }
+    const code = await this.baileys.requestPairingCode(id, phone);
+    return { code };
+  }
+
   async startBaileysSession(workspaceId: string, id: string) {
     const account = await this.findOne(workspaceId, id);
     if (account.providerType !== 'BAILEYS') {

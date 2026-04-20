@@ -38,6 +38,18 @@ export class WhatsappAccountsController {
     return this.accounts.startBaileysSession(workspace.id, id);
   }
 
+  @Post(':id/pairing-code')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  requestPairingCode(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { phone: string },
+  ) {
+    return this.accounts.requestPairingCode(workspace.id, id, body.phone);
+  }
+
   @Post(':id/disconnect')
   @UseGuards(RolesGuard, PermissionsGuard)
   @Roles('owner', 'admin')

@@ -7,19 +7,27 @@ import {
   Browsers,
   WASocket,
   BaileysEventMap,
+  fetchLatestWaWebVersion,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import P from 'pino';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { SocksProxyAgent } = require('socks-proxy-agent');
 
 const SESSION_DIR = process.env.BAILEYS_SESSION_DIR ?? '/tmp/baileys-sessions';
+// Route Baileys through WARP SOCKS5 proxy to bypass datacenter IP blocks
+// socks5h = proxy resolves DNS (hostname sent to proxy, not IP) — required for TLS cert validation
+const WARP_PROXY = process.env.WARP_PROXY_URL ?? 'socks5h://127.0.0.1:40000';
 
 interface SessionEntry {
   socket: WASocket;
   qrCode: string | null;
-  status: 'PENDING_QR' | 'CONNECTED' | 'DISCONNECTED';
+  pairingCode: string | null;
+  pairingPhone: string | null; // if set, use pairing code instead of QR on next qr event
+  status: 'PENDING_QR' | 'PENDING_PAIRING' | 'CONNECTED' | 'DISCONNECTED';
   accountId: string;
 }
 
@@ -58,8 +66,11 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     this.sessions.clear();
   }
 
-  async startSession(accountId: string): Promise<void> {
-    if (this.sessions.has(accountId)) {
+  async startSession(accountId: string, pairingPhone?: string): Promise<void> {
+    const existing = this.sessions.get(accountId);
+    if (existing) {
+      // If session exists and we want to set a pairing phone, update it
+      if (pairingPhone) existing.pairingPhone = pairingPhone.replace(/\D/g, '');
       this.logger.log(`Session ${accountId} already active`);
       return;
     }
@@ -71,21 +82,36 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
 
     const logger = P({ level: 'silent' });
 
+    // Fetch latest WhatsApp Web version — outdated versions get 405-rejected
+    let version: [number, number, number] | undefined;
+    try {
+      const result = await fetchLatestWaWebVersion({});
+      version = result.version as [number, number, number];
+      this.logger.log(`Using WA Web version ${version?.join('.')}`);
+    } catch {
+      this.logger.warn('Could not fetch latest WA version, using default');
+    }
+
+    const agent = new SocksProxyAgent(WARP_PROXY);
     const socket = makeWASocket({
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, logger),
       },
       logger,
-      browser: Browsers.ubuntu('Chrome'),
+      browser: Browsers.appropriate('Chrome'),
+      version,
       printQRInTerminal: false,
       syncFullHistory: false,
+      agent,
     });
 
     const entry: SessionEntry = {
       socket,
       qrCode: null,
-      status: 'PENDING_QR',
+      pairingCode: null,
+      pairingPhone: pairingPhone ? pairingPhone.replace(/\D/g, '') : null,
+      status: pairingPhone ? 'PENDING_PAIRING' : 'PENDING_QR',
       accountId,
     };
     this.sessions.set(accountId, entry);
@@ -94,7 +120,7 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.whatsAppSession.upsert({
       where: { whatsappAccountId: accountId },
       create: { whatsappAccountId: accountId, status: 'PENDING_QR' },
-      update: { status: 'PENDING_QR', qrCode: null },
+      update: { status: 'PENDING_QR', qrCode: null, errorMessage: null },
     });
 
     socket.ev.on('creds.update', saveCreds);
@@ -103,17 +129,36 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
-        entry.qrCode = qr;
-        this.logger.log(`QR code generated for account ${accountId}`);
-        await this.prisma.whatsAppSession.updateMany({
-          where: { whatsappAccountId: accountId },
-          data: { qrCode: qr, status: 'PENDING_QR' },
-        });
+        if (entry.pairingPhone) {
+          // Pairing code mode: request code instead of displaying QR
+          this.logger.log(`QR ready — requesting pairing code for ${accountId} (${entry.pairingPhone})`);
+          try {
+            const code = await socket.requestPairingCode(entry.pairingPhone);
+            entry.pairingCode = code;
+            entry.status = 'PENDING_PAIRING';
+            this.logger.log(`Pairing code for ${accountId}: ${code}`);
+            await this.prisma.whatsAppSession.updateMany({
+              where: { whatsappAccountId: accountId },
+              data: { status: 'PENDING_QR', errorMessage: null },
+            });
+          } catch (err) {
+            this.logger.error(`Pairing code request failed for ${accountId}: ${err}`);
+          }
+        } else {
+          entry.qrCode = qr;
+          entry.status = 'PENDING_QR';
+          this.logger.log(`QR code generated for account ${accountId}`);
+          await this.prisma.whatsAppSession.updateMany({
+            where: { whatsappAccountId: accountId },
+            data: { qrCode: qr, status: 'PENDING_QR' },
+          });
+        }
       }
 
       if (connection === 'open') {
         entry.status = 'CONNECTED';
         entry.qrCode = null;
+        entry.pairingCode = null;
         const phone = socket.user?.id?.split(':')[0] ?? null;
         this.logger.log(`Account ${accountId} connected. Phone: ${phone}`);
 
@@ -163,7 +208,7 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
           this.logger.log(`Reconnecting account ${accountId} in 5s…`);
           setTimeout(() => void this.startSession(accountId), 5000);
         } else {
-          this.logger.log(`Account ${accountId} closed before QR scan — not reconnecting`);
+          this.logger.log(`Account ${accountId} closed before pairing — not reconnecting`);
         }
       }
     });
@@ -243,6 +288,33 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
 
   getStatus(accountId: string): string {
     return this.sessions.get(accountId)?.status ?? 'DISCONNECTED';
+  }
+
+  async requestPairingCode(accountId: string, phoneNumber: string): Promise<string> {
+    const phone = phoneNumber.replace(/\D/g, '');
+
+    // Kill any existing session so we can restart with pairing phone set
+    const existing = this.sessions.get(accountId);
+    if (existing) {
+      if (existing.status === 'CONNECTED') throw new Error('Account is already connected');
+      try { existing.socket.end(undefined); } catch { /* ignore */ }
+      this.sessions.delete(accountId);
+    }
+
+    // Start fresh session with pairing phone — pairing code will be generated on qr event
+    await this.startSession(accountId, phone);
+
+    // Wait up to 20s for the pairing code to appear
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const code = this.sessions.get(accountId)?.pairingCode;
+      if (code) return code;
+    }
+    throw new Error('Timed out waiting for pairing code. Check server logs.');
+  }
+
+  getPairingCode(accountId: string): string | null {
+    return this.sessions.get(accountId)?.pairingCode ?? null;
   }
 
   async disconnectSession(accountId: string): Promise<void> {
