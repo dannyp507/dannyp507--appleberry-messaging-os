@@ -9,8 +9,10 @@ export const INCOMING_MESSAGES_QUEUE = 'incoming-messages';
 
 export type IncomingMessageJob = {
   whatsappAccountId: string;
-  from: string;
+  from: string;       // phone digits or full JID (kept for contact lookup)
+  remoteJid: string;  // full WhatsApp JID — use this for replies
   text: string;
+  senderName?: string; // WhatsApp pushName (display name)
   externalMessageId?: string;
 };
 

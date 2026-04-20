@@ -27,6 +27,14 @@ export class IncomingMessageService {
     private readonly ai: AiService,
   ) {}
 
+  /** Replace Planify X / common template variables in a response string */
+  private substituteVars(text: string, name: string): string {
+    return text
+      .replace(/\[wa_name\]/gi, name)
+      .replace(/\{wa_name\}/gi, name)
+      .replace(/\{\{name\}\}/gi, name);
+  }
+
   async dispatch(job: IncomingMessageJob): Promise<void> {
     const account = await this.prisma.whatsAppAccount.findUnique({
       where: { id: job.whatsappAccountId },
@@ -37,7 +45,22 @@ export class IncomingMessageService {
     }
 
     const workspaceId = account.workspaceId;
-    const { e164, isValid } = normalizePhoneE164(job.from, 'ZA');
+
+    // For @lid JIDs the `from` is the full JID — use it as the phone identifier
+    // For regular phone JIDs, normalise to E164
+    const rawFrom = job.from ?? '';
+    const isJid = rawFrom.includes('@');
+    const { e164, isValid } = isJid
+      ? { e164: rawFrom, isValid: false }
+      : normalizePhoneE164(rawFrom, 'ZA');
+
+    // Prefer sender's WhatsApp push name; fall back to phone/JID digits
+    const senderName =
+      job.senderName?.trim() ||
+      (isJid ? rawFrom.replace(/@.*/, '') : e164.replace(/\D/g, ''));
+
+    // Use remoteJid for replies so @lid accounts are reached correctly
+    const replyTo = job.remoteJid ?? e164;
 
     let contact = await this.prisma.contact.findFirst({
       where: { workspaceId, phone: e164 },
@@ -46,12 +69,18 @@ export class IncomingMessageService {
       contact = await this.prisma.contact.create({
         data: {
           workspaceId,
-          firstName: 'Unknown',
+          firstName: senderName || 'Unknown',
           lastName: '',
           phone: e164,
           isValid,
           isDuplicate: false,
         },
+      });
+    } else if (contact.firstName === 'Unknown' && senderName) {
+      // Update name from push name if we have a better one now
+      await this.prisma.contact.update({
+        where: { id: contact.id },
+        data: { firstName: senderName },
       });
     }
 
@@ -118,11 +147,11 @@ export class IncomingMessageService {
           where: { id: t.targetId, workspaceId },
         });
         if (!template) continue;
-        const body = this.templates.interpolate(template, contact);
+        const body = this.substituteVars(this.templates.interpolate(template, contact), senderName);
         await this.messages.enqueueOutboundText({
           workspaceId,
           whatsappAccountId: account.id,
-          to: contact.phone,
+          to: replyTo,
           message: body,
           contactId: contact.id,
           inboxThreadId: thread.id,
@@ -139,11 +168,12 @@ export class IncomingMessageService {
       if (!this.keywordMatches(r.keyword, r.matchType, job.text)) {
         continue;
       }
+      const responseText = this.substituteVars(r.response, senderName);
       await this.messages.enqueueOutboundText({
         workspaceId,
         whatsappAccountId: account.id,
-        to: contact.phone,
-        message: r.response,
+        to: replyTo,
+        message: responseText,
         contactId: contact.id,
         inboxThreadId: thread.id,
       });
@@ -171,7 +201,7 @@ export class IncomingMessageService {
       await this.messages.enqueueOutboundText({
         workspaceId,
         whatsappAccountId: account.id,
-        to: contact.phone,
+        to: replyTo,
         message: reply.trim(),
         contactId: contact.id,
         inboxThreadId: thread.id,

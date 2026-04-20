@@ -233,11 +233,17 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
           msg.message?.extendedTextMessage?.text ??
           null;
         if (!text) continue;
-        const from = msg.key.remoteJid?.replace('@s.whatsapp.net', '') ?? '';
+        const remoteJid = msg.key.remoteJid ?? '';
+        // For @s.whatsapp.net JIDs extract the phone number; for @lid or others keep as-is
+        const from = remoteJid.includes('@s.whatsapp.net')
+          ? remoteJid.replace('@s.whatsapp.net', '')
+          : remoteJid;
         const job: IncomingMessageJob = {
           whatsappAccountId: accountId,
           from,
+          remoteJid,
           text,
+          senderName: msg.pushName ?? undefined,
           externalMessageId: msg.key.id ?? undefined,
         };
         await this.incomingQueue.add('incoming', job, {
@@ -246,7 +252,7 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
           removeOnComplete: 2000,
           removeOnFail: false,
         });
-        this.logger.log(`Enqueued inbound message from ${from} for account ${accountId}`);
+        this.logger.log(`Enqueued inbound from ${remoteJid} (name: ${msg.pushName ?? 'unknown'}) for account ${accountId}`);
       }
     });
   }
@@ -256,7 +262,10 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     if (!entry || entry.status !== 'CONNECTED') {
       throw new Error(`No active Baileys session for account ${accountId}`);
     }
-    const jid = to.replace(/\D/g, '') + '@s.whatsapp.net';
+    // If `to` is already a full JID (contains @) use it directly — handles @lid accounts.
+    // Otherwise strip non-digits and append @s.whatsapp.net for standard phone numbers.
+    const jid = to.includes('@') ? to : to.replace(/\D/g, '') + '@s.whatsapp.net';
+    this.logger.log(`Sending to JID ${jid} for account ${accountId}`);
     await entry.socket.sendMessage(jid, { text });
   }
 
