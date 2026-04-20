@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import {
   makeWASocket,
   DisconnectReason,
@@ -10,9 +11,11 @@ import {
   fetchLatestWaWebVersion,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
+import { Queue } from 'bullmq';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { INCOMING_MESSAGES_QUEUE, type IncomingMessageJob } from '../queue/queue.constants';
 import P from 'pino';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { SocksProxyAgent } = require('socks-proxy-agent');
@@ -36,7 +39,10 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BaileysSessionService.name);
   private readonly sessions = new Map<string, SessionEntry>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue(INCOMING_MESSAGES_QUEUE) private readonly incomingQueue: Queue,
+  ) {}
 
   async onModuleInit() {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
@@ -217,7 +223,7 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    // Handle inbound messages
+    // Handle inbound messages — enqueue for full automation pipeline
     socket.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
       if (type !== 'notify') return;
       for (const msg of msgs) {
@@ -228,52 +234,20 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
           null;
         if (!text) continue;
         const from = msg.key.remoteJid?.replace('@s.whatsapp.net', '') ?? '';
-        await this.handleInboundMessage(accountId, from, text, msg.key.id ?? '');
-      }
-    });
-  }
-
-  private async handleInboundMessage(
-    accountId: string,
-    from: string,
-    text: string,
-    externalId: string,
-  ) {
-    const account = await this.prisma.whatsAppAccount.findUnique({ where: { id: accountId } });
-    if (!account) return;
-
-    const phone = `+${from}`;
-    let contact = await this.prisma.contact.findFirst({
-      where: { workspaceId: account.workspaceId, phone },
-    });
-    if (!contact) {
-      contact = await this.prisma.contact.create({
-        data: { workspaceId: account.workspaceId, phone, firstName: from },
-      });
-    }
-
-    let thread = await this.prisma.inboxThread.findFirst({
-      where: { workspaceId: account.workspaceId, whatsappAccountId: accountId, contactId: contact.id },
-    });
-    if (!thread) {
-      thread = await this.prisma.inboxThread.create({
-        data: {
-          workspaceId: account.workspaceId,
-          contactId: contact.id,
+        const job: IncomingMessageJob = {
           whatsappAccountId: accountId,
-          lastMessagePreview: text,
-          lastMessageAt: new Date(),
-        },
-      });
-    } else {
-      await this.prisma.inboxThread.update({
-        where: { id: thread.id },
-        data: { lastMessagePreview: text, lastMessageAt: new Date(), unreadCount: { increment: 1 }, status: 'OPEN' },
-      });
-    }
-
-    await this.prisma.inboxMessage.create({
-      data: { threadId: thread.id, direction: 'INBOUND', message: text, providerMessageId: externalId },
+          from,
+          text,
+          externalMessageId: msg.key.id ?? undefined,
+        };
+        await this.incomingQueue.add('incoming', job, {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 1500 },
+          removeOnComplete: 2000,
+          removeOnFail: false,
+        });
+        this.logger.log(`Enqueued inbound message from ${from} for account ${accountId}`);
+      }
     });
   }
 
