@@ -25,6 +25,7 @@ export class WebhooksController {
     const job: IncomingMessageJob = {
       whatsappAccountId: body.whatsappAccountId,
       from: body.from,
+      remoteJid: body.from, // webhook callers provide phone as from; use as JID fallback
       text: body.text,
       externalMessageId: body.externalMessageId,
     };
