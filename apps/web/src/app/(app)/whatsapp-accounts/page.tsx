@@ -20,21 +20,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { api } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
-import type { WhatsAppAccount } from "@/lib/api/types";
+import type { AutoresponderRule, WhatsAppAccount } from "@/lib/api/types";
 import { qk } from "@/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, PhoneCall, QrCode, Smartphone, Wifi, WifiOff } from "lucide-react";
+import {
+  Bot,
+  List,
+  Loader2,
+  PhoneCall,
+  Plus,
+  QrCode,
+  Smartphone,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type LinkMode = "qr" | "pairing";
 
@@ -57,7 +60,19 @@ export default function WhatsAppAccountsPage() {
       const { data } = await api.get<WhatsAppAccount[]>("/whatsapp/accounts");
       return data;
     },
+    refetchInterval: 10000, // refresh every 10s to pick up status changes
   });
+
+  const { data: rules = [] } = useQuery({
+    queryKey: qk.autoresponderRules,
+    queryFn: async () => {
+      const { data } = await api.get<AutoresponderRule[]>("/autoresponder/rules");
+      return data;
+    },
+  });
+
+  const activeItems = rules.filter((r) => r.active).length;
+  const totalItems = rules.length;
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -89,15 +104,12 @@ export default function WhatsAppAccountsPage() {
       );
       return data.code;
     },
-    onSuccess: (code) => {
-      setPairingCode(code);
-    },
+    onSuccess: (code) => setPairingCode(code),
     onError: () => toast.error("Could not get pairing code. Make sure the account session is starting."),
   });
 
   const connectMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Disconnect any existing session then restart fresh for QR
       await api.post(`/whatsapp/accounts/${id}/disconnect`, {}).catch(() => {});
       await api.post(`/whatsapp/accounts/${id}/connect`, {});
     },
@@ -115,7 +127,6 @@ export default function WhatsAppAccountsPage() {
     onError: () => toast.error("Could not disconnect"),
   });
 
-  // Poll status while link modal is open and not yet connected
   const { data: statusData } = useQuery({
     queryKey: ["wa-pairing-status", pairingAccountId],
     enabled: !!pairingAccountId && pairingStatus !== "CONNECTED",
@@ -151,7 +162,6 @@ export default function WhatsAppAccountsPage() {
     setPairingPhone("");
     setPairingStatus("PENDING_QR");
     setLinkMode("qr");
-    // Auto-start QR session
     connectMutation.mutate(id);
   };
 
@@ -167,7 +177,7 @@ export default function WhatsAppAccountsPage() {
     <div className="page-container space-y-8">
       <PageHeader
         title="WhatsApp Accounts"
-        description="Connect WhatsApp numbers to receive and send messages."
+        description="Each connected number runs your chatbot items automatically."
         action={
           <>
             <Button
@@ -175,6 +185,7 @@ export default function WhatsAppAccountsPage() {
               className="rounded-xl shadow-sm hover:shadow-md"
               onClick={() => setOpen(true)}
             >
+              <Plus className="mr-1.5 size-4" />
               Add account
             </Button>
 
@@ -208,7 +219,7 @@ export default function WhatsAppAccountsPage() {
                     </Select>
                     {providerType === "BAILEYS" && (
                       <p className="text-xs text-muted-foreground">
-                        After saving, scan the QR code or enter a pairing code to link your WhatsApp.
+                        After saving, scan the QR code to link your WhatsApp number.
                       </p>
                     )}
                   </div>
@@ -274,7 +285,6 @@ export default function WhatsAppAccountsPage() {
                     <p className="text-xs text-muted-foreground text-center">
                       QR code refreshes automatically. Scan it quickly.
                     </p>
-
                     <button
                       className="text-xs text-primary underline underline-offset-2"
                       onClick={() => { setLinkMode("pairing"); setPairingCode(null); }}
@@ -292,17 +302,12 @@ export default function WhatsAppAccountsPage() {
                         {pairingCode}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground text-center">
-                      Enter this code in WhatsApp when prompted.
-                    </p>
+                    <p className="text-xs text-muted-foreground text-center">Enter this code in WhatsApp when prompted.</p>
                     <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
                       Waiting for confirmation…
                     </div>
-                    <button
-                      className="text-xs text-primary underline underline-offset-2"
-                      onClick={switchToQr}
-                    >
+                    <button className="text-xs text-primary underline underline-offset-2" onClick={switchToQr}>
                       Scan QR code instead
                     </button>
                   </div>
@@ -323,20 +328,12 @@ export default function WhatsAppAccountsPage() {
                     <Button
                       className="rounded-xl"
                       disabled={pairingMutation.isPending || pairingPhone.length < 7}
-                      onClick={() =>
-                        pairingMutation.mutate({
-                          id: pairingAccountId!,
-                          phone: pairingPhone,
-                        })
-                      }
+                      onClick={() => pairingMutation.mutate({ id: pairingAccountId!, phone: pairingPhone })}
                     >
                       {pairingMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                       Get pairing code
                     </Button>
-                    <button
-                      className="text-xs text-primary underline underline-offset-2 text-center"
-                      onClick={switchToQr}
-                    >
+                    <button className="text-xs text-primary underline underline-offset-2 text-center" onClick={switchToQr}>
                       Scan QR code instead
                     </button>
                   </div>
@@ -359,69 +356,123 @@ export default function WhatsAppAccountsPage() {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-md">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/60 hover:bg-transparent">
-                <TableHead className="font-semibold">Name</TableHead>
-                <TableHead className="font-semibold">Phone</TableHead>
-                <TableHead className="font-semibold">Provider</TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-                <TableHead className="text-right font-semibold">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accounts.map((a) => {
-                const sessionStatus = a.session?.status ?? "DISCONNECTED";
-                const isConnected = sessionStatus === "CONNECTED";
-                return (
-                  <TableRow key={a.id} className="border-border/60 transition-colors hover:bg-muted/40">
-                    <TableCell className="font-medium">{a.name}</TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground">
-                      {a.phone ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="rounded-lg px-2.5 font-mono text-xs">
-                        {a.providerType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {isConnected
-                          ? <Wifi className="size-4 text-emerald-500" />
-                          : <WifiOff className="size-4 text-muted-foreground" />}
-                        <span className={isConnected ? "text-sm font-medium text-emerald-500" : "text-sm text-muted-foreground"}>
-                          {isConnected ? "Connected" : "Disconnected"}
-                        </span>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {accounts.map((a) => {
+            const sessionStatus = a.session?.status ?? "DISCONNECTED";
+            const isConnected = sessionStatus === "CONNECTED";
+            return (
+              <div
+                key={a.id}
+                className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-md"
+              >
+                {/* Card header */}
+                <div className={`px-5 py-4 ${isConnected ? "bg-emerald-500/5" : "bg-muted/30"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      {/* Avatar */}
+                      <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${isConnected ? "bg-emerald-500/15" : "bg-muted"}`}>
+                        <Smartphone className={`size-5 ${isConnected ? "text-emerald-500" : "text-muted-foreground"}`} />
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {a.providerType === "BAILEYS" && !isConnected && (
-                          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => openLinkModal(a.id)}>
-                            <Smartphone className="mr-1.5 size-3.5" />
-                            Link phone
-                          </Button>
-                        )}
-                        {a.providerType === "BAILEYS" && isConnected && (
-                          <Button
-                            size="sm" variant="ghost"
-                            className="rounded-xl text-destructive hover:text-destructive"
-                            disabled={disconnectMutation.isPending && disconnectMutation.variables === a.id}
-                            onClick={() => disconnectMutation.mutate(a.id)}
-                          >
-                            {disconnectMutation.isPending && disconnectMutation.variables === a.id
-                              ? <Loader2 className="size-4 animate-spin" />
-                              : "Disconnect"}
-                          </Button>
-                        )}
+                      <div>
+                        <p className="font-semibold text-sm leading-tight">{a.name}</p>
+                        <p className="font-mono text-xs text-muted-foreground mt-0.5">
+                          {a.phone ?? "Not linked"}
+                        </p>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={`shrink-0 rounded-lg text-xs font-mono ${isConnected ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+                    >
+                      {a.providerType}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-2 divide-x divide-border/40 border-t border-border/40">
+                  <div className="px-5 py-3 text-center">
+                    <p className="text-xl font-bold">{isConnected ? "✓" : "—"}</p>
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mt-0.5">
+                      {isConnected ? "Connected" : "Offline"}
+                    </p>
+                  </div>
+                  <div className="px-5 py-3 text-center">
+                    <p className="text-xl font-bold">{activeItems}</p>
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mt-0.5">
+                      Active Items
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status bar */}
+                <div className={`flex items-center gap-2 border-t border-border/40 px-5 py-2.5 ${isConnected ? "bg-emerald-500/5" : ""}`}>
+                  {isConnected ? (
+                    <Wifi className="size-3.5 text-emerald-500" />
+                  ) : (
+                    <WifiOff className="size-3.5 text-muted-foreground" />
+                  )}
+                  <span className={`text-xs font-medium ${isConnected ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                    {isConnected ? "Chatbot active — receiving messages" : "Not receiving messages"}
+                  </span>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2 border-t border-border/40 px-4 py-3">
+                  <Link href="/autoresponder" className="flex-1">
+                    <Button size="sm" variant="outline" className="w-full rounded-xl text-xs gap-1.5">
+                      <Bot className="size-3.5" />
+                      Add item
+                    </Button>
+                  </Link>
+                  <Link href="/autoresponder" className="flex-1">
+                    <Button size="sm" variant="outline" className="w-full rounded-xl text-xs gap-1.5">
+                      <List className="size-3.5" />
+                      Item list{totalItems > 0 ? ` (${totalItems})` : ""}
+                    </Button>
+                  </Link>
+                  {a.providerType === "BAILEYS" && !isConnected && (
+                    <Button
+                      size="sm"
+                      className="rounded-xl text-xs"
+                      onClick={() => openLinkModal(a.id)}
+                    >
+                      <QrCode className="mr-1 size-3.5" />
+                      Link
+                    </Button>
+                  )}
+                  {a.providerType === "BAILEYS" && isConnected && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-xl text-xs text-destructive hover:text-destructive"
+                      disabled={disconnectMutation.isPending && disconnectMutation.variables === a.id}
+                      onClick={() => disconnectMutation.mutate(a.id)}
+                    >
+                      {disconnectMutation.isPending && disconnectMutation.variables === a.id
+                        ? <Loader2 className="size-3.5 animate-spin" />
+                        : "Disconnect"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Help callout */}
+      {accounts.length > 0 && (
+        <div className="rounded-xl border border-border/50 bg-muted/20 px-5 py-4 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground mb-1">How it works</p>
+          <p>
+            Every connected number automatically runs your{" "}
+            <Link href="/autoresponder" className="underline underline-offset-2 text-primary">
+              Chatbot Items
+            </Link>{" "}
+            — keyword → reply rules that fire instantly when someone messages you.
+            Items are shared across all your connected numbers.
+          </p>
         </div>
       )}
     </div>
