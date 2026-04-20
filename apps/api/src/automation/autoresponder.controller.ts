@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Body,
   UseGuards,
@@ -36,6 +37,14 @@ export class AutoresponderController {
     @Body() dto: CreateAutoresponderDto,
   ) {
     return this.automation.createAutoresponder(workspace.id, dto);
+  }
+
+  @Patch(':id/toggle')
+  toggle(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.automation.toggleAutoresponder(workspace.id, id);
   }
 
   @Delete(':id')

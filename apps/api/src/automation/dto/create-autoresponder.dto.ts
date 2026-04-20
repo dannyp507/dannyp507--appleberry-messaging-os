@@ -2,6 +2,10 @@ import { AutoresponderMatchType } from '@prisma/client';
 import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateAutoresponderDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
   @IsString()
   @MinLength(1)
   keyword!: string;

@@ -19,7 +19,7 @@ const nav = [
 
 const automationNav = [
   { href: "/chatbot", label: "Chatbot Flows", icon: "account_tree" },
-  { href: "/autoresponder", label: "Autoresponder", icon: "reply_all" },
+  { href: "/autoresponder", label: "Chatbot Items", icon: "smart_toy" },
   { href: "/keyword-triggers", label: "Keyword Triggers", icon: "tag" },
 ];
 

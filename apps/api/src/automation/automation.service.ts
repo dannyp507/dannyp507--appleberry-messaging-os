@@ -22,12 +22,24 @@ export class AutomationService {
     return this.prisma.autoresponderRule.create({
       data: {
         workspaceId,
+        name: dto.name ?? null,
         keyword: dto.keyword,
         matchType: dto.matchType ?? AutoresponderMatchType.CONTAINS,
         response: dto.response,
         priority: dto.priority ?? 0,
         active: dto.active ?? true,
       },
+    });
+  }
+
+  async toggleAutoresponder(workspaceId: string, id: string) {
+    const row = await this.prisma.autoresponderRule.findFirst({
+      where: { id, workspaceId },
+    });
+    if (!row) throw new NotFoundException('Rule not found');
+    return this.prisma.autoresponderRule.update({
+      where: { id },
+      data: { active: !row.active },
     });
   }
 

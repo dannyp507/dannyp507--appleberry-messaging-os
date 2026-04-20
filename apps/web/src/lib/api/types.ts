@@ -68,14 +68,13 @@ export interface Template {
 
 export interface AutoresponderRule {
   id: string;
-  name: string;
-  triggerType: "ALWAYS" | "KEYWORD" | "OUTSIDE_HOURS";
-  keyword?: string | null;
-  templateId: string | null;
-  message: string | null;
-  isActive: boolean;
+  name: string | null;
+  keyword: string;
+  matchType: "EXACT" | "CONTAINS" | "REGEX";
+  response: string;
+  priority: number;
+  active: boolean;
   createdAt: string;
-  template?: { id: string; name: string } | null;
 }
 
 export interface KeywordTrigger {
