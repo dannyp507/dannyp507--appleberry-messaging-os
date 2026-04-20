@@ -130,19 +130,23 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
 
       if (qr) {
         if (entry.pairingPhone) {
-          // Pairing code mode: request code instead of displaying QR
-          this.logger.log(`QR ready — requesting pairing code for ${accountId} (${entry.pairingPhone})`);
-          try {
-            const code = await socket.requestPairingCode(entry.pairingPhone);
-            entry.pairingCode = code;
-            entry.status = 'PENDING_PAIRING';
-            this.logger.log(`Pairing code for ${accountId}: ${code}`);
-            await this.prisma.whatsAppSession.updateMany({
-              where: { whatsappAccountId: accountId },
-              data: { status: 'PENDING_QR', errorMessage: null },
-            });
-          } catch (err) {
-            this.logger.error(`Pairing code request failed for ${accountId}: ${err}`);
+          // Pairing code mode: only request once — subsequent QR rotations must not overwrite
+          if (!entry.pairingCode) {
+            this.logger.log(`QR ready — requesting pairing code for ${accountId} (${entry.pairingPhone})`);
+            try {
+              const code = await socket.requestPairingCode(entry.pairingPhone);
+              entry.pairingCode = code;
+              entry.status = 'PENDING_PAIRING';
+              this.logger.log(`Pairing code for ${accountId}: ${code}`);
+              await this.prisma.whatsAppSession.updateMany({
+                where: { whatsappAccountId: accountId },
+                data: { status: 'PENDING_QR', errorMessage: null },
+              });
+            } catch (err) {
+              this.logger.error(`Pairing code request failed for ${accountId}: ${err}`);
+            }
+          } else {
+            this.logger.log(`QR rotated for ${accountId} — keeping existing pairing code ${entry.pairingCode}`);
           }
         } else {
           entry.qrCode = qr;
