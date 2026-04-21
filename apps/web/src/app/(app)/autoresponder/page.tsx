@@ -472,28 +472,19 @@ export default function ChatbotItemsPage() {
         }
       }
 
-      // Track which bots are referenced as nextBot targets so we skip them
-      // as standalone items (they'll be included inside their parent's chain)
-      const chainTargets = new Set<string>();
-      for (const bot of bots) {
-        if (bot.nextBot?.trim()) chainTargets.add(bot.nextBot.trim().toLowerCase());
-      }
-
       let created = 0;
       for (const bot of bots) {
         if (bot.use_ai === "1" || bot.is_default === "1") continue;
         if (!bot.caption?.trim() || !bot.keywords?.trim()) continue;
 
-        // Skip items that are only used as nextBot targets — they'll be included
-        // in their parent's chained response
-        const firstKeyword = bot.keywords.split(",")[0].trim().toLowerCase();
-        if (chainTargets.has(firstKeyword)) continue;
-
         const name = cleanName(bot.name);
         const matchType: "EXACT" | "CONTAINS" =
           bot.type_search === "2" ? "CONTAINS" : "EXACT";
 
-        // Resolve the full nextBot chain into one multi-part response
+        // Resolve the full nextBot chain into one multi-part response.
+        // Every item is imported as its own standalone rule so direct triggers
+        // (e.g. typing "menu") always work, even if the item is also a chain
+        // target of another rule.
         const response = resolveChain(bot, byKeyword);
 
         const keywords = bot.keywords
