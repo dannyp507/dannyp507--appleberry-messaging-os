@@ -151,16 +151,25 @@ export class IncomingMessageService {
         },
         data: { status: ChatbotRunStatus.COMPLETED, currentNodeId: null },
       });
-      const responseText = this.substituteVars(r.response, senderName);
-      await this.messages.enqueueOutboundText({
-        workspaceId,
-        whatsappAccountId: account.id,
-        to: replyTo,
-        message: responseText,
-        contactId: contact.id,
-        inboxThreadId: thread.id,
-      });
-      this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched for account ${account.id}`);
+
+      // Responses may contain '\n---\n' to separate multiple sequential messages
+      // (used when importing Planify X nextBot chains)
+      const parts = r.response
+        .split(/\n---\n/)
+        .map((p) => this.substituteVars(p.trim(), senderName))
+        .filter(Boolean);
+
+      for (const part of parts) {
+        await this.messages.enqueueOutboundText({
+          workspaceId,
+          whatsappAccountId: account.id,
+          to: replyTo,
+          message: part,
+          contactId: contact.id,
+          inboxThreadId: thread.id,
+        });
+      }
+      this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched (${parts.length} message${parts.length > 1 ? 's' : ''}) for account ${account.id}`);
       return;
     }
 

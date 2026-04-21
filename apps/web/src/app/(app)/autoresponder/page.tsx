@@ -53,10 +53,32 @@ interface PlanifyBot {
   caption: string;
   use_ai?: string;
   is_default?: string;
+  nextBot?: string; // keyword of the next chatbot item to chain after this one
 }
 interface PlanifyJson {
   version?: string;
   chatbots: PlanifyBot[];
+}
+
+/**
+ * Follow the nextBot chain for a given bot and collect all captions in order.
+ * Returns them joined by '\n---\n' so the dispatch sends separate WA messages.
+ */
+function resolveChain(
+  bot: PlanifyBot,
+  byKeyword: Map<string, PlanifyBot>,
+  visited = new Set<string>(),
+): string {
+  const captions: string[] = [bot.caption?.trim()].filter(Boolean);
+  let next = bot.nextBot?.trim();
+  while (next && !visited.has(next)) {
+    visited.add(next);
+    const nextBot = byKeyword.get(next.toLowerCase());
+    if (!nextBot || !nextBot.caption?.trim()) break;
+    captions.push(nextBot.caption.trim());
+    next = nextBot.nextBot?.trim();
+  }
+  return captions.join("\n---\n");
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -440,19 +462,45 @@ export default function ChatbotItemsPage() {
         toast.error("No chatbot items found in file");
         return;
       }
+
+      // Build keyword → bot lookup so we can follow nextBot chains
+      const byKeyword = new Map<string, PlanifyBot>();
+      for (const bot of bots) {
+        if (!bot.keywords?.trim()) continue;
+        for (const kw of bot.keywords.split(",").map((k) => k.trim().toLowerCase())) {
+          if (kw) byKeyword.set(kw, bot);
+        }
+      }
+
+      // Track which bots are referenced as nextBot targets so we skip them
+      // as standalone items (they'll be included inside their parent's chain)
+      const chainTargets = new Set<string>();
+      for (const bot of bots) {
+        if (bot.nextBot?.trim()) chainTargets.add(bot.nextBot.trim().toLowerCase());
+      }
+
       let created = 0;
       for (const bot of bots) {
         if (bot.use_ai === "1" || bot.is_default === "1") continue;
         if (!bot.caption?.trim() || !bot.keywords?.trim()) continue;
+
+        // Skip items that are only used as nextBot targets — they'll be included
+        // in their parent's chained response
+        const firstKeyword = bot.keywords.split(",")[0].trim().toLowerCase();
+        if (chainTargets.has(firstKeyword)) continue;
+
         const name = cleanName(bot.name);
-        // type_search "1" = exact, "2" = contains (but for single chars/digits use EXACT for reliability)
         const matchType: "EXACT" | "CONTAINS" =
           bot.type_search === "2" ? "CONTAINS" : "EXACT";
-        const response = bot.caption.trim();
+
+        // Resolve the full nextBot chain into one multi-part response
+        const response = resolveChain(bot, byKeyword);
+
         const keywords = bot.keywords
           .split(",")
           .map((k) => k.trim().toLowerCase())
           .filter(Boolean);
+
         for (const kw of keywords) {
           try {
             await api.post("/autoresponder/rules", {
