@@ -105,12 +105,24 @@ export interface Workspace {
   createdAt: string;
 }
 
+export type WhatsAppSessionStatus =
+  | "CONNECTED"
+  | "DISCONNECTED"
+  | "PENDING_QR"
+  | "RECONNECTING"
+  | "ERROR";
+
 export interface WhatsAppAccount {
   id: string;
   name: string;
   phone: string | null;
-  providerType: string;
+  providerType: "MOCK" | "CLOUD" | "BAILEYS";
+  sessionStatus: WhatsAppSessionStatus;
   createdAt: string;
+  session: {
+    status: WhatsAppSessionStatus;
+    qrCode: string | null;
+  } | null;
 }
 
 export interface InboxThread {
