@@ -24,6 +24,10 @@ export type SendMessageJob = {
   accountId: string;
   campaignId?: string;
   campaignRecipientId?: string;
+  /** Relative URL path to a media file, e.g. '/uploads/media/abc.jpg'.
+   *  When set the processor sends a media message (image/video/document/audio)
+   *  instead of plain text; `message` becomes the caption. */
+  mediaUrl?: string;
 };
 
 export type ContactsImportJob = {

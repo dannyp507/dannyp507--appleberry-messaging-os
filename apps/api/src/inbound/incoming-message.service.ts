@@ -152,24 +152,38 @@ export class IncomingMessageService {
         data: { status: ChatbotRunStatus.COMPLETED, currentNodeId: null },
       });
 
-      // Responses may contain '\n---\n' to separate multiple sequential messages
-      // (used when importing Planify X nextBot chains)
-      const parts = r.response
-        .split(/\n---\n/)
-        .map((p) => this.substituteVars(p.trim(), senderName))
-        .filter(Boolean);
-
-      for (const part of parts) {
+      if (r.mediaUrl) {
+        // Media rule: send a single media message — response text becomes caption
+        const caption = this.substituteVars(r.response?.trim() ?? '', senderName);
         await this.messages.enqueueOutboundText({
           workspaceId,
           whatsappAccountId: account.id,
           to: replyTo,
-          message: part,
+          message: caption,
           contactId: contact.id,
           inboxThreadId: thread.id,
+          mediaUrl: r.mediaUrl,
         });
+        this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched (media) for account ${account.id}`);
+      } else {
+        // Text-only rule: split on '\n---\n' for multi-bubble messages
+        const parts = r.response
+          .split(/\n---\n/)
+          .map((p) => this.substituteVars(p.trim(), senderName))
+          .filter(Boolean);
+
+        for (const part of parts) {
+          await this.messages.enqueueOutboundText({
+            workspaceId,
+            whatsappAccountId: account.id,
+            to: replyTo,
+            message: part,
+            contactId: contact.id,
+            inboxThreadId: thread.id,
+          });
+        }
+        this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched (${parts.length} message${parts.length > 1 ? 's' : ''}) for account ${account.id}`);
       }
-      this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched (${parts.length} message${parts.length > 1 ? 's' : ''}) for account ${account.id}`);
       return;
     }
 

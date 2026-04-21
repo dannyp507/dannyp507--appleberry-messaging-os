@@ -2,6 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { ForbiddenException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
+import * as path from 'path';
 import {
   CampaignRecipientStatus,
   CampaignStatus,
@@ -45,6 +46,7 @@ export class MessageSendProcessor extends WorkerHost {
       accountId,
       campaignRecipientId,
       campaignId,
+      mediaUrl,
     } = job.data;
 
     const log = await this.prisma.messageLog.findUnique({
@@ -115,7 +117,19 @@ export class MessageSendProcessor extends WorkerHost {
         throw err;
       }
 
-      await provider.sendText(to, message, accountId);
+      if (mediaUrl) {
+        const uploadsBase = this.config.get<string>('UPLOADS_BASE_DIR') ?? '/app/uploads';
+        const relPath = mediaUrl.replace(/^\/uploads/, '');
+        const absPath = path.join(uploadsBase, relPath);
+        if (provider.sendMedia) {
+          await provider.sendMedia(to, absPath, message || undefined, accountId);
+        } else {
+          // Provider doesn't support media — fall back to text caption
+          if (message) await provider.sendText(to, message, accountId);
+        }
+      } else {
+        await provider.sendText(to, message, accountId);
+      }
       await this.prisma.$transaction(async (tx) => {
         await tx.messageLog.update({
           where: { id: messageLogId },

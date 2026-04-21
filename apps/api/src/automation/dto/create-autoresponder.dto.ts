@@ -14,9 +14,9 @@ export class CreateAutoresponderDto {
   @IsEnum(AutoresponderMatchType)
   matchType?: AutoresponderMatchType;
 
+  @IsOptional()
   @IsString()
-  @MinLength(1)
-  response!: string;
+  response?: string;
 
   @IsOptional()
   @IsInt()
@@ -30,4 +30,10 @@ export class CreateAutoresponderDto {
   @IsOptional()
   @IsUUID()
   whatsappAccountId?: string;
+
+  /** Relative URL to an uploaded media file, e.g. '/uploads/media/abc.jpg'.
+   *  When set the bot sends a media message; `response` becomes the caption. */
+  @IsOptional()
+  @IsString()
+  mediaUrl?: string;
 }

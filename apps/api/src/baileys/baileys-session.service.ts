@@ -269,6 +269,49 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     await entry.socket.sendMessage(jid, { text });
   }
 
+  async sendMedia(
+    accountId: string,
+    to: string,
+    filePath: string,
+    caption?: string,
+  ): Promise<void> {
+    const entry = this.sessions.get(accountId);
+    if (!entry || entry.status !== 'CONNECTED') {
+      throw new Error(`No active Baileys session for account ${accountId}`);
+    }
+    const jid = to.includes('@') ? to : to.replace(/\D/g, '') + '@s.whatsapp.net';
+    const ext = path.extname(filePath).toLowerCase().replace('.', '');
+    const buffer = fs.readFileSync(filePath);
+    const cap = caption && caption.trim() ? caption.trim() : undefined;
+
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+      await entry.socket.sendMessage(jid, { image: buffer, caption: cap });
+    } else if (['mp4', 'mov', 'avi', '3gp', 'mkv', 'webm'].includes(ext)) {
+      await entry.socket.sendMessage(jid, { video: buffer, caption: cap });
+    } else if (['mp3', 'ogg', 'opus', 'm4a', 'wav', 'aac'].includes(ext)) {
+      await entry.socket.sendMessage(jid, { audio: buffer, ptt: false });
+    } else {
+      const mimeMap: Record<string, string> = {
+        pdf: 'application/pdf',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        doc: 'application/msword',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        xls: 'application/vnd.ms-excel',
+        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        zip: 'application/zip',
+        txt: 'text/plain',
+      };
+      const mimetype = mimeMap[ext] ?? 'application/octet-stream';
+      await entry.socket.sendMessage(jid, {
+        document: buffer,
+        mimetype,
+        fileName: path.basename(filePath),
+        caption: cap,
+      });
+    }
+    this.logger.log(`Sent media (${ext}) to JID ${jid} for account ${accountId}`);
+  }
+
   getQrCode(accountId: string): string | null {
     return this.sessions.get(accountId)?.qrCode ?? null;
   }

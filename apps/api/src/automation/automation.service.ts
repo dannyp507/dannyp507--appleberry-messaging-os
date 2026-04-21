@@ -31,9 +31,27 @@ export class AutomationService {
         name: dto.name ?? null,
         keyword: dto.keyword,
         matchType: dto.matchType ?? AutoresponderMatchType.CONTAINS,
-        response: dto.response,
+        response: dto.response ?? '',
+        mediaUrl: dto.mediaUrl ?? null,
         priority: dto.priority ?? 0,
         active: dto.active ?? true,
+      },
+    });
+  }
+
+  async updateAutoresponder(workspaceId: string, id: string, dto: Partial<CreateAutoresponderDto>) {
+    const row = await this.prisma.autoresponderRule.findFirst({ where: { id, workspaceId } });
+    if (!row) throw new NotFoundException('Rule not found');
+    return this.prisma.autoresponderRule.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.keyword !== undefined && { keyword: dto.keyword }),
+        ...(dto.matchType !== undefined && { matchType: dto.matchType }),
+        ...(dto.response !== undefined && { response: dto.response }),
+        ...(dto.priority !== undefined && { priority: dto.priority }),
+        ...(dto.active !== undefined && { active: dto.active }),
+        ...(dto.mediaUrl !== undefined && { mediaUrl: dto.mediaUrl || null }),
       },
     });
   }

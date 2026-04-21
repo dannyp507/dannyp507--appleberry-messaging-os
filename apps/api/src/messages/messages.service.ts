@@ -72,6 +72,8 @@ export class MessagesService {
   /**
    * Outbound pipeline used by inbox, chatbot, autoresponders, and keyword actions.
    * Optionally records an inbox line item when `inboxThreadId` is provided.
+   * When `mediaUrl` is provided the queued job will send a media message instead
+   * of plain text; `message` becomes the caption.
    */
   async enqueueOutboundText(params: {
     workspaceId: string;
@@ -80,6 +82,7 @@ export class MessagesService {
     message: string;
     contactId?: string | null;
     inboxThreadId?: string | null;
+    mediaUrl?: string | null;
   }) {
     const account = await this.prisma.whatsAppAccount.findFirst({
       where: { id: params.whatsappAccountId, workspaceId: params.workspaceId },
@@ -118,6 +121,7 @@ export class MessagesService {
       message: params.message,
       workspaceId: params.workspaceId,
       accountId: account.id,
+      ...(params.mediaUrl ? { mediaUrl: params.mediaUrl } : {}),
     };
 
     await this.sendQueue.add('send-text', job, {

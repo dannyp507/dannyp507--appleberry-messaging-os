@@ -30,10 +30,15 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
+  FileImage,
+  FileVideo,
+  FileText,
   Globe,
   Hash,
+  ImageIcon,
   Loader2,
   MessageSquare,
+  Paperclip,
   Pencil,
   Phone,
   Plus,
@@ -41,9 +46,19 @@ import {
   PowerOff,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:3001";
+
+function mediaIcon(url: string) {
+  const ext = url.split(".").pop()?.toLowerCase() ?? "";
+  if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) return <FileImage className="size-3.5" />;
+  if (["mp4", "mov", "avi", "3gp", "mkv", "webm"].includes(ext)) return <FileVideo className="size-3.5" />;
+  return <FileText className="size-3.5" />;
+}
 
 // ─── Planify X JSON types ─────────────────────────────────────────────────────
 interface PlanifyBot {
@@ -93,6 +108,7 @@ type Group = {
   active: boolean;
   response: string;
   matchType: "EXACT" | "CONTAINS" | "REGEX";
+  mediaUrl: string | null;
 };
 
 function buildGroups(rules: AutoresponderRule[]): Group[] {
@@ -109,6 +125,7 @@ function buildGroups(rules: AutoresponderRule[]): Group[] {
     active: items.some((i) => i.active),
     response: items[0].response,
     matchType: items[0].matchType,
+    mediaUrl: items[0].mediaUrl ?? null,
   }));
 }
 
@@ -274,10 +291,22 @@ function AccountSection({
                 ))}
               </div>
 
+              {/* Media badge */}
+              {group.mediaUrl && (
+                <div className="flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400">
+                  {mediaIcon(group.mediaUrl)}
+                  <span className="truncate max-w-[180px]">
+                    {group.mediaUrl.split("/").pop()}
+                  </span>
+                </div>
+              )}
+
               {/* Response preview */}
-              <p className="line-clamp-2 text-xs text-muted-foreground">
-                {group.response}
-              </p>
+              {group.response && (
+                <p className="line-clamp-2 text-xs text-muted-foreground">
+                  {group.response}
+                </p>
+              )}
             </div>
 
             {/* Actions */}
@@ -335,6 +364,9 @@ export default function ChatbotItemsPage() {
   const [itemKeywords, setItemKeywords] = useState("");
   const [itemResponse, setItemResponse] = useState("");
   const [itemMatchType, setItemMatchType] = useState<"EXACT" | "CONTAINS">("EXACT");
+  const [itemMediaUrl, setItemMediaUrl] = useState<string | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const mediaFileRef = useRef<HTMLInputElement>(null);
 
   const { data: rules = [], isLoading: rulesLoading } = useQuery({
     queryKey: qk.autoresponderRules,
@@ -368,7 +400,7 @@ export default function ChatbotItemsPage() {
     mutationFn: async () => {
       const keywords = itemKeywords.split(",").map((k) => k.trim()).filter(Boolean);
       if (!keywords.length) throw new Error("At least one keyword required");
-      if (!itemResponse.trim()) throw new Error("Response required");
+      if (!itemResponse.trim() && !itemMediaUrl) throw new Error("Response or media required");
       for (const kw of keywords) {
         await api.post("/autoresponder/rules", {
           name: itemName.trim() || kw,
@@ -377,6 +409,7 @@ export default function ChatbotItemsPage() {
           response: itemResponse.trim(),
           active: true,
           whatsappAccountId: dialogAccountId ?? undefined,
+          ...(itemMediaUrl ? { mediaUrl: itemMediaUrl } : {}),
         });
       }
     },
@@ -392,7 +425,7 @@ export default function ChatbotItemsPage() {
     mutationFn: async (group: Group) => {
       const keywords = itemKeywords.split(",").map((k) => k.trim()).filter(Boolean);
       if (!keywords.length) throw new Error("At least one keyword required");
-      if (!itemResponse.trim()) throw new Error("Response required");
+      if (!itemResponse.trim() && !itemMediaUrl) throw new Error("Response or media required");
       for (const r of group.items) await api.delete(`/autoresponder/rules/${r.id}`);
       for (const kw of keywords) {
         await api.post("/autoresponder/rules", {
@@ -402,6 +435,7 @@ export default function ChatbotItemsPage() {
           response: itemResponse.trim(),
           active: group.active,
           whatsappAccountId: dialogAccountId ?? undefined,
+          ...(itemMediaUrl ? { mediaUrl: itemMediaUrl } : {}),
         });
       }
     },
@@ -440,6 +474,7 @@ export default function ChatbotItemsPage() {
     setItemKeywords("");
     setItemResponse("");
     setItemMatchType("EXACT");
+    setItemMediaUrl(null);
     setDialogOpen(true);
   };
 
@@ -450,7 +485,28 @@ export default function ChatbotItemsPage() {
     setItemKeywords(group.items.map((i) => i.keyword).join(", "));
     setItemResponse(group.response);
     setItemMatchType(group.matchType === "EXACT" ? "EXACT" : "CONTAINS");
+    setItemMediaUrl(group.mediaUrl ?? null);
     setDialogOpen(true);
+  };
+
+  const handleMediaUpload = async (file: File) => {
+    setUploadingMedia(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post<{ url: string }>(
+        "/autoresponder/media/upload",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      setItemMediaUrl(data.url);
+      toast.success("Media uploaded");
+    } catch (e) {
+      toast.error("Upload failed", getApiErrorMessage(e));
+    } finally {
+      setUploadingMedia(false);
+      if (mediaFileRef.current) mediaFileRef.current.value = "";
+    }
   };
 
   const handleImport = async (file: File, accountId: string | null) => {
@@ -682,10 +738,72 @@ export default function ChatbotItemsPage() {
               <Textarea
                 className="rounded-xl font-mono text-sm"
                 rows={5}
-                placeholder="Type the reply to send when this keyword is matched…"
+                placeholder="Type the reply to send when this keyword is matched… (optional if media is attached)"
                 value={itemResponse}
                 onChange={(e) => setItemResponse(e.target.value)}
               />
+            </div>
+
+            {/* Media attachment */}
+            <div className="grid gap-2">
+              <Label className="flex items-center gap-1.5">
+                <Paperclip className="size-3.5" />
+                Media attachment
+                <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+
+              {itemMediaUrl ? (
+                <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                  {/* Thumbnail for images, icon for others */}
+                  {/\.(jpg|jpeg|png|gif|webp)$/i.test(itemMediaUrl) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`${API_BASE}${itemMediaUrl}`}
+                      alt="preview"
+                      className="size-12 rounded-lg object-cover shrink-0 border border-border/40"
+                    />
+                  ) : (
+                    <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
+                      {mediaIcon(itemMediaUrl)}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm font-medium">{itemMediaUrl.split("/").pop()}</p>
+                    <p className="text-xs text-muted-foreground">Attached</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 rounded-lg p-0 text-destructive hover:text-destructive shrink-0"
+                    title="Remove media"
+                    onClick={() => setItemMediaUrl(null)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <label
+                  className={`flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground transition hover:bg-muted/40 hover:text-foreground ${uploadingMedia ? "pointer-events-none opacity-60" : ""}`}
+                >
+                  {uploadingMedia ? (
+                    <Loader2 className="size-4 animate-spin shrink-0" />
+                  ) : (
+                    <ImageIcon className="size-4 shrink-0" />
+                  )}
+                  {uploadingMedia ? "Uploading…" : "Click to attach image, video, or document"}
+                  <input
+                    ref={mediaFileRef}
+                    type="file"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.pptx,.zip,.txt"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleMediaUpload(f);
+                    }}
+                  />
+                </label>
+              )}
             </div>
           </div>
 
@@ -697,8 +815,9 @@ export default function ChatbotItemsPage() {
               className="rounded-xl"
               disabled={
                 (editingGroup ? editMutation.isPending : createMutation.isPending) ||
+                uploadingMedia ||
                 !itemKeywords.trim() ||
-                !itemResponse.trim()
+                (!itemResponse.trim() && !itemMediaUrl)
               }
               onClick={() => {
                 if (editingGroup) editMutation.mutate(editingGroup);

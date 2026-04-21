@@ -8,4 +8,8 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
   async sendText(to: string, message: string): Promise<void> {
     this.logger.log(`[MOCK] sendText to=${to} message=${message}`);
   }
+
+  async sendMedia(to: string, filePath: string, caption: string | undefined): Promise<void> {
+    this.logger.log(`[MOCK] sendMedia to=${to} filePath=${filePath} caption=${caption ?? ''}`);
+  }
 }

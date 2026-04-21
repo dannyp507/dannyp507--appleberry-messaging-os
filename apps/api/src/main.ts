@@ -1,6 +1,8 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import * as cookieParser from 'cookie-parser';
+import * as express from 'express';
+import * as fs from 'fs';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { validateProductionEnv } from './config/env.validation';
@@ -14,6 +16,11 @@ async function bootstrap() {
   if (process.env.TRUST_PROXY === '1' && typeof expressApp?.set === 'function') {
     expressApp.set('trust proxy', 1);
   }
+
+  // Serve uploaded media files (images, videos, documents) at /uploads/*
+  const uploadsBase = process.env.UPLOADS_BASE_DIR ?? '/app/uploads';
+  fs.mkdirSync(uploadsBase, { recursive: true });
+  expressApp.use('/uploads', express.static(uploadsBase));
 
   app.use(
     helmet({

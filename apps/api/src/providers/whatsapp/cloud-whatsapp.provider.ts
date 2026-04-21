@@ -62,4 +62,15 @@ export class CloudWhatsAppProvider implements WhatsAppProvider {
 
     this.logger.log(`WhatsApp Cloud sent message to=${recipient}`);
   }
+
+  async sendMedia(to: string, filePath: string, caption: string | undefined): Promise<void> {
+    // Cloud API media sends require hosted URLs (not local files) and additional
+    // setup.  Log and fall back to sending the caption as text for now.
+    this.logger.warn(
+      `CloudWhatsAppProvider.sendMedia not implemented — sending caption only to=${to} file=${filePath}`,
+    );
+    if (caption) {
+      await this.sendText(to, caption);
+    }
+  }
 }

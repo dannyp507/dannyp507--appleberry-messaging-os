@@ -72,6 +72,7 @@ export interface AutoresponderRule {
   keyword: string;
   matchType: "EXACT" | "CONTAINS" | "REGEX";
   response: string;
+  mediaUrl: string | null;
   priority: number;
   active: boolean;
   whatsappAccountId: string | null;

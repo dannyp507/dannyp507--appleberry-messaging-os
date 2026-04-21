@@ -11,4 +11,9 @@ export class BaileysWhatsAppProvider implements WhatsAppProvider {
     if (!accountId) throw new Error('accountId required for BAILEYS provider');
     await this.baileys.sendText(accountId, to, message);
   }
+
+  async sendMedia(to: string, filePath: string, caption: string | undefined, accountId?: string): Promise<void> {
+    if (!accountId) throw new Error('accountId required for BAILEYS provider');
+    await this.baileys.sendMedia(accountId, to, filePath, caption);
+  }
 }
