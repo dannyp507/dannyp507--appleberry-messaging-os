@@ -613,8 +613,8 @@ model Contact {
   chatbotRuns        ChatbotRun[]
   inboxThreads       InboxThread[]
 
+  @@unique([workspaceId, phone])
   @@index([workspaceId])
-  @@index([workspaceId, phone])
   @@index([workspaceId, optOut])
   @@index([workspaceId, isBlacklisted])
   @@index([workspaceId, leadStage])

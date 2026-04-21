@@ -94,23 +94,25 @@ export class FacebookInboundService {
     }
 
     // ── 2. Upsert contact (PSID stored in phone for lookup + externalId) ────────
-    // We use findFirst + create pattern inside a serialisable transaction to
-    // minimise (not fully prevent) concurrent duplicate contacts.
-    let contact = await this.prisma.contact.findFirst({
-      where: { workspaceId, phone },
+    // Uses the DB-level unique constraint on (workspaceId, phone) to atomically
+    // prevent duplicate contacts even under concurrent webhook events.
+    const contact = await this.prisma.contact.upsert({
+      where: { workspaceId_phone: { workspaceId, phone } },
+      update: {
+        // Ensure externalId is always set even on existing contacts
+        externalId: senderId,
+      },
+      create: {
+        workspaceId,
+        phone,          // fb:<PSID> — used as the lookup key
+        externalId: senderId, // raw PSID stored separately
+        firstName: 'Messenger',
+        lastName: 'User',
+      },
     });
-    if (!contact) {
-      contact = await this.prisma.contact.create({
-        data: {
-          workspaceId,
-          phone,          // fb:<PSID> — used as the lookup key
-          externalId: senderId, // raw PSID stored separately
-          firstName: 'Messenger',
-          lastName: 'User',
-        },
-      });
 
-      // Attempt to fetch the user's real name from the Messenger Profile API
+    // Fetch real name if the contact still has the default placeholder name
+    if (contact.firstName === 'Messenger' && contact.lastName === 'User') {
       void this.fetchAndUpdateName(
         contact.id,
         senderId,

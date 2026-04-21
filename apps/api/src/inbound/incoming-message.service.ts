@@ -63,22 +63,23 @@ export class IncomingMessageService {
     // Use remoteJid for replies so @lid accounts are reached correctly
     const replyTo = job.remoteJid ?? e164;
 
-    let contact = await this.prisma.contact.findFirst({
-      where: { workspaceId, phone: e164 },
+    // Use upsert against the DB-level unique constraint on (workspaceId, phone)
+    // to atomically prevent duplicate contacts under concurrent inbound messages.
+    const contact = await this.prisma.contact.upsert({
+      where: { workspaceId_phone: { workspaceId, phone: e164 } },
+      update: {}, // don't overwrite existing fields on collision
+      create: {
+        workspaceId,
+        firstName: senderName || 'Unknown',
+        lastName: '',
+        phone: e164,
+        isValid,
+        isDuplicate: false,
+      },
     });
-    if (!contact) {
-      contact = await this.prisma.contact.create({
-        data: {
-          workspaceId,
-          firstName: senderName || 'Unknown',
-          lastName: '',
-          phone: e164,
-          isValid,
-          isDuplicate: false,
-        },
-      });
-    } else if (contact.firstName === 'Unknown' && senderName) {
-      // Update name from push name if we have a better one now
+
+    // Update name from push name if we have a better one now
+    if (contact.firstName === 'Unknown' && senderName) {
       await this.prisma.contact.update({
         where: { id: contact.id },
         data: { firstName: senderName },

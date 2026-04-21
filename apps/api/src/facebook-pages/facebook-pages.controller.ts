@@ -19,7 +19,7 @@ import { FacebookPagesService } from './facebook-pages.service';
 @Controller('facebook/pages')
 @UseGuards(WorkspaceContextGuard, RolesGuard, PermissionsGuard)
 @Roles('owner', 'admin')
-@Permissions('manage_whatsapp')
+@Permissions('manage_facebook')
 export class FacebookPagesController {
   constructor(private readonly service: FacebookPagesService) {}
 

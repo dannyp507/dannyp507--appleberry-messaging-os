@@ -10,6 +10,7 @@ const PERMISSIONS = [
   { key: 'manage_templates', description: 'Manage message templates' },
   { key: 'send_messages', description: 'Send WhatsApp messages' },
   { key: 'manage_whatsapp', description: 'Manage WhatsApp accounts' },
+  { key: 'manage_facebook', description: 'Manage Facebook pages and Messenger' },
   { key: 'view_reports', description: 'View analytics and reports' },
   { key: 'manage_inbox', description: 'View and manage inbox threads' },
   { key: 'manage_chatbot', description: 'Configure chatbot flows' },
@@ -37,7 +38,7 @@ const ROLE_DEFS = [
     keys: [
       'manage_users', 'manage_contacts', 'manage_campaigns',
       'manage_templates', 'send_messages', 'manage_whatsapp',
-      'view_reports', 'manage_inbox', 'manage_chatbot',
+      'manage_facebook', 'view_reports', 'manage_inbox', 'manage_chatbot',
       'manage_automation', 'manage_api_keys', 'manage_webhooks',
       'view_audit_logs',
     ],
