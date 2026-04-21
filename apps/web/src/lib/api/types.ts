@@ -129,11 +129,22 @@ export interface TelegramAccount {
   updatedAt: string;
 }
 
+export interface FacebookPage {
+  id: string;
+  pageId: string;
+  name: string;
+  category: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { inboxThreads: number };
+}
+
 export interface InboxThread {
   id: string;
   workspaceId: string;
   contactId: string;
-  channel: "WHATSAPP" | "TELEGRAM";
+  channel: "WHATSAPP" | "TELEGRAM" | "MESSENGER" | "INSTAGRAM";
   whatsappAccountId: string | null;
   telegramAccountId: string | null;
   status: "OPEN" | "CLOSED";

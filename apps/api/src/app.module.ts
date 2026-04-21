@@ -27,6 +27,7 @@ import { TemplatesModule } from './templates/templates.module';
 import { WhatsappAccountsModule } from './whatsapp-accounts/whatsapp-accounts.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
 import { TelegramAccountsModule } from './telegram-accounts/telegram-accounts.module';
+import { FacebookPagesModule } from './facebook-pages/facebook-pages.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -63,6 +64,7 @@ import { AppController } from './app.controller';
     InboxModule,
     AnalyticsModule,
     TelegramAccountsModule,
+    FacebookPagesModule,
   ],
   providers: [
     {

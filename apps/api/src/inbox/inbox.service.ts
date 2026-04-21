@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ChannelType } from '@prisma/client';
+import { ChannelRouterService } from '../channels/channel-router.service';
 import { MessagesService } from '../messages/messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SendInboxMessageDto } from './dto/send-inbox-message.dto';
@@ -9,6 +11,7 @@ export class InboxService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messages: MessagesService,
+    private readonly channelRouter: ChannelRouterService,
   ) {}
 
   listThreads(workspaceId: string) {
@@ -49,9 +52,27 @@ export class InboxService {
     if (!thread) {
       throw new NotFoundException('Thread not found');
     }
+
+    // Route by channel — each channel has its own send path
+    if (thread.channel === ChannelType.MESSENGER || thread.channel === ChannelType.TELEGRAM) {
+      return this.channelRouter.sendInboxReply(
+        {
+          threadId: thread.id,
+          channel: thread.channel,
+          contactPhone: thread.contact.phone,
+          externalChatId: thread.externalChatId,
+          whatsappAccountId: thread.whatsappAccountId,
+          facebookPageId: thread.facebookPageId,
+          telegramAccountId: thread.telegramAccountId,
+        },
+        dto.message,
+      );
+    }
+
+    // WhatsApp path — queue-based via MessagesService (unchanged)
     return this.messages.enqueueOutboundText({
       workspaceId,
-      whatsappAccountId: thread.whatsappAccountId,
+      whatsappAccountId: thread.whatsappAccountId!,
       to: thread.contact.phone,
       message: dto.message,
       contactId: thread.contactId,

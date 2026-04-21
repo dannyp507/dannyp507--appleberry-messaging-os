@@ -23,9 +23,10 @@ const automationNav = [
   { href: "/keyword-triggers", label: "Keyword Triggers", icon: "tag" },
 ];
 
-const toolsNav = [
-  { href: "/whatsapp-accounts", label: "WA Accounts", icon: "cell_tower" },
-  { href: "/telegram-accounts", label: "Telegram Bots", icon: "send" },
+const channelsNav = [
+  { href: "/whatsapp-accounts", label: "WhatsApp", icon: "cell_tower" },
+  { href: "/telegram-accounts", label: "Telegram", icon: "telegram" },
+  { href: "/facebook-pages", label: "Facebook Pages", icon: "groups" },
   { href: "/link-generator", label: "Link & QR", icon: "qr_code_2" },
 ];
 
@@ -104,10 +105,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <NavItem key={href} href={href} label={label} icon={icon} active={isActive(href)} onClick={onNavigate} />
           ))}
 
-          {/* Tools */}
+          {/* Channels */}
           <div className="my-3 border-t border-[#262B33]/30" />
-          <p className="px-4 py-1 text-[10px] font-bold text-[#73757d] uppercase tracking-widest">Tools</p>
-          {toolsNav.map(({ href, label, icon }) => (
+          <p className="px-4 py-1 text-[10px] font-bold text-[#73757d] uppercase tracking-widest">Channels</p>
+          {channelsNav.map(({ href, label, icon }) => (
             <NavItem key={href} href={href} label={label} icon={icon} active={isActive(href)} onClick={onNavigate} />
           ))}
 

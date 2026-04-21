@@ -77,13 +77,19 @@ export class MessagesService {
    */
   async enqueueOutboundText(params: {
     workspaceId: string;
-    whatsappAccountId: string;
+    whatsappAccountId: string | null | undefined;
     to: string;
     message: string;
     contactId?: string | null;
     inboxThreadId?: string | null;
     mediaUrl?: string | null;
   }) {
+    if (!params.whatsappAccountId) {
+      throw new NotFoundException(
+        'enqueueOutboundText requires a whatsappAccountId — ' +
+          'use ChannelRouterService for non-WhatsApp channels',
+      );
+    }
     const account = await this.prisma.whatsAppAccount.findFirst({
       where: { id: params.whatsappAccountId, workspaceId: params.workspaceId },
     });

@@ -12,6 +12,8 @@ datasource db {
 enum ChannelType {
   WHATSAPP
   TELEGRAM
+  MESSENGER
+  INSTAGRAM
 }
 
 enum WhatsAppProviderType {
@@ -269,6 +271,7 @@ model Workspace {
   workspaceMemberships WorkspaceMembership[]
   whatsappAccounts     WhatsAppAccount[]
   telegramAccounts     TelegramAccount[]
+  facebookPages        FacebookPage[]
   messageLogs          MessageLog[]
   contacts             Contact[]
   tags                 Tag[]
@@ -513,8 +516,32 @@ model TelegramAccount {
 
   workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   inboxThreads InboxThread[]
+  messageLogs  MessageLog[]
 
   @@index([workspaceId])
+}
+
+model FacebookPage {
+  id              String   @id @default(uuid()) @db.Uuid
+  workspaceId     String   @db.Uuid
+  /// Facebook Page ID (numeric string from Graph API)
+  pageId          String
+  name            String
+  category        String?
+  /// Long-lived page access token (never expires unless user revokes)
+  pageAccessToken String   @db.Text
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inboxThreads       InboxThread[]
+  messageLogs        MessageLog[]
+  autoresponderRules AutoresponderRule[]
+
+  @@unique([workspaceId, pageId])
+  @@index([workspaceId])
+  @@index([pageId])
 }
 
 // ─── Contacts & CRM ───────────────────────────────────────────────────────────
@@ -734,7 +761,10 @@ model MessageLog {
   id                String           @id @default(uuid()) @db.Uuid
   workspaceId       String           @db.Uuid
   contactId         String?          @db.Uuid
-  whatsappAccountId String           @db.Uuid
+  channel           ChannelType      @default(WHATSAPP)
+  whatsappAccountId String?          @db.Uuid
+  facebookPageId    String?          @db.Uuid
+  telegramAccountId String?          @db.Uuid
   message           String           @db.Text
   mediaUrl          String?
   status            MessageLogStatus @default(PENDING)
@@ -748,13 +778,16 @@ model MessageLog {
   updatedAt         DateTime         @updatedAt
 
   workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  account           WhatsAppAccount    @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  account           WhatsAppAccount?   @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  fbPage            FacebookPage?      @relation(fields: [facebookPageId], references: [id], onDelete: SetNull)
+  tgAccount         TelegramAccount?   @relation(fields: [telegramAccountId], references: [id], onDelete: SetNull)
   contact           Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
   campaign          Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   campaignRecipient CampaignRecipient?
 
   @@index([workspaceId])
   @@index([whatsappAccountId])
+  @@index([facebookPageId])
   @@index([status])
   @@index([campaignId])
   @@index([workspaceId, createdAt])
@@ -825,19 +858,23 @@ model ChatbotEdge {
 }
 
 model ChatbotRun {
-  id            String           @id @default(uuid()) @db.Uuid
-  workspaceId   String           @db.Uuid
-  flowId        String           @db.Uuid
-  contactId     String           @db.Uuid
-  currentNodeId String?          @db.Uuid
-  status        ChatbotRunStatus @default(ACTIVE)
-  variables     Json             @default("{}")
-  stepCount     Int              @default(0)
-  startedAt     DateTime         @default(now())
-  completedAt   DateTime?
-  timeoutAt     DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id               String           @id @default(uuid()) @db.Uuid
+  workspaceId      String           @db.Uuid
+  flowId           String           @db.Uuid
+  contactId        String           @db.Uuid
+  currentNodeId    String?          @db.Uuid
+  status           ChatbotRunStatus @default(ACTIVE)
+  variables        Json             @default("{}")
+  stepCount        Int              @default(0)
+  /// Channel this run is executing on — used to route outbound messages
+  channel          ChannelType      @default(WHATSAPP)
+  /// The FK for the connected account: whatsappAccountId, facebookPageId, or telegramAccountId
+  channelAccountId String?
+  startedAt        DateTime         @default(now())
+  completedAt      DateTime?
+  timeoutAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   flow        ChatbotFlow  @relation(fields: [flowId], references: [id], onDelete: Cascade)
@@ -861,6 +898,8 @@ model KeywordTrigger {
   response    String?           @db.Text
   priority    Int               @default(0)
   active      Boolean           @default(true)
+  /// null = all channels; set to scope trigger to a specific channel
+  channel     ChannelType?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
@@ -873,8 +912,10 @@ model KeywordTrigger {
 model AutoresponderRule {
   id                String                 @id @default(uuid()) @db.Uuid
   workspaceId       String                 @db.Uuid
-  /// null = applies to all accounts in workspace; set to scope rule to one account
+  /// null = applies to all WA accounts in workspace; set to scope to one WA account
   whatsappAccountId String?                @db.Uuid
+  /// null = workspace-wide for Messenger; set to scope to one Facebook Page
+  facebookPageId    String?                @db.Uuid
   name              String?
   keyword           String
   matchType         AutoresponderMatchType @default(CONTAINS)
@@ -888,9 +929,11 @@ model AutoresponderRule {
 
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   whatsappAccount WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: SetNull)
+  fbPage          FacebookPage?    @relation(fields: [facebookPageId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, active, priority])
   @@index([whatsappAccountId])
+  @@index([facebookPageId])
 }
 
 model FallbackRule {
@@ -921,6 +964,7 @@ model InboxThread {
   channel             ChannelType       @default(WHATSAPP)
   whatsappAccountId   String?           @db.Uuid
   telegramAccountId   String?           @db.Uuid
+  facebookPageId      String?           @db.Uuid
   externalChatId      String?
   assignedToId        String?           @db.Uuid
   status              InboxThreadStatus @default(OPEN)
@@ -938,6 +982,7 @@ model InboxThread {
   contact         Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
   waAccount       WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
   tgAccount       TelegramAccount? @relation(fields: [telegramAccountId], references: [id], onDelete: Cascade)
+  fbPage          FacebookPage?    @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
   assignedTo      User?            @relation("AssignedThreads", fields: [assignedToId], references: [id], onDelete: SetNull)
   messages        InboxMessage[]
 
