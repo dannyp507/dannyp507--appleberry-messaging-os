@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   AutoresponderMatchType,
   ChatbotFlowStatus,
+  ChatbotRunStatus,
   InboxMessageDirection,
   InboxThreadStatus,
   KeywordActionType,
@@ -111,6 +112,61 @@ export class IncomingMessageService {
       },
     });
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 1: Autoresponder rules (chatbot items) — checked FIRST so that
+    // keyword triggers (e.g. "1", "2", menu options) always fire regardless of
+    // whether the contact is currently inside a chatbot flow.  If a rule
+    // matches we also cancel any stuck ACTIVE run so the flow doesn't interfere.
+    //
+    // Account-scoped rules are checked first; workspace-wide rules (null account)
+    // serve as a fallback.
+    // ─────────────────────────────────────────────────────────────────────────
+    const allRules = await this.prisma.autoresponderRule.findMany({
+      where: {
+        workspaceId,
+        active: true,
+        OR: [
+          { whatsappAccountId: account.id },
+          { whatsappAccountId: null },
+        ],
+      },
+      orderBy: [
+        // Account-scoped rules have priority over workspace-wide ones
+        { whatsappAccountId: 'desc' },
+        { priority: 'desc' },
+        { createdAt: 'asc' },
+      ],
+    });
+
+    for (const r of allRules) {
+      if (!this.keywordMatches(r.keyword, r.matchType, job.text)) {
+        continue;
+      }
+      // Cancel any active chatbot run so keywords always interrupt flows
+      await this.prisma.chatbotRun.updateMany({
+        where: {
+          workspaceId,
+          contactId: contact.id,
+          status: ChatbotRunStatus.ACTIVE,
+        },
+        data: { status: ChatbotRunStatus.COMPLETED, currentNodeId: null },
+      });
+      const responseText = this.substituteVars(r.response, senderName);
+      await this.messages.enqueueOutboundText({
+        workspaceId,
+        whatsappAccountId: account.id,
+        to: replyTo,
+        message: responseText,
+        contactId: contact.id,
+        inboxThreadId: thread.id,
+      });
+      this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched for account ${account.id}`);
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 2: Active chatbot flow (QUESTION node waiting for user input)
+    // ─────────────────────────────────────────────────────────────────────────
     const ctx = {
       workspaceId,
       whatsappAccountId: account.id,
@@ -124,6 +180,9 @@ export class IncomingMessageService {
       return;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 3: Keyword triggers (START_FLOW / SEND_TEMPLATE)
+    // ─────────────────────────────────────────────────────────────────────────
     const triggers = await this.prisma.keywordTrigger.findMany({
       where: { workspaceId, active: true },
       orderBy: { createdAt: 'asc' },
@@ -160,26 +219,9 @@ export class IncomingMessageService {
       }
     }
 
-    const rules = await this.prisma.autoresponderRule.findMany({
-      where: { workspaceId, active: true },
-      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
-    });
-    for (const r of rules) {
-      if (!this.keywordMatches(r.keyword, r.matchType, job.text)) {
-        continue;
-      }
-      const responseText = this.substituteVars(r.response, senderName);
-      await this.messages.enqueueOutboundText({
-        workspaceId,
-        whatsappAccountId: account.id,
-        to: replyTo,
-        message: responseText,
-        contactId: contact.id,
-        inboxThreadId: thread.id,
-      });
-      return;
-    }
-
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 4: AI fallback
+    // ─────────────────────────────────────────────────────────────────────────
     const recent = await this.prisma.inboxMessage.findMany({
       where: { threadId: thread.id },
       orderBy: { createdAt: 'desc' },
@@ -220,6 +262,12 @@ export class IncomingMessageService {
     const mode = matchType as string;
     if (mode === KeywordMatchType.EXACT || mode === AutoresponderMatchType.EXACT) {
       return t === k;
+    }
+    // CONTAINS: for short keywords (≤3 chars like "1","2","hi") use word-boundary
+    // matching to prevent "1" from matching inside "12" or "21"
+    if (k.length <= 3) {
+      const wordBoundary = new RegExp(`(?:^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
+      return wordBoundary.test(t);
     }
     return t.includes(k);
   }

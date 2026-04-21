@@ -74,6 +74,7 @@ export interface AutoresponderRule {
   response: string;
   priority: number;
   active: boolean;
+  whatsappAccountId: string | null;
   createdAt: string;
 }
 

@@ -71,8 +71,11 @@ export default function WhatsAppAccountsPage() {
     },
   });
 
-  const activeItems = rules.filter((r) => r.active).length;
-  const totalItems = rules.length;
+  // Per-account item counts (account-scoped + workspace-wide rules apply to all)
+  const accountActiveItems = (accountId: string) =>
+    rules.filter((r) => (r.whatsappAccountId === accountId || r.whatsappAccountId === null) && r.active).length;
+  const accountTotalItems = (accountId: string) =>
+    rules.filter((r) => r.whatsappAccountId === accountId || r.whatsappAccountId === null).length;
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -398,7 +401,7 @@ export default function WhatsAppAccountsPage() {
                     </p>
                   </div>
                   <div className="px-5 py-3 text-center">
-                    <p className="text-xl font-bold">{activeItems}</p>
+                    <p className="text-xl font-bold">{accountActiveItems(a.id)}</p>
                     <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mt-0.5">
                       Active Items
                     </p>
@@ -419,7 +422,7 @@ export default function WhatsAppAccountsPage() {
 
                 {/* Action buttons */}
                 <div className="flex gap-2 border-t border-border/40 px-4 py-3">
-                  <Link href="/autoresponder" className="flex-1">
+                  <Link href={`/autoresponder?account=${a.id}`} className="flex-1">
                     <Button size="sm" variant="outline" className="w-full rounded-xl text-xs gap-1.5">
                       <Bot className="size-3.5" />
                       Add item
@@ -428,7 +431,7 @@ export default function WhatsAppAccountsPage() {
                   <Link href="/autoresponder" className="flex-1">
                     <Button size="sm" variant="outline" className="w-full rounded-xl text-xs gap-1.5">
                       <List className="size-3.5" />
-                      Item list{totalItems > 0 ? ` (${totalItems})` : ""}
+                      Item list{accountTotalItems(a.id) > 0 ? ` (${accountTotalItems(a.id)})` : ""}
                     </Button>
                   </Link>
                   {a.providerType === "BAILEYS" && !isConnected && (
@@ -466,12 +469,12 @@ export default function WhatsAppAccountsPage() {
         <div className="rounded-xl border border-border/50 bg-muted/20 px-5 py-4 text-sm text-muted-foreground">
           <p className="font-medium text-foreground mb-1">How it works</p>
           <p>
-            Every connected number automatically runs your{" "}
+            Each number runs its own{" "}
             <Link href="/autoresponder" className="underline underline-offset-2 text-primary">
               Chatbot Items
             </Link>{" "}
             — keyword → reply rules that fire instantly when someone messages you.
-            Items are shared across all your connected numbers.
+            Add items per account or workspace-wide (applies to all numbers).
           </p>
         </div>
       )}

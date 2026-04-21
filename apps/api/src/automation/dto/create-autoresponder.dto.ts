@@ -1,5 +1,5 @@
 import { AutoresponderMatchType } from '@prisma/client';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
 export class CreateAutoresponderDto {
   @IsOptional()
@@ -25,4 +25,9 @@ export class CreateAutoresponderDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  /** Scope this rule to a specific WhatsApp account. Omit to apply workspace-wide. */
+  @IsOptional()
+  @IsUUID()
+  whatsappAccountId?: string;
 }

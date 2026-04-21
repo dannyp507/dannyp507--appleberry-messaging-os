@@ -468,11 +468,12 @@ model WhatsAppAccount {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  messageLogs  MessageLog[]
-  campaigns    Campaign[]
-  inboxThreads InboxThread[]
-  session      WhatsAppSession?
+  workspace          Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messageLogs        MessageLog[]
+  campaigns          Campaign[]
+  inboxThreads       InboxThread[]
+  session            WhatsAppSession?
+  autoresponderRules AutoresponderRule[]
 
   @@index([workspaceId])
 }
@@ -867,22 +868,26 @@ model KeywordTrigger {
 }
 
 model AutoresponderRule {
-  id          String                 @id @default(uuid()) @db.Uuid
-  workspaceId String                 @db.Uuid
-  name        String?
-  keyword     String
-  matchType   AutoresponderMatchType @default(CONTAINS)
-  trigger     AutoresponderTrigger   @default(ANY_MESSAGE)
-  response    String                 @db.Text
-  mediaUrl    String?
-  priority    Int                    @default(0)
-  active      Boolean                @default(true)
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  id                String                 @id @default(uuid()) @db.Uuid
+  workspaceId       String                 @db.Uuid
+  /// null = applies to all accounts in workspace; set to scope rule to one account
+  whatsappAccountId String?                @db.Uuid
+  name              String?
+  keyword           String
+  matchType         AutoresponderMatchType @default(CONTAINS)
+  trigger           AutoresponderTrigger   @default(ANY_MESSAGE)
+  response          String                 @db.Text
+  mediaUrl          String?
+  priority          Int                    @default(0)
+  active            Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  whatsappAccount WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, active, priority])
+  @@index([whatsappAccountId])
 }
 
 model FallbackRule {

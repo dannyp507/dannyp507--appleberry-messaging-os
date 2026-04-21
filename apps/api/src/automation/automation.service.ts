@@ -11,9 +11,14 @@ import type { CreateKeywordTriggerDto } from './dto/create-keyword-trigger.dto';
 export class AutomationService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listAutoresponders(workspaceId: string) {
+  listAutoresponders(workspaceId: string, whatsappAccountId?: string) {
     return this.prisma.autoresponderRule.findMany({
-      where: { workspaceId },
+      where: {
+        workspaceId,
+        ...(whatsappAccountId
+          ? { whatsappAccountId }
+          : {}),
+      },
       orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     });
   }
@@ -22,6 +27,7 @@ export class AutomationService {
     return this.prisma.autoresponderRule.create({
       data: {
         workspaceId,
+        whatsappAccountId: dto.whatsappAccountId ?? null,
         name: dto.name ?? null,
         keyword: dto.keyword,
         matchType: dto.matchType ?? AutoresponderMatchType.CONTAINS,

@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Body,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Permissions } from '../common/decorators/permissions.decorator';
@@ -27,8 +28,11 @@ export class AutoresponderController {
   constructor(private readonly automation: AutomationService) {}
 
   @Get()
-  list(@CurrentWorkspace() workspace: Workspace) {
-    return this.automation.listAutoresponders(workspace.id);
+  list(
+    @CurrentWorkspace() workspace: Workspace,
+    @Query('account') account?: string,
+  ) {
+    return this.automation.listAutoresponders(workspace.id, account);
   }
 
   @Post()
