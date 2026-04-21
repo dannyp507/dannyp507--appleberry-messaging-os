@@ -10,7 +10,7 @@ import { validateProductionEnv } from './config/env.validation';
 async function bootstrap() {
   validateProductionEnv();
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const expressApp = app.getHttpAdapter().getInstance();
   if (process.env.TRUST_PROXY === '1' && typeof expressApp?.set === 'function') {

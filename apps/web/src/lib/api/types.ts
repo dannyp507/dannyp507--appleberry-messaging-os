@@ -147,8 +147,11 @@ export interface InboxThread {
   channel: "WHATSAPP" | "TELEGRAM" | "MESSENGER" | "INSTAGRAM";
   whatsappAccountId: string | null;
   telegramAccountId: string | null;
-  status: "OPEN" | "CLOSED";
+  facebookPageId: string | null;
+  externalChatId: string | null;
+  status: "OPEN" | "PENDING" | "RESOLVED" | "CLOSED";
   assignedToId: string | null;
+  unreadCount: number;
   createdAt: string;
   updatedAt: string;
   contact: {
@@ -156,7 +159,10 @@ export interface InboxThread {
     firstName: string;
     lastName: string;
     phone: string;
+    externalId: string | null;
   };
+  /** Facebook Page info — present on MESSENGER threads. */
+  fbPage?: { id: string; name: string; pageId: string } | null;
   assignedTo: {
     id: string;
     name: string | null;

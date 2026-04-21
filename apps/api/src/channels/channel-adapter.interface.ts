@@ -20,9 +20,10 @@ export interface ChannelAdapter {
  */
 export interface InboxReplyContext {
   threadId: string;
+  workspaceId: string;            // Required for workspace-scoped DB lookups
   channel: ChannelType;
-  contactPhone: string;          // E164 for WhatsApp; unused for other channels
-  externalChatId: string | null; // Messenger PSID / Telegram chatId
+  contactPhone: string;           // E164 for WhatsApp; unused for other channels
+  externalChatId: string | null;  // Messenger PSID / Telegram chatId
   whatsappAccountId: string | null;
   facebookPageId: string | null;
   telegramAccountId: string | null;

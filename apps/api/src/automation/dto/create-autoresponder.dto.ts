@@ -26,13 +26,22 @@ export class CreateAutoresponderDto {
   @IsBoolean()
   active?: boolean;
 
-  /** Scope this rule to a specific WhatsApp account. Omit to apply workspace-wide. */
+  /** Scope to a specific WhatsApp account. Omit for workspace-wide. */
   @IsOptional()
   @IsUUID()
   whatsappAccountId?: string;
 
-  /** Relative URL to an uploaded media file, e.g. '/uploads/media/abc.jpg'.
-   *  When set the bot sends a media message; `response` becomes the caption. */
+  /**
+   * Scope to a specific Facebook Page (Messenger).
+   * When set, this rule only fires for messages received on that page.
+   * A rule with both whatsappAccountId=null AND facebookPageId=null
+   * fires on ALL channels (workspace-wide fallback).
+   */
+  @IsOptional()
+  @IsUUID()
+  facebookPageId?: string;
+
+  /** Relative URL to an uploaded media file, e.g. '/uploads/media/abc.jpg'. */
   @IsOptional()
   @IsString()
   mediaUrl?: string;

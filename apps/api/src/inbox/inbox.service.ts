@@ -19,8 +19,10 @@ export class InboxService {
       where: { workspaceId },
       orderBy: { updatedAt: 'desc' },
       include: {
-        contact: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        contact: { select: { id: true, firstName: true, lastName: true, phone: true, externalId: true } },
         assignedTo: { select: { id: true, name: true, email: true } },
+        // Include Facebook Page name for Messenger threads
+        fbPage: { select: { id: true, name: true, pageId: true } },
         _count: { select: { messages: true } },
         messages: {
           take: 1,
@@ -58,6 +60,7 @@ export class InboxService {
       return this.channelRouter.sendInboxReply(
         {
           threadId: thread.id,
+          workspaceId,
           channel: thread.channel,
           contactPhone: thread.contact.phone,
           externalChatId: thread.externalChatId,

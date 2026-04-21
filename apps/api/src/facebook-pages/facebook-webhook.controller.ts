@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Query, Res } from '@nestjs/common';
+import { Controller, Get, Headers, Post, Body, Query, RawBody, Res } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { Public } from '../common/decorators/public.decorator';
 import { FacebookInboundService, FacebookWebhookPayload } from './facebook-inbound.service';
 import { FacebookPagesService } from './facebook-pages.service';
@@ -18,8 +19,6 @@ export class FacebookWebhookController {
   /**
    * GET /facebook/webhook
    * Meta calls this to verify the webhook endpoint.
-   * Set FACEBOOK_WEBHOOK_VERIFY_TOKEN to any secret string, then use
-   * the same value in the Meta App Dashboard → Webhooks → Verify Token.
    */
   @Public()
   @Get('webhook')
@@ -40,14 +39,42 @@ export class FacebookWebhookController {
 
   /**
    * POST /facebook/webhook
-   * Receives all Messenger (and Instagram) events for the app.
-   * Must respond with 200 within 20 s — processing is fire-and-forget.
+   * Receives all Messenger events for the app.
+   * Verifies X-Hub-Signature-256 HMAC before processing.
+   * Must respond 200 within 20 s — processing is fire-and-forget.
    */
   @Public()
   @Post('webhook')
-  receiveWebhook(@Body() payload: FacebookWebhookPayload, @Res() res: Response) {
+  receiveWebhook(
+    @Body() payload: FacebookWebhookPayload,
+    @RawBody() rawBody: Buffer,
+    @Headers('x-hub-signature-256') sig: string | undefined,
+    @Res() res: Response,
+  ) {
+    const appSecret = this.config.get<string>('FACEBOOK_APP_SECRET') ?? '';
+
+    // Verify HMAC signature when app secret is configured
+    if (appSecret) {
+      if (!sig) {
+        res.status(403).send('Missing signature');
+        return;
+      }
+      const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody).digest('hex')}`;
+      const sigBuf = Buffer.from(sig);
+      const expBuf = Buffer.from(expected);
+      // Guard against length mismatch before timingSafeEqual
+      if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+        this.inbound['logger'].warn('Facebook webhook: invalid signature — request rejected');
+        res.status(403).send('Forbidden');
+        return;
+      }
+    }
+
+    // Respond immediately — Meta requires 200 within 20 s
     res.status(200).send('EVENT_RECEIVED');
-    if (payload?.object === 'page' || payload?.object === 'instagram') {
+
+    // Only handle Page/Messenger events — Instagram Messaging is not yet configured
+    if (payload?.object === 'page') {
       void this.inbound.handleWebhook(payload);
     }
   }
@@ -55,7 +82,6 @@ export class FacebookWebhookController {
   /**
    * GET /facebook/callback
    * OAuth redirect target — Meta sends the auth code here.
-   * Exchanges the code, saves pages, then redirects back to the frontend.
    */
   @Public()
   @Get('callback')

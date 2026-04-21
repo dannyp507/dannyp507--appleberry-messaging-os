@@ -125,6 +125,8 @@ export class IncomingMessageService {
       where: {
         workspaceId,
         active: true,
+        // Workspace-wide rules must have no facebookPageId set (those belong to Messenger)
+        facebookPageId: null,
         OR: [
           { whatsappAccountId: account.id },
           { whatsappAccountId: null },
@@ -206,9 +208,14 @@ export class IncomingMessageService {
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 3: Keyword triggers (START_FLOW / SEND_TEMPLATE)
     // ─────────────────────────────────────────────────────────────────────────
+    // Exclude MESSENGER-only triggers — those are handled by FacebookInboundService
     const triggers = await this.prisma.keywordTrigger.findMany({
-      where: { workspaceId, active: true },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        workspaceId,
+        active: true,
+        NOT: { channel: 'MESSENGER' },
+      },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     });
     for (const t of triggers) {
       if (!this.keywordMatches(t.keyword, t.matchType, job.text)) {

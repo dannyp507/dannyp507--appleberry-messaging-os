@@ -2,6 +2,7 @@
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,10 +26,33 @@ import { Inbox, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function threadHasUnread(t: InboxThread): boolean {
+  if (t.unreadCount > 0) return true;
   const latest = t.messages?.[0];
   return latest?.direction === "INBOUND";
 }
+
+/** Format the contact's display identifier, hiding synthetic fb: PSIDs */
+function contactSubtitle(t: InboxThread): string {
+  if (t.channel === "MESSENGER") {
+    return t.fbPage?.name ? `Messenger · ${t.fbPage.name}` : "Messenger";
+  }
+  if (t.channel === "TELEGRAM") return "Telegram";
+  // WhatsApp: show phone
+  const p = t.contact.phone;
+  return p.startsWith("fb:") ? "Messenger" : p;
+}
+
+const CHANNEL_BADGE: Record<string, { label: string; className: string }> = {
+  WHATSAPP: { label: "WA", className: "bg-green-500/15 text-green-400 border-green-500/20" },
+  MESSENGER: { label: "FB", className: "bg-blue-500/15 text-blue-400 border-blue-500/20" },
+  TELEGRAM: { label: "TG", className: "bg-sky-500/15 text-sky-400 border-sky-500/20" },
+  INSTAGRAM: { label: "IG", className: "bg-pink-500/15 text-pink-400 border-pink-500/20" },
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function InboxPage() {
   const queryClient = useQueryClient();
@@ -36,7 +60,6 @@ export default function InboxPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [assignUserId, setAssignUserId] = useState("");
-  const [showTyping, setShowTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: threads = [], isLoading } = useQuery({
@@ -60,18 +83,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, showTyping, threadId]);
-
-  useEffect(() => {
-    if (!threadId) {
-      setShowTyping(false);
-      return;
-    }
-    const id = window.setInterval(() => {
-      setShowTyping((v) => !v);
-    }, 2200);
-    return () => clearInterval(id);
-  }, [threadId]);
+  }, [messages, threadId]);
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -80,9 +92,7 @@ export default function InboxPage() {
     },
     onSuccess: () => {
       setDraft("");
-      void queryClient.invalidateQueries({
-        queryKey: qk.inboxMessages(threadId ?? ""),
-      });
+      void queryClient.invalidateQueries({ queryKey: qk.inboxMessages(threadId ?? "") });
       void queryClient.invalidateQueries({ queryKey: qk.inboxThreads });
     },
     onError: (e) => toast.error("Could not send", getApiErrorMessage(e)),
@@ -90,7 +100,7 @@ export default function InboxPage() {
 
   const patchMutation = useMutation({
     mutationFn: async (body: {
-      status?: "OPEN" | "CLOSED";
+      status?: "OPEN" | "PENDING" | "RESOLVED" | "CLOSED";
       assignedToId?: string | null;
     }) => {
       if (!threadId) return;
@@ -103,16 +113,18 @@ export default function InboxPage() {
   });
 
   const active = threads.find((t) => t.id === threadId);
+  const channelBadge = active ? CHANNEL_BADGE[active.channel] : null;
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col md:h-[calc(100vh-4rem)]">
       <div className="page-container border-b border-border/60 pb-6 pt-2">
         <PageHeader
           title="Inbox"
-          description="Reply fast. Unread customer threads are highlighted."
+          description="Reply to customer conversations across all channels."
         />
       </div>
       <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(240px,300px)_1fr]">
+        {/* Thread list */}
         <div className="border-b border-border/60 bg-muted/15 md:border-b-0 md:border-r md:border-border/60">
           <ScrollArea className="h-full md:max-h-[calc(100vh-12rem)]">
             <div className="space-y-1 p-3">
@@ -127,11 +139,12 @@ export default function InboxPage() {
                   className="mx-2 my-4 border-none bg-transparent"
                   icon={Inbox}
                   title="No conversations yet"
-                  description="When customers message your WhatsApp numbers, threads appear here."
+                  description="When customers message you via WhatsApp, Messenger, or Telegram, threads appear here."
                 />
               ) : (
                 threads.map((t) => {
                   const unread = threadHasUnread(t);
+                  const badge = CHANNEL_BADGE[t.channel];
                   const preview = t.messages?.[0]?.message;
                   return (
                     <button
@@ -147,15 +160,25 @@ export default function InboxPage() {
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 font-medium leading-tight">
-                          {t.contact.firstName} {t.contact.lastName}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {badge && (
+                            <span className={cn(
+                              "shrink-0 rounded px-1 py-0.5 text-[9px] font-bold border",
+                              badge.className,
+                            )}>
+                              {badge.label}
+                            </span>
+                          )}
+                          <span className="font-medium leading-tight truncate">
+                            {t.contact.firstName} {t.contact.lastName}
+                          </span>
                         </div>
                         {unread ? (
                           <span className="mt-0.5 size-2 shrink-0 rounded-full bg-primary shadow-sm" />
                         ) : null}
                       </div>
                       <div className="mt-0.5 text-xs text-muted-foreground">
-                        {t.contact.phone}
+                        {contactSubtitle(t)}
                       </div>
                       {preview ? (
                         <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
@@ -174,25 +197,55 @@ export default function InboxPage() {
           </ScrollArea>
         </div>
 
+        {/* Message panel */}
         <div className="flex min-h-0 flex-col bg-background/40">
           {!threadId ? (
             <div className="flex flex-1 items-center justify-center p-6">
               <EmptyState
                 icon={Inbox}
-                title="Select a thread"
-                description="Choose a conversation to read and reply."
+                title="Select a conversation"
+                description="Choose a thread on the left to read and reply."
               />
             </div>
           ) : (
             <>
+              {/* Thread header */}
               <div className="space-y-3 border-b border-border/60 p-4 md:p-5">
+                {/* Contact + channel info */}
+                {active && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm">
+                      {active.contact.firstName} {active.contact.lastName}
+                    </span>
+                    {channelBadge && (
+                      <Badge
+                        variant="outline"
+                        className={cn("text-xs border", channelBadge.className)}
+                      >
+                        {active.channel === "MESSENGER"
+                          ? `Messenger${active.fbPage ? ` · ${active.fbPage.name}` : ""}`
+                          : active.channel === "TELEGRAM"
+                          ? "Telegram"
+                          : active.contact.phone.startsWith("fb:")
+                          ? "Messenger"
+                          : active.contact.phone}
+                      </Badge>
+                    )}
+                    {active.channel === "MESSENGER" && (
+                      <span className="text-xs text-amber-500/80">
+                        24h reply window applies
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">Status</Label>
                     <Select
                       value={active?.status}
                       onValueChange={(v) => {
-                        if (v === "OPEN" || v === "CLOSED") {
+                        if (v === "OPEN" || v === "PENDING" || v === "RESOLVED" || v === "CLOSED") {
                           patchMutation.mutate({ status: v });
                         }
                       }}
@@ -202,6 +255,8 @@ export default function InboxPage() {
                       </SelectTrigger>
                       <SelectContent className="rounded-xl">
                         <SelectItem value="OPEN">Open</SelectItem>
+                        <SelectItem value="PENDING">Pending</SelectItem>
+                        <SelectItem value="RESOLVED">Resolved</SelectItem>
                         <SelectItem value="CLOSED">Closed</SelectItem>
                       </SelectContent>
                     </Select>
@@ -211,9 +266,7 @@ export default function InboxPage() {
                     variant="secondary"
                     size="sm"
                     className="rounded-xl"
-                    onClick={() =>
-                      me && patchMutation.mutate({ assignedToId: me.id })
-                    }
+                    onClick={() => me && patchMutation.mutate({ assignedToId: me.id })}
                     disabled={!me || patchMutation.isPending}
                   >
                     {patchMutation.isPending ? (
@@ -232,6 +285,7 @@ export default function InboxPage() {
                     Unassign
                   </Button>
                 </div>
+
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="grid min-w-[200px] flex-1 gap-1">
                     <Label className="text-xs text-muted-foreground">
@@ -260,6 +314,7 @@ export default function InboxPage() {
                     Apply
                   </Button>
                 </div>
+
                 {active?.assignedTo ? (
                   <p className="text-xs text-muted-foreground">
                     Assigned: {active.assignedTo.name ?? active.assignedTo.email}
@@ -269,6 +324,7 @@ export default function InboxPage() {
                 )}
               </div>
 
+              {/* Messages */}
               <ScrollArea className="min-h-0 flex-1">
                 <div className="space-y-3 p-4 md:p-5">
                   {messagesFetching && messages.length === 0 ? (
@@ -281,7 +337,7 @@ export default function InboxPage() {
                       <div
                         key={m.id}
                         className={cn(
-                          "max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm shadow-sm transition-shadow duration-200",
+                          "max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm shadow-sm",
                           m.direction === "OUTBOUND"
                             ? "ml-auto bg-primary text-primary-foreground"
                             : "bg-muted/80 ring-1 ring-border/40",
@@ -295,20 +351,11 @@ export default function InboxPage() {
                       </div>
                     ))
                   )}
-                  {showTyping && threadId ? (
-                    <div className="flex max-w-[78%] items-center gap-2 rounded-xl bg-muted/80 px-3.5 py-2.5 text-xs text-muted-foreground ring-1 ring-border/40">
-                      <span className="flex gap-1">
-                        <span className="inline-block size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.2s]" />
-                        <span className="inline-block size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.1s]" />
-                        <span className="inline-block size-1.5 animate-bounce rounded-full bg-muted-foreground/70" />
-                      </span>
-                      Customer is typing…
-                    </div>
-                  ) : null}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
 
+              {/* Compose */}
               <div className="space-y-2 border-t border-border/60 bg-background/80 p-4 backdrop-blur-sm md:p-5">
                 <Textarea
                   rows={3}
@@ -316,6 +363,11 @@ export default function InboxPage() {
                   placeholder="Write a reply…"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && draft.trim()) {
+                      sendMutation.mutate();
+                    }
+                  }}
                 />
                 <Button
                   className="rounded-xl"

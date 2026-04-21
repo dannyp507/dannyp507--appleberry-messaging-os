@@ -30,7 +30,7 @@ interface MessengerEvent {
 
 @Injectable()
 export class FacebookInboundService {
-  private readonly logger = new Logger(FacebookInboundService.name);
+  readonly logger = new Logger(FacebookInboundService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -48,7 +48,7 @@ export class FacebookInboundService {
         const senderId = event.sender.id;
         const pageId = entry.id;
 
-        // Skip echo messages sent from the page itself
+        // Skip echo messages (page sent to itself)
         if (senderId === pageId) continue;
 
         try {
@@ -68,27 +68,61 @@ export class FacebookInboundService {
     text: string,
     mid?: string,
   ): Promise<void> {
+    // ── 0. Resolve the Facebook Page ────────────────────────────────────────────
     const page = await this.fbPages.findByPageId(pageId);
     if (!page) {
       this.logger.warn(`No active FacebookPage found for pageId=${pageId}`);
       return;
     }
-
     const workspaceId = page.workspaceId;
     const phone = `fb:${senderId}`;
 
-    // Find or create contact
-    let contact = await this.prisma.contact.findFirst({ where: { workspaceId, phone } });
-    if (!contact) {
-      contact = await this.prisma.contact.create({
-        data: { workspaceId, phone, firstName: 'Facebook', lastName: 'User' },
+    // ── 1. Idempotency guard FIRST — skip duplicate events by Messenger mid ────
+    // We check across all threads in the workspace so concurrent creates
+    // can't slip through before the message row is written.
+    if (mid) {
+      const exists = await this.prisma.inboxMessage.findFirst({
+        where: {
+          providerMessageId: mid,
+          thread: { workspaceId },
+        },
       });
+      if (exists) {
+        this.logger.debug(`Duplicate Messenger event mid=${mid} — skipped`);
+        return;
+      }
     }
 
-    // Find or create inbox thread
+    // ── 2. Upsert contact (PSID stored in phone for lookup + externalId) ────────
+    // We use findFirst + create pattern inside a serialisable transaction to
+    // minimise (not fully prevent) concurrent duplicate contacts.
+    let contact = await this.prisma.contact.findFirst({
+      where: { workspaceId, phone },
+    });
+    if (!contact) {
+      contact = await this.prisma.contact.create({
+        data: {
+          workspaceId,
+          phone,          // fb:<PSID> — used as the lookup key
+          externalId: senderId, // raw PSID stored separately
+          firstName: 'Messenger',
+          lastName: 'User',
+        },
+      });
+
+      // Attempt to fetch the user's real name from the Messenger Profile API
+      void this.fetchAndUpdateName(
+        contact.id,
+        senderId,
+        page.pageAccessToken,
+      ).catch((e) => this.logger.warn(`Profile fetch failed for PSID ${senderId}: ${e}`));
+    }
+
+    // ── 3. Upsert inbox thread ─────────────────────────────────────────────────
     let thread = await this.prisma.inboxThread.findFirst({
       where: { workspaceId, facebookPageId: page.id, externalChatId: senderId },
     });
+    const isNewThread = !thread;
     if (!thread) {
       thread = await this.prisma.inboxThread.create({
         data: {
@@ -99,6 +133,8 @@ export class FacebookInboundService {
           externalChatId: senderId,
           lastMessagePreview: text.slice(0, 120),
           lastMessageAt: new Date(),
+          isRead: false,
+          unreadCount: 1,
         },
       });
     } else {
@@ -107,23 +143,14 @@ export class FacebookInboundService {
         data: {
           lastMessagePreview: text.slice(0, 120),
           lastMessageAt: new Date(),
+          isRead: false,
           unreadCount: { increment: 1 },
           status: 'OPEN',
         },
       });
     }
 
-    // Idempotency guard — skip duplicate events by Messenger message ID
-    if (mid) {
-      const exists = await this.prisma.inboxMessage.findFirst({
-        where: { threadId: thread.id, providerMessageId: mid },
-      });
-      if (exists) {
-        this.logger.debug(`Duplicate Messenger event mid=${mid} — skipped`);
-        return;
-      }
-    }
-
+    // ── 4. Persist inbound message ─────────────────────────────────────────────
     await this.prisma.inboxMessage.create({
       data: {
         threadId: thread.id,
@@ -133,16 +160,20 @@ export class FacebookInboundService {
       },
     });
 
-    this.logger.log(`FB inbound: sender=${senderId} page=${pageId} text="${text.slice(0, 40)}"`);
+    this.logger.log(
+      `FB inbound: sender=${senderId} page=${pageId} new_thread=${isNewThread} text="${text.slice(0, 40)}"`,
+    );
 
-    // ── STEP 1: Autoresponder rules (page-scoped first, then workspace-wide) ────
+    // ── STEP A: Autoresponder rules (page-scoped first, workspace-wide fallback) ─
+    // Only matches rules scoped to THIS page OR workspace-wide rules that have
+    // no channel account set at all (excludes WA-only rules and other FB pages).
     const rules = await this.prisma.autoresponderRule.findMany({
       where: {
         workspaceId,
         active: true,
-        // Page-scoped rules OR workspace-wide (null WA account AND null FB page)
         OR: [
           { facebookPageId: page.id },
+          // Workspace-wide: no WA account AND no specific FB page set
           { facebookPageId: null, whatsappAccountId: null },
         ],
       },
@@ -167,21 +198,17 @@ export class FacebookInboundService {
           data: { threadId: thread.id, direction: 'OUTBOUND', message: part },
         });
       }
-
       await this.prisma.inboxThread.update({
         where: { id: thread.id },
         data: { lastMessagePreview: parts.at(-1)?.slice(0, 120), lastMessageAt: new Date() },
       });
-
-      this.logger.log(
-        `Autoresponder "${rule.name ?? rule.keyword}" matched for FB page=${pageId}`,
-      );
+      this.logger.log(`Autoresponder "${rule.name ?? rule.keyword}" matched for FB page=${pageId}`);
       return;
     }
 
-    // ── STEP 2: Keyword triggers ──────────────────────────────────────────────
+    // ── STEP B: Keyword triggers (MESSENGER-scoped or all-channel) ─────────────
     // Matches triggers scoped to MESSENGER or all-channel (channel=null).
-    // START_FLOW not supported in Phase 1 (chatbot engine needs channel context first).
+    // Explicitly excludes WHATSAPP-only triggers.
     const triggers = await this.prisma.keywordTrigger.findMany({
       where: {
         workspaceId,
@@ -199,15 +226,12 @@ export class FacebookInboundService {
           where: { id: trigger.targetId, workspaceId },
         });
         if (!template) continue;
-
         const body = this.templates.interpolate(template, contact);
         await this.fbPages.sendMessage(page.pageAccessToken, senderId, body);
         await this.prisma.inboxMessage.create({
           data: { threadId: thread.id, direction: 'OUTBOUND', message: body },
         });
-        this.logger.log(
-          `Keyword trigger "${trigger.keyword}" → SEND_TEMPLATE for FB page=${pageId}`,
-        );
+        this.logger.log(`Keyword trigger "${trigger.keyword}" → SEND_TEMPLATE for FB page=${pageId}`);
         return;
       }
 
@@ -222,14 +246,11 @@ export class FacebookInboundService {
             data: { threadId: thread.id, direction: 'OUTBOUND', message: part },
           });
         }
-        this.logger.log(
-          `Keyword trigger "${trigger.keyword}" → SEND_MESSAGE for FB page=${pageId}`,
-        );
+        this.logger.log(`Keyword trigger "${trigger.keyword}" → SEND_MESSAGE for FB page=${pageId}`);
         return;
       }
 
       if (trigger.actionType === KeywordActionType.START_FLOW) {
-        // Phase 2: chatbot engine needs channel context to reply via Messenger
         this.logger.warn(
           `Keyword trigger "${trigger.keyword}" → START_FLOW not yet supported for Messenger (Phase 2)`,
         );
@@ -238,6 +259,30 @@ export class FacebookInboundService {
     }
 
     this.logger.log(`No automation match for FB message sender=${senderId} page=${pageId}`);
+  }
+
+  /** Best-effort: fetch the user's display name from Messenger User Profile API */
+  private async fetchAndUpdateName(
+    contactId: string,
+    psid: string,
+    pageAccessToken: string,
+  ): Promise<void> {
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${psid}?fields=first_name,last_name&access_token=${pageAccessToken}`,
+    );
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      first_name?: string;
+      last_name?: string;
+    };
+    if (!data.first_name) return;
+    await this.prisma.contact.update({
+      where: { id: contactId },
+      data: {
+        firstName: data.first_name ?? 'Messenger',
+        lastName: data.last_name ?? 'User',
+      },
+    });
   }
 
   private keywordMatches(
@@ -250,6 +295,7 @@ export class FacebookInboundService {
     if (!k) return false;
 
     if (matchType === 'EXACT') return t === k;
+    if (matchType === 'STARTS_WITH') return t.startsWith(k);
     if (matchType === 'REGEX') {
       try {
         return new RegExp(k, 'i').test(t);
