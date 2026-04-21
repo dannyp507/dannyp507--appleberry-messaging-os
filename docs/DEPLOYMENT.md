@@ -36,6 +36,14 @@ Edit `.env.production`:
 - Set `NEXT_PUBLIC_API_URL` to the **browser-visible** API base (same host and port as the app, path `/api`, no trailing slash), e.g. `https://app.example.com/api`.
 - If ports **80** or **443** are already in use on the host, set `NGINX_HTTP_PORT` / `NGINX_HTTPS_PORT` (e.g. `8080` and `8443`) and match `CORS_ORIGIN` / `NEXT_PUBLIC_API_URL` to that port.
 
+Optional Google sign-in:
+
+- Google OAuth web clients require HTTPS redirect URIs, and the host cannot be a raw public IP address. Use a real domain or subdomain pointed at the VPS.
+- Create a Google OAuth 2.0 Web application client.
+- Add the app origin as an authorized JavaScript origin, e.g. `https://app.example.com`.
+- Add the API callback as an authorized redirect URI, e.g. `https://app.example.com/api/auth/google/callback` for the Nginx production stack, or `https://api.example.com/auth/google/callback` if the API is served on its own hostname.
+- Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `WEB_APP_URL`, and `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=1`.
+
 Validate the compose file (optional):
 
 ```bash
@@ -103,4 +111,3 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec nginx 
 
 - View logs: `docker compose -f docker-compose.prod.yml logs -f api web nginx`
 - Database backup: use `pg_dump` against the `postgres` service (expose port temporarily or run from a sidecar container on the same Docker network).
-

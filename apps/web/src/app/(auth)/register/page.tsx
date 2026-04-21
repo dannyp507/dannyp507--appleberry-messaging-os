@@ -1,12 +1,12 @@
 "use client";
 
-import { api, getApiErrorMessage } from "@/lib/api/client";
+import { api, apiBaseURL, getApiErrorMessage } from "@/lib/api/client";
 import type { SessionUser } from "@/stores/auth-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,8 @@ interface RegisterResponse {
   organizationId: string;
   user: SessionUser;
 }
+
+const googleAuthEnabled = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "1";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -147,6 +149,17 @@ export default function RegisterPage() {
               {loading ? "Creating account..." : "Create account"}
             </Button>
           </form>
+          {googleAuthEnabled ? (
+            <a
+              href={`${apiBaseURL}/auth/google`}
+              className={buttonVariants({
+                variant: "outline",
+                className: "mt-3 w-full",
+              })}
+            >
+              Continue with Google
+            </a>
+          ) : null}
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
             <Link

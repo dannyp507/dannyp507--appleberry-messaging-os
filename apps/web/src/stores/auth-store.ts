@@ -5,6 +5,7 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string | null;
+  emailVerified?: boolean;
 }
 
 export interface AuthStore {

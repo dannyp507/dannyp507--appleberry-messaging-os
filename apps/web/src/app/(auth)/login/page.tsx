@@ -1,11 +1,11 @@
 "use client";
 
-import { api, getApiErrorMessage } from "@/lib/api/client";
+import { api, apiBaseURL, getApiErrorMessage } from "@/lib/api/client";
 import type { SessionUser } from "@/stores/auth-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,8 @@ interface LoginResponse {
   organizationId: string;
   user: SessionUser;
 }
+
+const googleAuthEnabled = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "1";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -120,6 +122,17 @@ export default function LoginPage() {
               {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
+          {googleAuthEnabled ? (
+            <a
+              href={`${apiBaseURL}/auth/google`}
+              className={buttonVariants({
+                variant: "outline",
+                className: "mt-3 w-full",
+              })}
+            >
+              Continue with Google
+            </a>
+          ) : null}
           <p className="mt-4 text-center text-sm text-muted-foreground">
             New to Appleberry?{" "}
             <Link

@@ -12,3 +12,11 @@ export type RefreshTokenPayload = {
   workspaceId: string | null;
   typ: 'refresh';
 };
+
+export type OAuthSessionPayload = {
+  sub: string;
+  email: string;
+  organizationId: string;
+  workspaceId: string | null;
+  typ: 'oauth_session';
+};

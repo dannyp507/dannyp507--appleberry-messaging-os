@@ -1,11 +1,11 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/stores/auth-store";
 
-const baseURL =
+export const apiBaseURL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:3001";
 
 export const api = axios.create({
-  baseURL,
+  baseURL: apiBaseURL,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });
@@ -46,7 +46,7 @@ api.interceptors.response.use(
         refreshToken: string;
         workspaceId: string;
       }>(
-        `${baseURL}/auth/refresh`,
+        `${apiBaseURL}/auth/refresh`,
         refreshToken ? { refreshToken } : {},
         { withCredentials: true },
       );
