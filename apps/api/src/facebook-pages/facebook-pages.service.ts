@@ -133,6 +133,12 @@ export class FacebookPagesService {
             isActive: true,
           },
         });
+
+        // Step 5: Subscribe the page to webhook events.
+        // This is required in addition to the app-level webhook URL — without it,
+        // Meta will NOT deliver events for this page even if the webhook URL is set.
+        await this.subscribePageToWebhook(page.id, page.access_token);
+
         savedCount++;
       }
 
@@ -168,6 +174,32 @@ export class FacebookPagesService {
     if (!page) throw new NotFoundException('Facebook page not found');
     await this.prisma.facebookPage.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  /**
+   * Subscribe a Facebook Page to webhook events for this app.
+   * Must be called after OAuth connect — this is separate from the app-level
+   * webhook URL and controls whether Meta actually delivers events for this page.
+   * Safe to call multiple times (idempotent).
+   */
+  async subscribePageToWebhook(pageId: string, pageAccessToken: string): Promise<void> {
+    const res = await fetch(
+      `${GRAPH_BASE}/${pageId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          subscribed_fields: 'messages,messaging_postbacks,message_deliveries,message_reads',
+          access_token: pageAccessToken,
+        }).toString(),
+      },
+    );
+    const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message: string } };
+    if (!body.success) {
+      this.logger.error(`Failed to subscribe page ${pageId} to webhook: ${body.error?.message ?? JSON.stringify(body)}`);
+    } else {
+      this.logger.log(`Page ${pageId} subscribed to webhook fields: messages, messaging_postbacks, message_deliveries, message_reads`);
+    }
   }
 
   /** Send a text message via the Messenger Graph API */
