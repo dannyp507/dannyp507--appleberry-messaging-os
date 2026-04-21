@@ -125,7 +125,12 @@ export default function AiSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Select value={provider} onValueChange={setProvider}>
+          <Select
+            value={provider}
+            onValueChange={(value) => {
+              if (value) setProvider(value);
+            }}
+          >
             <SelectTrigger className="w-56">
               <SelectValue />
             </SelectTrigger>
@@ -213,7 +218,12 @@ export default function AiSettingsPage() {
 
           <div className="space-y-2">
             <Label>Model</Label>
-            <Select value={openaiModel} onValueChange={setOpenaiModel}>
+            <Select
+              value={openaiModel}
+              onValueChange={(value) => {
+                if (value) setOpenaiModel(value);
+              }}
+            >
               <SelectTrigger className="w-64">
                 <SelectValue />
               </SelectTrigger>
@@ -286,7 +296,12 @@ export default function AiSettingsPage() {
 
           <div className="space-y-2">
             <Label>Model</Label>
-            <Select value={geminiModel} onValueChange={setGeminiModel}>
+            <Select
+              value={geminiModel}
+              onValueChange={(value) => {
+                if (value) setGeminiModel(value);
+              }}
+            >
               <SelectTrigger className="w-64">
                 <SelectValue />
               </SelectTrigger>
