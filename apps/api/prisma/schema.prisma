@@ -296,9 +296,28 @@ model Workspace {
   exports              Export[]
   billingEvents        BillingEvent[]
   customFieldDefs      ContactCustomFieldDef[]
+  aiSettings           WorkspaceAiSettings?
 
   @@unique([organizationId, slug])
   @@index([organizationId])
+}
+
+// ─── AI Settings ─────────────────────────────────────────────────────────────
+
+model WorkspaceAiSettings {
+  id              String   @id @default(uuid()) @db.Uuid
+  workspaceId     String   @unique @db.Uuid
+  /// "openai" | "gemini"
+  defaultProvider String   @default("openai")
+  systemPrompt    String?  @db.Text
+  openaiApiKey    String?  @db.Text
+  openaiModel     String   @default("gpt-4o-mini")
+  geminiApiKey    String?  @db.Text
+  geminiModel     String   @default("gemini-1.5-flash")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 // ─── Plans & Billing ──────────────────────────────────────────────────────────

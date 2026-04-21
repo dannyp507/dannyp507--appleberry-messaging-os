@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
+import { AiService } from '../ai/ai.service';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -23,6 +24,7 @@ export class ChatbotEngineService {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => MessagesService))
     private readonly messages: MessagesService,
+    private readonly ai: AiService,
   ) {}
 
   private readVars(run: { variables: unknown }): Record<string, string> {
@@ -270,6 +272,63 @@ export class ChatbotEngineService {
           await this.prisma.chatbotRun.update({
             where: { id: runId },
             data: { currentNodeId: next },
+          });
+          continue;
+        }
+        case ChatbotNodeType.AI_REPLY: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const systemPrompt =
+            typeof content.systemPrompt === 'string'
+              ? content.systemPrompt
+              : undefined;
+
+          // Gather last 10 inbox messages as context
+          const thread = await this.prisma.inboxThread.findFirst({
+            where: { workspaceId: run.workspaceId, contactId: run.contactId },
+            orderBy: { updatedAt: 'desc' },
+            include: {
+              messages: {
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+              },
+            },
+          });
+          const recentMessages = (thread?.messages ?? [])
+            .reverse()
+            .map((m) => ({ direction: m.direction, message: m.message }));
+
+          const vars = this.readVars(run);
+          const lastInput = vars.lastInput ?? '';
+
+          const reply = await this.ai.generateReply(
+            {
+              workspaceId: run.workspaceId,
+              contactId: run.contactId,
+              recentMessages,
+            },
+            lastInput,
+            systemPrompt,
+          );
+
+          if (reply) {
+            await this.messages.enqueueOutboundText({
+              workspaceId: run.workspaceId,
+              whatsappAccountId: accountId,
+              to: run.contact.phone,
+              message: reply,
+              contactId: run.contactId,
+              inboxThreadId: sendCtx.inboxThreadId ?? null,
+            });
+          }
+
+          const aiNext = await this.pickNextLinear(node.id);
+          if (!aiNext) {
+            await this.completeRun(runId);
+            return;
+          }
+          await this.prisma.chatbotRun.update({
+            where: { id: runId },
+            data: { currentNodeId: aiNext },
           });
           continue;
         }

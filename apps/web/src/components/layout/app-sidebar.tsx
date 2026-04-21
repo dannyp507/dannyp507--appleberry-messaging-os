@@ -32,6 +32,7 @@ const channelsNav = [
 
 const settingsNav = [
   { href: "/settings", label: "Settings", icon: "settings" },
+  { href: "/settings/ai", label: "AI Providers", icon: "auto_awesome" },
   { href: "/settings/billing", label: "Billing", icon: "credit_card" },
   { href: "/settings/api-keys", label: "API Keys", icon: "key" },
 ];

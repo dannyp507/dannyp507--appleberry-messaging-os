@@ -28,6 +28,7 @@ import { WhatsappAccountsModule } from './whatsapp-accounts/whatsapp-accounts.mo
 import { WorkspacesModule } from './workspaces/workspaces.module';
 import { TelegramAccountsModule } from './telegram-accounts/telegram-accounts.module';
 import { FacebookPagesModule } from './facebook-pages/facebook-pages.module';
+import { WorkspaceAiSettingsModule } from './workspace-ai-settings/workspace-ai-settings.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -65,6 +66,7 @@ import { AppController } from './app.controller';
     AnalyticsModule,
     TelegramAccountsModule,
     FacebookPagesModule,
+    WorkspaceAiSettingsModule,
   ],
   providers: [
     {
