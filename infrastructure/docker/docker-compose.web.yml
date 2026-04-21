@@ -1,0 +1,15 @@
+services:
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://appleberry-api.duckdns.org
+    container_name: appleberry-web
+    ports:
+      - "8090:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    restart: unless-stopped
