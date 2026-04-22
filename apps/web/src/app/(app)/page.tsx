@@ -8,6 +8,15 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
+import {
+  ArrowRight,
+  FileText,
+  GitBranch,
+  Inbox as InboxIcon,
+  Radio,
+  Settings,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
@@ -211,7 +220,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-emerald-500">cell_tower</span>
+                  <Radio className="size-5 text-emerald-500" />
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-[#73757d] uppercase tracking-widest">Connection</p>
@@ -227,7 +236,7 @@ export default function DashboardPage() {
               href="/whatsapp-accounts"
               className="w-full py-3 rounded-xl stitch-gradient text-white text-sm font-bold flex items-center justify-center gap-2 shadow-[0_8px_20px_-5px_rgba(99,102,241,0.35)] hover:opacity-90 transition-all"
             >
-              <span className="material-symbols-outlined text-sm">manage_accounts</span>
+              <Settings className="size-4" />
               Manage Accounts
             </Link>
           </div>
@@ -272,21 +281,21 @@ export default function DashboardPage() {
           <div className="bg-[#161a21] border border-[#262B33]/20 rounded-2xl p-6">
             <h3 className="text-[10px] font-bold text-white uppercase tracking-widest mb-4">Quick Actions</h3>
             <div className="space-y-1">
-              {[
-                { href: "/chatbot", label: "Manage Chatbot Flows", icon: "account_tree" },
-                { href: "/templates", label: "Browse Templates", icon: "layers" },
-                { href: "/inbox", label: "Open Inbox", icon: "inbox" },
-              ].map(({ href, label, icon }) => (
+              {(
+                [
+                  { href: "/chatbot",   label: "Manage Chatbot Flows", icon: GitBranch },
+                  { href: "/templates", label: "Browse Templates",     icon: FileText  },
+                  { href: "/inbox",     label: "Open Inbox",           icon: InboxIcon },
+                ] satisfies { href: string; label: string; icon: LucideIcon }[]
+              ).map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#a9abb3] hover:text-white hover:bg-[#262B33]/30 transition-all group"
                 >
-                  <span className="material-symbols-outlined text-[18px] text-[#6366F1]">{icon}</span>
+                  <Icon className="size-[17px] shrink-0 text-[#6366F1]" strokeWidth={1.75} />
                   {label}
-                  <span className="material-symbols-outlined text-[14px] ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                    arrow_forward
-                  </span>
+                  <ArrowRight className="size-3.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                 </Link>
               ))}
             </div>
