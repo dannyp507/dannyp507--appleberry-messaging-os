@@ -28,6 +28,7 @@ import type { AutoresponderRule, WhatsAppAccount } from "@/lib/api/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
+  CheckSquare,
   ChevronDown,
   ChevronRight,
   FileImage,
@@ -38,6 +39,7 @@ import {
   ImageIcon,
   Loader2,
   MessageSquare,
+  Minus,
   Paperclip,
   Pencil,
   Phone,
@@ -131,6 +133,11 @@ function buildGroups(rules: AutoresponderRule[]): Group[] {
   }));
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function groupKey(name: string, accountId: string | null) {
+  return `${name}:::${accountId ?? "__global__"}`;
+}
+
 // ─── Account section ──────────────────────────────────────────────────────────
 function AccountSection({
   account,
@@ -140,6 +147,8 @@ function AccountSection({
   onDelete,
   onImport,
   onNew,
+  selectedKeys,
+  onToggleSelect,
 }: {
   account: WhatsAppAccount | null; // null = workspace-wide
   allRules: AutoresponderRule[];
@@ -148,6 +157,8 @@ function AccountSection({
   onDelete: (g: Group) => void;
   onImport: (file: File, accountId: string | null) => Promise<void>;
   onNew: (accountId: string | null) => void;
+  selectedKeys: Set<string>;
+  onToggleSelect: (key: string, allKeys?: string[]) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -157,6 +168,9 @@ function AccountSection({
     account ? r.whatsappAccountId === account.id : r.whatsappAccountId === null,
   );
   const groups = buildGroups(rules);
+  const sectionKeys = groups.map((g) => groupKey(g.name, account?.id ?? null));
+  const allSelected = sectionKeys.length > 0 && sectionKeys.every((k) => selectedKeys.has(k));
+  const someSelected = sectionKeys.some((k) => selectedKeys.has(k));
 
   const label = account
     ? account.name + (account.phone ? ` · ${account.phone}` : "")
@@ -176,6 +190,24 @@ function AccountSection({
         className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30"
         onClick={() => setOpen((o) => !o)}
       >
+        {/* Section select-all checkbox */}
+        {groups.length > 0 && (
+          <button
+            type="button"
+            className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${allSelected ? "border-primary bg-primary text-white" : someSelected ? "border-primary bg-primary/20 text-primary" : "border-border bg-background hover:border-primary/60"}`}
+            title={allSelected ? "Deselect all in section" : "Select all in section"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect("__section__", sectionKeys);
+            }}
+          >
+            {allSelected ? (
+              <svg viewBox="0 0 10 10" className="size-2.5 fill-current"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            ) : someSelected ? (
+              <Minus className="size-2.5" />
+            ) : null}
+          </button>
+        )}
         <span className={`size-2.5 rounded-full ${statusDot}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -248,11 +280,24 @@ function AccountSection({
       )}
 
       {open &&
-        groups.map((group, idx) => (
+        groups.map((group, idx) => {
+          const key = groupKey(group.name, account?.id ?? null);
+          const isChecked = selectedKeys.has(key);
+          return (
           <div
             key={group.name + idx}
-            className="flex items-start gap-4 border-t border-border/40 px-4 py-3 transition-colors hover:bg-muted/20"
+            className={`flex items-start gap-3 border-t border-border/40 px-4 py-3 transition-colors hover:bg-muted/20 ${isChecked ? "bg-primary/5" : ""}`}
           >
+            {/* Row checkbox */}
+            <button
+              type="button"
+              className={`mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${isChecked ? "border-primary bg-primary text-white" : "border-border bg-background hover:border-primary/60"}`}
+              onClick={() => onToggleSelect(key)}
+            >
+              {isChecked && (
+                <svg viewBox="0 0 10 10" className="size-2.5 fill-current"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              )}
+            </button>
             {/* Status dot */}
             <div
               className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${group.active ? "bg-emerald-500/10" : "bg-muted"}`}
@@ -357,7 +402,7 @@ function AccountSection({
               </Button>
             </div>
           </div>
-        ))}
+        );})}
     </div>
   );
 }
@@ -376,6 +421,7 @@ export default function ChatbotItemsPage() {
   const [itemResponse, setItemResponse] = useState("");
   const [itemMatchType, setItemMatchType] = useState<"EXACT" | "CONTAINS">("EXACT");
   const [itemUseAi, setItemUseAi] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [itemMediaUrl, setItemMediaUrl] = useState<string | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const mediaFileRef = useRef<HTMLInputElement>(null);
@@ -479,6 +525,47 @@ export default function ChatbotItemsPage() {
     },
     onError: (e) => toast.error("Could not delete", getApiErrorMessage(e)),
   });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (keys: string[]) => {
+      // Build a flat map of all groups keyed by groupKey
+      const allGroups = new Map<string, Group>();
+      for (const acc of [null, ...accounts.map((a) => a)]) {
+        const accRules = rules.filter((r) =>
+          acc ? r.whatsappAccountId === (acc as WhatsAppAccount).id : r.whatsappAccountId === null,
+        );
+        for (const g of buildGroups(accRules)) {
+          allGroups.set(groupKey(g.name, acc ? (acc as WhatsAppAccount).id : null), g);
+        }
+      }
+      for (const key of keys) {
+        const g = allGroups.get(key);
+        if (g) for (const r of g.items) await api.delete(`/autoresponder/rules/${r.id}`);
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.autoresponderRules });
+      setSelectedKeys(new Set());
+      toast.success("Deleted selected items");
+    },
+    onError: (e) => toast.error("Bulk delete failed", getApiErrorMessage(e)),
+  });
+
+  const handleToggleSelect = (key: string, allKeys?: string[]) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (key === "__section__" && allKeys) {
+        // If all in section already selected → deselect all; else select all
+        const allSelected = allKeys.every((k) => prev.has(k));
+        if (allSelected) allKeys.forEach((k) => next.delete(k));
+        else allKeys.forEach((k) => next.add(k));
+      } else {
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+      }
+      return next;
+    });
+  };
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const openNew = (accountId: string | null) => {
@@ -642,6 +729,8 @@ export default function ChatbotItemsPage() {
               onDelete={(g) => deleteMutation.mutate(g)}
               onImport={handleImport}
               onNew={openNew}
+              selectedKeys={selectedKeys}
+              onToggleSelect={handleToggleSelect}
             />
           ))}
 
@@ -654,6 +743,8 @@ export default function ChatbotItemsPage() {
             onDelete={(g) => deleteMutation.mutate(g)}
             onImport={handleImport}
             onNew={openNew}
+            selectedKeys={selectedKeys}
+            onToggleSelect={handleToggleSelect}
           />
         </div>
       )}
@@ -663,6 +754,43 @@ export default function ChatbotItemsPage() {
         <p className="text-xs text-muted-foreground">
           {totalActive} active · {buildGroups(rules).filter((g) => !g.active).length} inactive · {rules.length} total keyword rules
         </p>
+      )}
+
+      {/* Floating bulk-action bar */}
+      {selectedKeys.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-2xl border border-border/80 bg-background/95 px-4 py-3 shadow-xl backdrop-blur-sm">
+          <CheckSquare className="size-4 text-primary shrink-0" />
+          <span className="text-sm font-semibold">
+            {selectedKeys.size} item{selectedKeys.size !== 1 ? "s" : ""} selected
+          </span>
+          <div className="h-4 w-px bg-border/60" />
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-7 rounded-lg px-3 text-xs gap-1.5"
+            disabled={bulkDeleteMutation.isPending}
+            onClick={() => {
+              if (confirm(`Delete ${selectedKeys.size} selected item${selectedKeys.size !== 1 ? "s" : ""}?`)) {
+                bulkDeleteMutation.mutate(Array.from(selectedKeys));
+              }
+            }}
+          >
+            {bulkDeleteMutation.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+            Delete selected
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 rounded-lg px-3 text-xs"
+            onClick={() => setSelectedKeys(new Set())}
+          >
+            Deselect all
+          </Button>
+        </div>
       )}
 
       {/* Create / Edit dialog */}
