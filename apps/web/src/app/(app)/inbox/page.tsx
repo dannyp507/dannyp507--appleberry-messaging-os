@@ -1,11 +1,9 @@
 "use client";
 
-import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -22,9 +20,16 @@ import { toast } from "@/lib/toast";
 import { qk } from "@/lib/query-keys";
 import { useAuthStore } from "@/stores/auth-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Inbox, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import {
+  AlertCircle,
+  Inbox,
+  Loader2,
+  Send,
+  UserCircle,
+  UserMinus,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -34,32 +39,104 @@ function threadHasUnread(t: InboxThread): boolean {
   return latest?.direction === "INBOUND";
 }
 
-/** Format the contact's display identifier, hiding synthetic fb: PSIDs */
 function contactSubtitle(t: InboxThread): string {
   if (t.channel === "MESSENGER") {
     return t.fbPage?.name ? `Messenger · ${t.fbPage.name}` : "Messenger";
   }
   if (t.channel === "TELEGRAM") return "Telegram";
-  // WhatsApp: show phone
   const p = t.contact.phone;
   return p.startsWith("fb:") ? "Messenger" : p;
 }
 
 const CHANNEL_BADGE: Record<string, { label: string; className: string }> = {
-  WHATSAPP: { label: "WA", className: "bg-green-500/15 text-green-400 border-green-500/20" },
-  MESSENGER: { label: "FB", className: "bg-blue-500/15 text-blue-400 border-blue-500/20" },
-  TELEGRAM: { label: "TG", className: "bg-sky-500/15 text-sky-400 border-sky-500/20" },
-  INSTAGRAM: { label: "IG", className: "bg-pink-500/15 text-pink-400 border-pink-500/20" },
+  WHATSAPP:  { label: "WA", className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
+  MESSENGER: { label: "FB", className: "bg-blue-500/15   text-blue-400   border-blue-500/25"     },
+  TELEGRAM:  { label: "TG", className: "bg-sky-500/15    text-sky-400    border-sky-500/25"       },
+  INSTAGRAM: { label: "IG", className: "bg-pink-500/15   text-pink-400   border-pink-500/25"      },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
+  if (diffDays === 0) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7)  return d.toLocaleDateString([], { weekday: "short" });
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+// ─── Thread list item ─────────────────────────────────────────────────────────
+
+function ThreadItem({
+  thread,
+  active,
+  onClick,
+}: {
+  thread: InboxThread;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const unread  = threadHasUnread(thread);
+  const badge   = CHANNEL_BADGE[thread.channel];
+  const preview = thread.messages?.[0];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-xl px-3 py-3 text-left transition-all duration-150",
+        active
+          ? "bg-[#1e2330] ring-1 ring-[#2d3248]/80"
+          : unread
+          ? "bg-[#6366F1]/5 ring-1 ring-[#6366F1]/15 hover:bg-[#1a1f2a]"
+          : "hover:bg-[#161a21]",
+      )}
+    >
+      <div className="flex items-start gap-2.5">
+        <div className="relative mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1e2330] text-xs font-bold text-[#6366F1] ring-1 ring-[#2d3141]">
+          {thread.contact.firstName?.[0]?.toUpperCase() ?? "?"}
+          {unread && !active && (
+            <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-[#6366F1] ring-2 ring-[#0f1219]" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-1">
+            <span className={cn("truncate text-sm font-semibold leading-tight", active || unread ? "text-white" : "text-[#b0b3be]")}>
+              {thread.contact.firstName} {thread.contact.lastName}
+            </span>
+            {preview?.createdAt && (
+              <span className="shrink-0 text-[10px] text-[#3e4148]">
+                {formatTime(preview.createdAt)}
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex items-center gap-1.5">
+            {badge && (
+              <span className={cn("shrink-0 rounded px-1 py-0.5 text-[9px] font-bold border", badge.className)}>
+                {badge.label}
+              </span>
+            )}
+            <span className="truncate text-xs text-[#4a4d56]">
+              {preview ? preview.message : contactSubtitle(thread)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function InboxPage() {
   const queryClient = useQueryClient();
-  const me = useAuthStore((s) => s.user);
-  const [threadId, setThreadId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const me          = useAuthStore((s) => s.user);
+
+  const [threadId, setThreadId]         = useState<string | null>(null);
+  const [draft, setDraft]               = useState("");
   const [assignUserId, setAssignUserId] = useState("");
+  const [showAssign, setShowAssign]     = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: threads = [], isLoading } = useQuery({
@@ -74,9 +151,7 @@ export default function InboxPage() {
     queryKey: qk.inboxMessages(threadId ?? ""),
     enabled: !!threadId,
     queryFn: async () => {
-      const { data } = await api.get<InboxMessage[]>(
-        `/inbox/threads/${threadId}/messages`,
-      );
+      const { data } = await api.get<InboxMessage[]>(`/inbox/threads/${threadId}/messages`);
       return data;
     },
   });
@@ -106,283 +181,248 @@ export default function InboxPage() {
       if (!threadId) return;
       await api.patch(`/inbox/threads/${threadId}`, body);
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.inboxThreads });
-    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: qk.inboxThreads }),
     onError: (e) => toast.error("Could not update thread", getApiErrorMessage(e)),
   });
 
-  const active = threads.find((t) => t.id === threadId);
+  const active       = threads.find((t) => t.id === threadId);
   const channelBadge = active ? CHANNEL_BADGE[active.channel] : null;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col md:h-[calc(100vh-4rem)]">
-      <div className="page-container border-b border-border/60 pb-6 pt-2">
-        <PageHeader
-          title="Inbox"
-          description="Reply to customer conversations across all channels."
-        />
-      </div>
-      <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(240px,300px)_1fr]">
-        {/* Thread list */}
-        <div className="border-b border-border/60 bg-muted/15 md:border-b-0 md:border-r md:border-border/60">
-          <ScrollArea className="h-full md:max-h-[calc(100vh-12rem)]">
-            <div className="space-y-1 p-3">
-              {isLoading ? (
-                <div className="space-y-2 p-1">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-[4.25rem] w-full rounded-xl" />
-                  ))}
-                </div>
-              ) : threads.length === 0 ? (
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+
+      {/* Thread list */}
+      <div className="flex w-72 shrink-0 flex-col border-r border-[#1a1f2a] bg-[#0b0e14]">
+        <div className="border-b border-[#1a1f2a] px-4 py-4">
+          <h2 className="text-sm font-semibold text-white">Conversations</h2>
+          {!isLoading && (
+            <p className="mt-0.5 text-xs text-[#3e4148]">
+              {threads.length} thread{threads.length !== 1 ? "s" : ""}
+            </p>
+          )}
+        </div>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-0.5 p-2">
+            {isLoading
+              ? Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[60px] w-full rounded-xl bg-[#161a21]" />
+                ))
+              : threads.length === 0
+              ? (
                 <EmptyState
-                  className="mx-2 my-4 border-none bg-transparent"
+                  className="mx-1 my-6 border-none bg-transparent"
                   icon={Inbox}
                   title="No conversations yet"
-                  description="When customers message you via WhatsApp, Messenger, or Telegram, threads appear here."
+                  description="Messages from WhatsApp, Messenger, and Telegram will appear here."
                 />
-              ) : (
-                threads.map((t) => {
-                  const unread = threadHasUnread(t);
-                  const badge = CHANNEL_BADGE[t.channel];
-                  const preview = t.messages?.[0]?.message;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setThreadId(t.id)}
-                      className={cn(
-                        "w-full rounded-xl border border-transparent px-3 py-2.5 text-left text-sm transition-all duration-200",
-                        t.id === threadId
-                          ? "border-border/80 bg-background shadow-md ring-1 ring-border/50"
-                          : "hover:border-border/60 hover:bg-background/80 hover:shadow-sm",
-                        unread && t.id !== threadId && "bg-primary/5 ring-1 ring-primary/15",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {badge && (
-                            <span className={cn(
-                              "shrink-0 rounded px-1 py-0.5 text-[9px] font-bold border",
-                              badge.className,
-                            )}>
-                              {badge.label}
-                            </span>
-                          )}
-                          <span className="font-medium leading-tight truncate">
-                            {t.contact.firstName} {t.contact.lastName}
+              )
+              : threads.map((t) => (
+                  <ThreadItem
+                    key={t.id}
+                    thread={t}
+                    active={t.id === threadId}
+                    onClick={() => setThreadId(t.id)}
+                  />
+                ))}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Message panel */}
+      <div className="flex min-w-0 flex-1 flex-col bg-[#0d1018]">
+        {!threadId ? (
+          <div className="flex flex-1 items-center justify-center">
+            <EmptyState
+              icon={Inbox}
+              title="Select a conversation"
+              description="Choose a thread on the left to read and reply."
+            />
+          </div>
+        ) : (
+          <>
+            {/* Thread header */}
+            <div className="border-b border-[#1a1f2a] bg-[#0b0e14] px-5 py-3.5">
+              {active && (
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1e2330] text-sm font-bold text-[#6366F1] ring-1 ring-[#2d3141]">
+                      {active.contact.firstName?.[0]?.toUpperCase() ?? "?"}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-white">
+                          {active.contact.firstName} {active.contact.lastName}
+                        </span>
+                        {channelBadge && (
+                          <Badge
+                            variant="outline"
+                            className={cn("border px-1.5 py-0.5 text-[9px] font-bold", channelBadge.className)}
+                          >
+                            {active.channel === "MESSENGER"
+                              ? active.fbPage ? `Messenger · ${active.fbPage.name}` : "Messenger"
+                              : active.channel === "TELEGRAM"
+                              ? "Telegram"
+                              : active.contact.phone.startsWith("fb:") ? "Messenger" : active.contact.phone}
+                          </Badge>
+                        )}
+                      </div>
+                      {active.assignedTo ? (
+                        <p className="mt-0.5 text-xs text-[#4a4d56]">
+                          Assigned to{" "}
+                          <span className="text-[#818cf8]">
+                            {active.assignedTo.name ?? active.assignedTo.email}
                           </span>
-                        </div>
-                        {unread ? (
-                          <span className="mt-0.5 size-2 shrink-0 rounded-full bg-primary shadow-sm" />
-                        ) : null}
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {contactSubtitle(t)}
-                      </div>
-                      {preview ? (
-                        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                          {preview}
-                        </div>
+                        </p>
                       ) : (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {t.status} · {t._count?.messages ?? 0} messages
-                        </div>
+                        <p className="mt-0.5 text-xs text-[#3e4148]">Unassigned</p>
                       )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </ScrollArea>
-        </div>
-
-        {/* Message panel */}
-        <div className="flex min-h-0 flex-col bg-background/40">
-          {!threadId ? (
-            <div className="flex flex-1 items-center justify-center p-6">
-              <EmptyState
-                icon={Inbox}
-                title="Select a conversation"
-                description="Choose a thread on the left to read and reply."
-              />
-            </div>
-          ) : (
-            <>
-              {/* Thread header */}
-              <div className="space-y-3 border-b border-border/60 p-4 md:p-5">
-                {/* Contact + channel info */}
-                {active && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm">
-                      {active.contact.firstName} {active.contact.lastName}
-                    </span>
-                    {channelBadge && (
-                      <Badge
-                        variant="outline"
-                        className={cn("text-xs border", channelBadge.className)}
-                      >
-                        {active.channel === "MESSENGER"
-                          ? `Messenger${active.fbPage ? ` · ${active.fbPage.name}` : ""}`
-                          : active.channel === "TELEGRAM"
-                          ? "Telegram"
-                          : active.contact.phone.startsWith("fb:")
-                          ? "Messenger"
-                          : active.contact.phone}
-                      </Badge>
-                    )}
-                    {active.channel === "MESSENGER" && (
-                      <span className="text-xs text-amber-500/80">
-                        24h reply window applies
-                      </span>
-                    )}
+                    </div>
                   </div>
-                )}
 
-                <div className="flex flex-wrap items-end gap-3">
-                  <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">Status</Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {active.channel === "MESSENGER" && (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[11px] text-amber-400/80">
+                        <AlertCircle className="size-3 shrink-0" />
+                        24h window
+                      </div>
+                    )}
                     <Select
-                      value={active?.status}
+                      value={active.status}
                       onValueChange={(v) => {
-                        if (v === "OPEN" || v === "PENDING" || v === "RESOLVED" || v === "CLOSED") {
+                        if (v === "OPEN" || v === "PENDING" || v === "RESOLVED" || v === "CLOSED")
                           patchMutation.mutate({ status: v });
-                        }
                       }}
                     >
-                      <SelectTrigger className="h-9 w-[140px] rounded-xl">
+                      <SelectTrigger className="h-8 w-[116px] rounded-lg border-[#1e2330] bg-[#161a21] text-xs text-[#9b9da6] focus:ring-0">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="rounded-xl">
+                      <SelectContent className="rounded-xl border-[#262B33]/40 bg-[#161a21]">
                         <SelectItem value="OPEN">Open</SelectItem>
                         <SelectItem value="PENDING">Pending</SelectItem>
                         <SelectItem value="RESOLVED">Resolved</SelectItem>
                         <SelectItem value="CLOSED">Closed</SelectItem>
                       </SelectContent>
                     </Select>
+                    <Button
+                      type="button" variant="outline" size="sm"
+                      className="h-8 rounded-lg border-[#1e2330] bg-[#161a21] px-3 text-xs text-[#9b9da6] hover:bg-[#1e2330] hover:text-white"
+                      onClick={() => me && patchMutation.mutate({ assignedToId: me.id })}
+                      disabled={!me || patchMutation.isPending}
+                    >
+                      {patchMutation.isPending
+                        ? <Loader2 className="mr-1 size-3 animate-spin" />
+                        : <UserCircle className="mr-1 size-3" />}
+                      Assign me
+                    </Button>
+                    <Button
+                      type="button" variant="ghost" size="sm"
+                      className="h-8 rounded-lg px-2.5 text-xs text-[#4a4d56] hover:bg-[#161a21] hover:text-[#9b9da6]"
+                      onClick={() => patchMutation.mutate({ assignedToId: null })}
+                      disabled={patchMutation.isPending}
+                    >
+                      <UserMinus className="size-3.5" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAssign((v) => !v)}
+                      className="text-[11px] text-[#3e4148] transition-colors hover:text-[#5a5d68]"
+                    >
+                      {showAssign ? "hide" : "···"}
+                    </button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="rounded-xl"
-                    onClick={() => me && patchMutation.mutate({ assignedToId: me.id })}
-                    disabled={!me || patchMutation.isPending}
-                  >
-                    {patchMutation.isPending ? (
-                      <Loader2 className="mr-1 size-3.5 animate-spin" />
-                    ) : null}
-                    Assign to me
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl"
-                    onClick={() => patchMutation.mutate({ assignedToId: null })}
-                    disabled={patchMutation.isPending}
-                  >
-                    Unassign
-                  </Button>
                 </div>
+              )}
 
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="grid min-w-[200px] flex-1 gap-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Assign to user (UUID)
-                    </Label>
-                    <Input
-                      className="rounded-xl"
-                      placeholder="User UUID"
-                      value={assignUserId}
-                      onChange={(e) => setAssignUserId(e.target.value)}
-                    />
-                  </div>
+              {showAssign && (
+                <div className="mt-3 flex items-center gap-2 border-t border-[#1a1f2a] pt-3">
+                  <Input
+                    className="h-8 flex-1 rounded-lg border-[#1e2330] bg-[#161a21] text-xs text-white placeholder:text-[#3e4148] focus-visible:ring-[#6366F1]/30"
+                    placeholder="Assign to user UUID…"
+                    value={assignUserId}
+                    onChange={(e) => setAssignUserId(e.target.value)}
+                  />
                   <Button
-                    type="button"
-                    size="sm"
-                    className="rounded-xl"
+                    type="button" size="sm"
+                    className="h-8 rounded-lg px-4 text-xs"
                     onClick={() => {
-                      if (!assignUserId.trim()) {
-                        toast.info("Enter a user id to assign.");
-                        return;
-                      }
+                      if (!assignUserId.trim()) { toast.info("Enter a user ID first."); return; }
                       patchMutation.mutate({ assignedToId: assignUserId.trim() });
+                      setAssignUserId("");
                     }}
                     disabled={patchMutation.isPending}
                   >
                     Apply
                   </Button>
                 </div>
+              )}
+            </div>
 
-                {active?.assignedTo ? (
-                  <p className="text-xs text-muted-foreground">
-                    Assigned: {active.assignedTo.name ?? active.assignedTo.email}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Unassigned</p>
-                )}
-              </div>
-
-              {/* Messages */}
-              <ScrollArea className="min-h-0 flex-1">
-                <div className="space-y-3 p-4 md:p-5">
-                  {messagesFetching && messages.length === 0 ? (
-                    <div className="space-y-3">
-                      <Skeleton className="ml-auto h-16 w-[78%] rounded-xl" />
-                      <Skeleton className="h-14 w-[72%] rounded-xl" />
+            {/* Messages */}
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-2.5 px-5 py-5">
+                {messagesFetching && messages.length === 0 ? (
+                  <div className="space-y-3">
+                    <Skeleton className="ml-auto h-14 w-[65%] rounded-2xl bg-[#161a21]" />
+                    <Skeleton className="h-10 w-[55%] rounded-2xl bg-[#161a21]" />
+                    <Skeleton className="ml-auto h-12 w-[48%] rounded-2xl bg-[#161a21]" />
+                  </div>
+                ) : messages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={cn(
+                      "max-w-[78%] rounded-2xl px-4 py-2.5 text-sm",
+                      m.direction === "OUTBOUND"
+                        ? "ml-auto bg-[#6366F1] text-white shadow-[0_2px_12px_-2px_rgba(99,102,241,0.4)]"
+                        : "bg-[#161a21] text-[#d1d3db] ring-1 ring-[#1e2330]",
+                    )}
+                  >
+                    <div className={cn("mb-1 text-[10px] font-medium",
+                      m.direction === "OUTBOUND" ? "text-[#a5b4fc]" : "text-[#4a4d56]")}>
+                      {m.direction === "OUTBOUND" ? "You" : (active?.contact.firstName ?? "Customer")}
+                      {" · "}
+                      {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </div>
-                  ) : (
-                    messages.map((m) => (
-                      <div
-                        key={m.id}
-                        className={cn(
-                          "max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm shadow-sm",
-                          m.direction === "OUTBOUND"
-                            ? "ml-auto bg-primary text-primary-foreground"
-                            : "bg-muted/80 ring-1 ring-border/40",
-                        )}
-                      >
-                        <div className="text-[10px] opacity-80">
-                          {m.direction === "OUTBOUND" ? "You" : "Customer"} ·{" "}
-                          {new Date(m.createdAt).toLocaleString()}
-                        </div>
-                        <div className="whitespace-pre-wrap">{m.message}</div>
-                      </div>
-                    ))
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-              </ScrollArea>
+                    <div className="whitespace-pre-wrap leading-relaxed">{m.message}</div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
 
-              {/* Compose */}
-              <div className="space-y-2 border-t border-border/60 bg-background/80 p-4 backdrop-blur-sm md:p-5">
+            {/* Compose */}
+            <div className="border-t border-[#1a1f2a] bg-[#0b0e14] px-5 py-4">
+              <div className="overflow-hidden rounded-xl border border-[#1e2330] bg-[#0f1219] transition-all focus-within:border-[#2d3248] focus-within:ring-1 focus-within:ring-[#6366F1]/20">
                 <Textarea
                   rows={3}
-                  className="min-h-[88px] rounded-xl"
+                  className="min-h-[80px] resize-none rounded-none border-none bg-transparent px-4 pt-3 text-sm text-white placeholder:text-[#3e4148] focus-visible:ring-0"
                   placeholder="Write a reply…"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && draft.trim()) {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && draft.trim())
                       sendMutation.mutate();
-                    }
                   }}
                 />
-                <Button
-                  className="rounded-xl"
-                  onClick={() => sendMutation.mutate()}
-                  disabled={sendMutation.isPending || !draft.trim()}
-                >
-                  {sendMutation.isPending ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : null}
-                  Send
-                </Button>
+                <div className="flex items-center justify-between border-t border-[#1a1f2a] px-3 py-2">
+                  <span className="text-[10px] text-[#3e4148]">
+                    {draft.length > 0 ? `${draft.length} chars · ` : ""}⌘↵ to send
+                  </span>
+                  <Button
+                    size="sm"
+                    className="h-8 rounded-lg px-4 text-xs font-semibold stitch-gradient shadow-[0_2px_10px_-2px_rgba(99,102,241,0.4)] transition-opacity hover:opacity-90 disabled:opacity-40"
+                    onClick={() => sendMutation.mutate()}
+                    disabled={sendMutation.isPending || !draft.trim()}
+                  >
+                    {sendMutation.isPending
+                      ? <Loader2 className="mr-1.5 size-3 animate-spin" />
+                      : <Send className="mr-1.5 size-3" />}
+                    Send
+                  </Button>
+                </div>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
