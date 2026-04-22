@@ -1,9 +1,10 @@
 import { BullModule } from '@nestjs/bullmq';
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { INCOMING_MESSAGES_QUEUE } from '../queue/queue.constants';
 import { BaileysSessionService } from './baileys-session.service';
 
+@Global()
 @Module({
   imports: [
     BullModule.forRootAsync({
