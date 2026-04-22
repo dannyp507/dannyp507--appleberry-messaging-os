@@ -36,7 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Upload } from "lucide-react";
+import { Download, Upload, Sparkles, Copy, Check } from "lucide-react";
 import { api, getApiErrorMessage } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
 import type {
@@ -68,6 +68,7 @@ export default function ChatbotPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importName, setImportName] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const importMutation = useMutation({
     mutationFn: async () => {
@@ -198,6 +199,54 @@ export default function ChatbotPage() {
     onError: (e) => toast.error("Could not set entry", getApiErrorMessage(e)),
   });
 
+  // ── Flow templates ────────────────────────────────────────────────────────
+  const FLOW_TEMPLATES = [
+    {
+      id: "service-business",
+      name: "Service Business",
+      tag: "Repairs · Salons · Clinics",
+      description: "Welcome flow, 3 service pages, booking intake, store info, human handoff, and AI fallback.",
+      steps: 12,
+      file: "/flow-templates/service-business.json",
+      color: "bg-indigo-50 text-indigo-600 border-indigo-100",
+      dot: "bg-indigo-500",
+    },
+    {
+      id: "restaurant",
+      name: "Restaurant & Food",
+      tag: "Restaurants · Takeaways · Cafés",
+      description: "Menu browsing, takeaway orders, table reservations, delivery info, and AI fallback.",
+      steps: 12,
+      file: "/flow-templates/restaurant.json",
+      color: "bg-orange-50 text-orange-600 border-orange-100",
+      dot: "bg-orange-500",
+    },
+    {
+      id: "retail-store",
+      name: "Retail Store",
+      tag: "Boutiques · Electronics · Hardware",
+      description: "3 product categories, deals page, stock enquiry, store info, human handoff, and AI fallback.",
+      steps: 12,
+      file: "/flow-templates/retail-store.json",
+      color: "bg-emerald-50 text-emerald-600 border-emerald-100",
+      dot: "bg-emerald-500",
+    },
+  ] as const;
+
+  const copyPrompt = async (templateId: string) => {
+    try {
+      const res = await fetch(FLOW_TEMPLATES.find(t => t.id === templateId)!.file);
+      const json = await res.json() as { _meta?: { chatgpt_prompt?: string } };
+      const prompt = json._meta?.chatgpt_prompt ?? "";
+      await navigator.clipboard.writeText(prompt);
+      setCopiedId(templateId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
     <div className="mx-auto max-w-[1400px] space-y-6 p-6">
       <PageHeader
@@ -293,6 +342,59 @@ export default function ChatbotPage() {
                 )}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+
+        {/* ── Starter Templates ────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#6366F1]" />
+              Starter Templates
+            </CardTitle>
+            <CardDescription>
+              Download a template → paste the embedded ChatGPT prompt + your business info into ChatGPT → import the result above.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 pb-4">
+            {FLOW_TEMPLATES.map((t) => (
+              <div
+                key={t.id}
+                className={`rounded-xl border p-3.5 ${t.color}`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className={`inline-block size-1.5 rounded-full ${t.dot}`} />
+                      <p className="text-sm font-semibold leading-none">{t.name}</p>
+                    </div>
+                    <p className="text-[10px] font-medium opacity-70 mb-1">{t.tag}</p>
+                    <p className="text-xs opacity-80 leading-relaxed">{t.description}</p>
+                    <p className="text-[10px] opacity-60 mt-1">{t.steps} steps</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <a
+                    href={t.file}
+                    download
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-current/20 bg-white/60 px-3 py-1.5 text-xs font-semibold hover:bg-white/90 transition-colors"
+                  >
+                    <Download className="size-3" />
+                    Download JSON
+                  </a>
+                  <button
+                    onClick={() => copyPrompt(t.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-current/20 bg-white/40 px-3 py-1.5 text-xs font-semibold hover:bg-white/70 transition-colors"
+                  >
+                    {copiedId === t.id ? (
+                      <><Check className="size-3" />Copied!</>
+                    ) : (
+                      <><Copy className="size-3" />Copy ChatGPT Prompt</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
 
