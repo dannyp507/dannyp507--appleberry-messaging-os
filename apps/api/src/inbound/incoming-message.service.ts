@@ -158,7 +158,7 @@ export class IncomingMessageService {
       if (r.useAi) {
         // AI rule: `response` is the system prompt — generate a dynamic reply
         const recentMessages = await this.prisma.inboxMessage.findMany({
-          where: { inboxThreadId: thread.id },
+          where: { threadId: thread.id },
           orderBy: { createdAt: 'desc' },
           take: 10,
           select: { direction: true, message: true },
