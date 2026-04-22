@@ -109,13 +109,13 @@ export default function FacebookPagesPage() {
           <p className="font-medium text-amber-400">
             Meta App Review required for production
           </p>
-          <p className="mt-0.5 text-[#6b6d74]">
+          <p className="mt-0.5 text-[#6B7280]">
             The{" "}
-            <code className="rounded bg-[#1e2330] px-1 py-0.5 font-mono text-xs text-[#a9abb3]">pages_messaging</code>{" "}
+            <code className="rounded bg-[#F3F4F6] px-1 py-0.5 font-mono text-xs text-[#6B7280]">pages_messaging</code>{" "}
             permission requires Meta App Review before non-test users can connect Pages.
             In Development Mode, only test users assigned in your Meta App Dashboard can grant
             access. Messenger replies are only permitted within the{" "}
-            <strong className="text-[#a9abb3]">24-hour messaging window</strong> — outside this window, use MESSAGE_TAG
+            <strong className="text-[#6B7280]">24-hour messaging window</strong> — outside this window, use MESSAGE_TAG
             messages only.
           </p>
         </div>
@@ -133,7 +133,7 @@ export default function FacebookPagesPage() {
           {pages.map((page) => (
             <div
               key={page.id}
-              className="overflow-hidden rounded-2xl border border-[#1a2820] bg-[#0f1219] transition-all duration-200 hover:border-blue-900/50 hover:shadow-lg"
+              className="overflow-hidden rounded-2xl border border-emerald-200 bg-white transition-all duration-200 hover:border-blue-900/50 hover:shadow-lg"
             >
               {/* Top accent */}
               <div className="h-0.5 w-full bg-gradient-to-r from-blue-500/80 to-blue-400/40" />
@@ -145,9 +145,9 @@ export default function FacebookPagesPage() {
                     <Share2 className="size-5 text-blue-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold leading-tight text-white">{page.name}</p>
+                    <p className="text-sm font-semibold leading-tight text-[#111827]">{page.name}</p>
                     {page.category && (
-                      <p className="mt-0.5 font-mono text-xs text-[#6b6d74]">
+                      <p className="mt-0.5 font-mono text-xs text-[#6B7280]">
                         {page.category}
                       </p>
                     )}
@@ -160,7 +160,7 @@ export default function FacebookPagesPage() {
                     "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
                     page.isActive
                       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                      : "border-[#262B33]/60 bg-[#161a21] text-[#5a5d68]",
+                      : "border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]",
                   )}
                 >
                   {page.isActive ? (
@@ -173,32 +173,32 @@ export default function FacebookPagesPage() {
               </div>
 
               {/* Stats row */}
-              <div className="grid grid-cols-2 divide-x divide-[#1e2330] border-t border-[#1e2330]">
+              <div className="grid grid-cols-2 divide-x divide-[#F3F4F6] border-t border-[#E5E7EB]">
                 <div className="px-5 py-3 text-center">
-                  <p className="text-xl font-bold text-white">
+                  <p className="text-xl font-bold text-[#111827]">
                     {page._count?.inboxThreads ?? 0}
                   </p>
-                  <p className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-[#5a5d68]">
+                  <p className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-[#9CA3AF]">
                     Conversations
                   </p>
                 </div>
                 <div className="px-5 py-3 text-center">
-                  <p className="mt-1 font-mono text-xs text-[#6b6d74] break-all">
+                  <p className="mt-1 font-mono text-xs text-[#6B7280] break-all">
                     {page.pageId}
                   </p>
-                  <p className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-[#5a5d68]">
+                  <p className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-[#9CA3AF]">
                     Page ID
                   </p>
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 border-t border-[#1e2330] px-4 py-3">
+              <div className="flex gap-2 border-t border-[#E5E7EB] px-4 py-3">
                 <Link href={`/facebook-pages/${page.id}`} className="flex-1">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full rounded-xl border-[#1e2330] bg-[#161a21] text-xs text-[#9b9da6] gap-1.5 hover:border-[#2d3141] hover:bg-[#1e2330] hover:text-white"
+                    className="w-full rounded-xl border-[#E5E7EB] bg-[#F9FAFB] text-xs text-[#6B7280] gap-1.5 hover:border-[#D1D5DB] hover:bg-[#F3F4F6] hover:text-[#111827]"
                   >
                     <ExternalLink className="size-3.5" />
                     Manage
@@ -208,7 +208,7 @@ export default function FacebookPagesPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full rounded-xl border-[#1e2330] bg-[#161a21] text-xs text-[#9b9da6] gap-1.5 hover:border-[#2d3141] hover:bg-[#1e2330] hover:text-white"
+                    className="w-full rounded-xl border-[#E5E7EB] bg-[#F9FAFB] text-xs text-[#6B7280] gap-1.5 hover:border-[#D1D5DB] hover:bg-[#F3F4F6] hover:text-[#111827]"
                   >
                     <MessageCircle className="size-3.5" />
                     Inbox
@@ -238,20 +238,20 @@ export default function FacebookPagesPage() {
       )}
 
       {pages.length > 0 && (
-        <div className="rounded-xl border border-[#1a1f2a] bg-[#0f1219] px-5 py-4 text-sm text-[#6b6d74]">
-          <p className="mb-1 font-medium text-white">How it works</p>
+        <div className="rounded-xl border border-[#E5E7EB] bg-white px-5 py-4 text-sm text-[#6B7280]">
+          <p className="mb-1 font-medium text-[#111827]">How it works</p>
           <p>
             Each connected Page receives Messenger messages in the unified{" "}
             <Link
               href="/inbox"
-              className="font-medium text-[#818cf8] underline-offset-2 hover:underline"
+              className="font-medium text-[#6366F1] underline-offset-2 hover:underline"
             >
               Inbox
             </Link>
             . Keyword triggers and autoresponders you create under{" "}
             <Link
               href="/keyword-triggers"
-              className="font-medium text-[#818cf8] underline-offset-2 hover:underline"
+              className="font-medium text-[#6366F1] underline-offset-2 hover:underline"
             >
               Automation
             </Link>{" "}

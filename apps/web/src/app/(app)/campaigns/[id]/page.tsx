@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-[#262B33] text-[#a9abb3]",
+  DRAFT: "bg-[#F3F4F6] text-[#6B7280]",
   RUNNING: "bg-emerald-500/10 text-emerald-400",
   PAUSED: "bg-amber-500/10 text-amber-400",
   COMPLETED: "bg-[#6366F1]/10 text-[#6366F1]",
@@ -29,9 +29,9 @@ export default function CampaignReportPage() {
   if (isLoading) {
     return (
       <div className="page-container animate-pulse space-y-6">
-        <div className="h-8 w-48 bg-[#161a21] rounded-xl" />
+        <div className="h-8 w-48 bg-[#F9FAFB] rounded-xl" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-[#161a21] rounded-xl" />)}
+          {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-[#F9FAFB] rounded-xl" />)}
         </div>
       </div>
     );
@@ -40,7 +40,7 @@ export default function CampaignReportPage() {
   if (!campaign) {
     return (
       <div className="page-container flex flex-col items-center justify-center py-20">
-        <p className="text-[#a9abb3]">Campaign not found.</p>
+        <p className="text-[#6B7280]">Campaign not found.</p>
         <Link href="/campaigns" className="mt-4 text-[#6366F1] hover:underline text-sm">← Back to campaigns</Link>
       </div>
     );
@@ -57,17 +57,17 @@ export default function CampaignReportPage() {
   return (
     <div className="page-container space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/campaigns" className="text-[#a9abb3] hover:text-white transition-colors">
+        <Link href="/campaigns" className="text-[#6B7280] hover:text-[#111827] transition-colors">
           <span className="material-symbols-outlined">arrow_back</span>
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-white">{campaign.name}</h2>
+            <h2 className="text-2xl font-bold text-[#111827]">{campaign.name}</h2>
             <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${STATUS_COLORS[campaign.status] ?? STATUS_COLORS.DRAFT}`}>
               {campaign.status}
             </span>
           </div>
-          <p className="text-sm text-[#a9abb3] mt-0.5">
+          <p className="text-sm text-[#6B7280] mt-0.5">
             Created {new Date(campaign.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
           </p>
         </div>
@@ -81,10 +81,10 @@ export default function CampaignReportPage() {
           { label: "Failed", value: campaign.failed.toLocaleString(), color: "text-[#ff6e84]", icon: "error" },
           { label: "Skipped", value: campaign.skipped.toLocaleString(), color: "text-amber-400", icon: "skip_next" },
         ].map(({ label, value, color, icon }) => (
-          <div key={label} className="bg-[#161a21] border border-[#262B33]/30 rounded-xl p-5">
+          <div key={label} className="bg-[#F9FAFB] border border-[#F3F4F6] rounded-xl p-5">
             <div className="flex items-center gap-2 mb-2">
               <span className={`material-symbols-outlined text-xl ${color}`}>{icon}</span>
-              <p className="text-[10px] font-bold text-[#73757d] uppercase tracking-widest">{label}</p>
+              <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">{label}</p>
             </div>
             <p className={`text-3xl font-black ${color}`}>{value}</p>
           </div>
@@ -94,8 +94,8 @@ export default function CampaignReportPage() {
       {/* Visual breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Delivery ring */}
-        <div className="bg-[#161a21] border border-[#262B33]/20 rounded-2xl p-6 flex flex-col items-center gap-4">
-          <h3 className="text-[10px] font-bold text-white uppercase tracking-widest self-start">Delivery Rate</h3>
+        <div className="bg-[#F9FAFB] border border-[#F3F4F6] rounded-2xl p-6 flex flex-col items-center gap-4">
+          <h3 className="text-[10px] font-bold text-[#111827] uppercase tracking-widest self-start">Delivery Rate</h3>
           <div className="relative w-36 h-36">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 140 140">
               <circle cx="70" cy="70" r="60" fill="transparent" stroke="#262B33" strokeWidth="8" />
@@ -108,8 +108,8 @@ export default function CampaignReportPage() {
               </defs>
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-white leading-none">{deliveryRate}%</span>
-              <span className="text-[10px] text-[#73757d] font-bold mt-1 uppercase">Delivered</span>
+              <span className="text-3xl font-black text-[#111827] leading-none">{deliveryRate}%</span>
+              <span className="text-[10px] text-[#9CA3AF] font-bold mt-1 uppercase">Delivered</span>
             </div>
           </div>
           <div className="w-full grid grid-cols-3 gap-3">
@@ -119,19 +119,19 @@ export default function CampaignReportPage() {
               { label: "Skipped", pct: skipRate, color: "bg-amber-500" },
             ].map(({ label, pct, color }) => (
               <div key={label} className="text-center">
-                <div className="h-1 rounded-full bg-[#262B33] mb-1.5 overflow-hidden">
+                <div className="h-1 rounded-full bg-[#F3F4F6] mb-1.5 overflow-hidden">
                   <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
                 </div>
-                <p className="text-[10px] text-[#73757d] font-bold uppercase">{label}</p>
-                <p className="text-sm font-bold text-white">{pct}%</p>
+                <p className="text-[10px] text-[#9CA3AF] font-bold uppercase">{label}</p>
+                <p className="text-sm font-bold text-[#111827]">{pct}%</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Template & group info */}
-        <div className="bg-[#161a21] border border-[#262B33]/20 rounded-2xl p-6 space-y-4">
-          <h3 className="text-[10px] font-bold text-white uppercase tracking-widest">Campaign Details</h3>
+        <div className="bg-[#F9FAFB] border border-[#F3F4F6] rounded-2xl p-6 space-y-4">
+          <h3 className="text-[10px] font-bold text-[#111827] uppercase tracking-widest">Campaign Details</h3>
           {[
             { label: "Template", value: campaign.template?.name ?? "—", icon: "layers" },
             { label: "Contact Group", value: campaign.contactGroup?.name ?? "—", icon: "group" },
@@ -139,12 +139,12 @@ export default function CampaignReportPage() {
             { label: "Last Updated", value: new Date(campaign.updatedAt).toLocaleString(), icon: "schedule" },
           ].map(({ label, value, icon }) => (
             <div key={label} className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#1c2028] flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-[#F3F4F6] flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-sm text-[#6366F1]">{icon}</span>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-[#73757d] uppercase tracking-wider">{label}</p>
-                <p className="text-sm text-white font-medium">{value}</p>
+                <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">{label}</p>
+                <p className="text-sm text-[#111827] font-medium">{value}</p>
               </div>
             </div>
           ))}

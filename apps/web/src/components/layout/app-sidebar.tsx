@@ -7,6 +7,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AppleberryIcon } from "@/components/ui/appleberry-icon";
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
@@ -54,10 +55,10 @@ const channelsNav = [
 ] satisfies NavEntry[];
 
 const settingsNav = [
-  { href: "/settings",          label: "Settings",      icon: Settings  },
-  { href: "/settings/ai",       label: "AI Providers",  icon: Sparkles  },
+  { href: "/settings",          label: "Settings",      icon: Settings   },
+  { href: "/settings/ai",       label: "AI Providers",  icon: Sparkles   },
   { href: "/settings/billing",  label: "Billing",       icon: CreditCard },
-  { href: "/settings/api-keys", label: "API Keys",      icon: Key       },
+  { href: "/settings/api-keys", label: "API Keys",      icon: Key        },
 ] satisfies NavEntry[];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -80,14 +81,14 @@ function NavItem({
       className={cn(
         "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
         active
-          ? "bg-[#1e2330] text-white after:absolute after:left-0 after:top-1/2 after:-translate-y-1/2 after:h-5 after:w-0.5 after:rounded-r-full after:bg-gradient-to-b after:from-[#6366F1] after:to-[#EC4899]"
-          : "text-[#7a7d87] hover:bg-[#1e2330]/70 hover:text-[#d1d3db]",
+          ? "bg-[#EEF2FF] text-[#4338CA] after:absolute after:left-0 after:top-1/2 after:-translate-y-1/2 after:h-5 after:w-0.5 after:rounded-r-full after:bg-gradient-to-b after:from-[#6366F1] after:to-[#EC4899]"
+          : "text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]",
       )}
     >
       <Icon
         className={cn(
           "size-[17px] shrink-0 transition-colors",
-          active ? "text-[#818cf8]" : "text-[#5a5d68]",
+          active ? "text-[#6366F1]" : "text-[#9CA3AF]",
         )}
         strokeWidth={active ? 2.25 : 1.75}
       />
@@ -100,7 +101,7 @@ function NavItem({
 
 function SectionLabel({ label }: { label: string }) {
   return (
-    <p className="mb-0.5 mt-4 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[#3e4148]">
+    <p className="mb-0.5 mt-4 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">
       {label}
     </p>
   );
@@ -125,7 +126,7 @@ function SectionLinkLabel({
       onClick={onClick}
       className={cn(
         "group mb-0.5 mt-4 flex items-center justify-between px-3 transition-colors",
-        active ? "text-[#6366F1]" : "text-[#3e4148] hover:text-[#5a5d68]",
+        active ? "text-[#6366F1]" : "text-[#9CA3AF] hover:text-[#6B7280]",
       )}
     >
       <span className="text-[10px] font-bold uppercase tracking-[0.12em]">
@@ -153,19 +154,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="px-5 py-5">
         <Link href="/" className="flex items-center gap-3" onClick={onNavigate}>
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg stitch-gradient shadow-[0_0_14px_rgba(99,102,241,0.35)]">
-            <span
-              className="material-symbols-outlined text-[18px] text-white"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              bolt
-            </span>
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-[0_1px_4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]">
+            <AppleberryIcon size={22} />
           </div>
           <div>
             <h1 className="text-[15px] font-bold leading-none tracking-tight stitch-text">
               Appleberry
             </h1>
-            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[#3e4148]">
+            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">
               Messaging OS
             </p>
           </div>
@@ -177,7 +173,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <Link
           href="/campaigns"
           onClick={onNavigate}
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white stitch-gradient shadow-[0_4px_14px_-3px_rgba(99,102,241,0.4)] transition-opacity hover:opacity-90"
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white stitch-gradient shadow-[0_2px_8px_rgba(99,102,241,0.25)] transition-opacity hover:opacity-90"
         >
           <Megaphone className="size-3.5" />
           New Campaign
@@ -245,7 +241,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </ScrollArea>
 
       {/* Footer */}
-      <div className="border-t border-[#1e2330] px-2.5 py-3">
+      <div className="border-t border-[#E5E7EB] px-2.5 py-3">
         <NavItem
           href="/help"
           label="Help & Support"
@@ -265,14 +261,14 @@ export function AppSidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[#1a1f2a] bg-[#0f1219] md:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[#E5E7EB] bg-white/90 backdrop-blur-sm md:flex">
         <SidebarContent />
       </aside>
 
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetContent
           side="left"
-          className="w-60 border-[#1a1f2a] bg-[#0f1219] p-0"
+          className="w-60 border-[#E5E7EB] bg-white p-0"
         >
           <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
         </SheetContent>
@@ -288,7 +284,7 @@ export function MobileMenuButton() {
       type="button"
       variant="ghost"
       size="icon"
-      className="md:hidden text-[#7a7d87] hover:text-white hover:bg-[#1e2330]"
+      className="md:hidden text-[#9CA3AF] hover:text-[#111827] hover:bg-[#F3F4F6]"
       onClick={() => setOpen(true)}
       aria-label="Open menu"
     >

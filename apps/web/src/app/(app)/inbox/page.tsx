@@ -60,24 +60,24 @@ const FILTER_TABS: { key: FilterKey; label: string; dot?: string }[] = [
 ];
 
 const CHANNEL_BADGE: Record<string, { label: string; className: string }> = {
-  WHATSAPP:  { label: "WA", className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
-  MESSENGER: { label: "FB", className: "bg-blue-500/15   text-blue-400   border-blue-500/25"     },
-  TELEGRAM:  { label: "TG", className: "bg-sky-500/15    text-sky-400    border-sky-500/25"       },
-  INSTAGRAM: { label: "IG", className: "bg-pink-500/15   text-pink-400   border-pink-500/25"      },
+  WHATSAPP:  { label: "WA", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  MESSENGER: { label: "FB", className: "bg-blue-50 text-blue-700 border-blue-200"         },
+  TELEGRAM:  { label: "TG", className: "bg-sky-50 text-sky-700 border-sky-200"            },
+  INSTAGRAM: { label: "IG", className: "bg-pink-50 text-pink-700 border-pink-200"         },
 };
 
 const CHANNEL_META: Record<string, { icon: LucideIcon; label: string; color: string; accent: string }> = {
-  WHATSAPP:  { icon: Smartphone, label: "WhatsApp",  color: "text-emerald-400", accent: "bg-emerald-500" },
-  MESSENGER: { icon: Share2,     label: "Messenger", color: "text-blue-400",    accent: "bg-blue-500"    },
-  TELEGRAM:  { icon: Send,       label: "Telegram",  color: "text-sky-400",     accent: "bg-sky-500"     },
-  INSTAGRAM: { icon: Camera,     label: "Instagram", color: "text-pink-400",    accent: "bg-pink-500"    },
+  WHATSAPP:  { icon: Smartphone, label: "WhatsApp",  color: "text-emerald-500", accent: "bg-emerald-500" },
+  MESSENGER: { icon: Share2,     label: "Messenger", color: "text-blue-500",    accent: "bg-blue-500"    },
+  TELEGRAM:  { icon: Send,       label: "Telegram",  color: "text-sky-500",     accent: "bg-sky-500"     },
+  INSTAGRAM: { icon: Camera,     label: "Instagram", color: "text-pink-500",    accent: "bg-pink-500"    },
 };
 
 const STATUS_META: Record<string, { label: string; dotClass: string; textClass: string }> = {
-  OPEN:     { label: "Open",     dotClass: "bg-emerald-400", textClass: "text-emerald-400" },
-  PENDING:  { label: "Pending",  dotClass: "bg-amber-400",   textClass: "text-amber-400"   },
-  RESOLVED: { label: "Resolved", dotClass: "bg-blue-400",    textClass: "text-blue-400"    },
-  CLOSED:   { label: "Closed",   dotClass: "bg-[#3e4148]",   textClass: "text-[#5a5d68]"   },
+  OPEN:     { label: "Open",     dotClass: "bg-emerald-400", textClass: "text-emerald-600" },
+  PENDING:  { label: "Pending",  dotClass: "bg-amber-400",   textClass: "text-amber-600"   },
+  RESOLVED: { label: "Resolved", dotClass: "bg-blue-400",    textClass: "text-blue-600"    },
+  CLOSED:   { label: "Closed",   dotClass: "bg-[#D1D5DB]",   textClass: "text-[#9CA3AF]"   },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -167,10 +167,10 @@ function ThreadItem({
       className={cn(
         "group relative w-full rounded-xl px-3 py-3 text-left transition-all duration-150",
         active
-          ? "bg-gradient-to-r from-[#1e2330] to-[#1a1f2d] ring-1 ring-[#2d3248]/80"
+          ? "bg-[#EEF2FF] ring-1 ring-[#C7D2FE]"
           : unread
-          ? "bg-[#6366F1]/[0.06] ring-1 ring-[#6366F1]/10 hover:bg-[#161a21]"
-          : "hover:bg-[#161a21]",
+          ? "bg-indigo-50/40 ring-1 ring-indigo-100/80 hover:bg-[#F9FAFB]"
+          : "hover:bg-[#F9FAFB]",
       )}
     >
       {/* Active left indicator */}
@@ -185,32 +185,26 @@ function ThreadItem({
             className={cn(
               "flex size-9 items-center justify-center rounded-full text-[11px] font-bold tracking-wide",
               active
-                ? "bg-gradient-to-br from-[#6366F1]/30 to-[#EC4899]/20 text-[#818cf8] ring-1 ring-[#6366F1]/40"
+                ? "bg-[#EEF2FF] text-[#4338CA] ring-1 ring-[#C7D2FE]"
                 : unread
-                ? "bg-[#6366F1]/15 text-[#818cf8] ring-1 ring-[#6366F1]/25"
-                : "bg-[#1e2330] text-[#5a5d68] ring-1 ring-[#262B33]",
+                ? "bg-indigo-100/80 text-[#4338CA] ring-1 ring-indigo-200/60"
+                : "bg-[#F3F4F6] text-[#9CA3AF] ring-1 ring-[#E5E7EB]",
             )}
           >
             {initials}
           </div>
-          {/* Channel indicator badge */}
+          {/* Channel icon badge */}
           {meta && (
             <span
               className={cn(
-                "absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full ring-1 ring-[#0b0e14]",
-                thread.channel === "WHATSAPP"  ? "bg-emerald-500/20" :
-                thread.channel === "MESSENGER" ? "bg-blue-500/20" :
-                thread.channel === "TELEGRAM"  ? "bg-sky-500/20" : "bg-pink-500/20",
+                "absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-white ring-1 ring-[#E5E7EB]",
               )}
             >
-              <meta.icon
-                className={cn("size-2", meta.color)}
-                strokeWidth={2.5}
-              />
+              <meta.icon className={cn("size-2", meta.color)} strokeWidth={2.5} />
             </span>
           )}
           {unread && !active && (
-            <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#6366F1] ring-1.5 ring-[#0b0e14]" />
+            <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#6366F1] ring-1 ring-white" />
           )}
         </div>
 
@@ -220,13 +214,13 @@ function ThreadItem({
             <span
               className={cn(
                 "truncate text-[13px] font-semibold leading-tight",
-                active || unread ? "text-white" : "text-[#9b9da6]",
+                active || unread ? "text-[#111827]" : "text-[#374151]",
               )}
             >
               {thread.contact.firstName} {thread.contact.lastName}
             </span>
             {preview?.createdAt && (
-              <span className="shrink-0 text-[10px] text-[#3a3d47]">
+              <span className="shrink-0 text-[10px] text-[#9CA3AF]">
                 {formatTime(preview.createdAt)}
               </span>
             )}
@@ -235,12 +229,12 @@ function ThreadItem({
           <p
             className={cn(
               "mt-0.5 truncate text-xs leading-relaxed",
-              active    ? "text-[#5a5d68]"  :
-              unread    ? "text-[#7a7d87]"  : "text-[#44474f]",
+              active  ? "text-[#6B7280]"  :
+              unread  ? "text-[#6B7280]"  : "text-[#9CA3AF]",
             )}
           >
             {preview?.direction === "OUTBOUND" && (
-              <span className="text-[#3e4148]">You: </span>
+              <span className="text-[#9CA3AF]">You: </span>
             )}
             {preview?.message ?? subtitle}
           </p>
@@ -252,8 +246,8 @@ function ThreadItem({
             </span>
             {thread.assignedTo && (
               <>
-                <span className="text-[10px] text-[#2a2d37]">·</span>
-                <span className="truncate text-[10px] text-[#3e4148]">
+                <span className="text-[10px] text-[#D1D5DB]">·</span>
+                <span className="truncate text-[10px] text-[#9CA3AF]">
                   {thread.assignedTo.name ?? thread.assignedTo.email}
                 </span>
               </>
@@ -270,11 +264,11 @@ function ThreadItem({
 function DateSeparator({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 py-2">
-      <div className="h-px flex-1 bg-[#1a1f2a]" />
-      <span className="shrink-0 rounded-full border border-[#1e2330] bg-[#0f1219] px-3 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#3e4148]">
+      <div className="h-px flex-1 bg-[#E5E7EB]" />
+      <span className="shrink-0 rounded-full border border-[#E5E7EB] bg-white px-3 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#9CA3AF]">
         {label}
       </span>
-      <div className="h-px flex-1 bg-[#1a1f2a]" />
+      <div className="h-px flex-1 bg-[#E5E7EB]" />
     </div>
   );
 }
@@ -385,7 +379,6 @@ export default function InboxPage() {
   const isMessenger = active?.channel === "MESSENGER";
 
   // ── Build message groups with date separators ───────────────────────────────
-  // Each entry is either { type: "separator", label } or { type: "group", group, prevDate }
   type TimelineEntry =
     | { type: "separator"; label: string; key: string }
     | { type: "group"; group: MessageGroup; index: number };
@@ -416,20 +409,20 @@ export default function InboxPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
 
       {/* ════════════════════════════════════════════════════════════════════
           LEFT PANEL — conversation list
       ════════════════════════════════════════════════════════════════════ */}
-      <div className="flex w-[17rem] shrink-0 flex-col border-r border-[#1a1f2a] bg-[#0b0e14]">
+      <div className="flex w-[17rem] shrink-0 flex-col border-r border-[#E5E7EB] bg-white">
 
         {/* Header */}
-        <div className="border-b border-[#1a1f2a] px-4 pb-3 pt-4">
+        <div className="border-b border-[#F3F4F6] px-4 pb-3 pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-[13px] font-bold tracking-tight text-white">Inbox</h2>
+              <h2 className="text-[13px] font-bold tracking-tight text-[#111827]">Inbox</h2>
               {unreadCount > 0 && (
-                <span className="flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#6366F1] px-1.5 text-[10px] font-bold text-white">
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#6366F1] px-1.5 text-[10px] font-bold text-white">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -438,10 +431,10 @@ export default function InboxPage() {
 
           {/* Search */}
           <div className="relative mt-3">
-            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#3a3d47]" />
+            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" />
             <Input
-              className="h-8 rounded-lg border-[#1e2330] bg-[#12151c] pl-8 text-xs text-white placeholder:text-[#3a3d47] focus-visible:ring-[#6366F1]/30"
-              placeholder="Search by name or message…"
+              className="h-8 rounded-lg border-[#E5E7EB] bg-[#F9FAFB] pl-8 text-xs text-[#111827] placeholder:text-[#9CA3AF] focus-visible:ring-[#6366F1]/20"
+              placeholder="Search conversations…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -457,8 +450,8 @@ export default function InboxPage() {
                 className={cn(
                   "flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all",
                   activeFilter === f.key
-                    ? "bg-[#6366F1]/20 text-[#818cf8]"
-                    : "text-[#44474f] hover:text-[#7a7d87]",
+                    ? "bg-[#EEF2FF] text-[#4338CA]"
+                    : "text-[#9CA3AF] hover:text-[#6B7280]",
                 )}
               >
                 {f.dot && <span className={cn("size-1.5 rounded-full", f.dot)} />}
@@ -474,23 +467,23 @@ export default function InboxPage() {
             {isLoading
               ? Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="flex items-start gap-2.5 rounded-xl px-3 py-3">
-                    <Skeleton className="size-9 shrink-0 rounded-full bg-[#161a21]" />
+                    <Skeleton className="size-9 shrink-0 rounded-full bg-[#F3F4F6]" />
                     <div className="flex-1 space-y-1.5">
-                      <Skeleton className="h-3 w-2/3 rounded bg-[#161a21]" />
-                      <Skeleton className="h-2.5 w-full rounded bg-[#161a21]" />
-                      <Skeleton className="h-2 w-1/3 rounded bg-[#161a21]" />
+                      <Skeleton className="h-3 w-2/3 rounded bg-[#F3F4F6]" />
+                      <Skeleton className="h-2.5 w-full rounded bg-[#F3F4F6]" />
+                      <Skeleton className="h-2 w-1/3 rounded bg-[#F3F4F6]" />
                     </div>
                   </div>
                 ))
               : filteredThreads.length === 0
               ? (
                   <div className="flex flex-col items-center gap-4 px-2 py-10 text-center">
-                    <div className="flex size-14 items-center justify-center rounded-2xl bg-[#0f1219]">
-                      <AppleberryIcon size={32} />
+                    <div className="flex size-14 items-center justify-center rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB]">
+                      <AppleberryIcon size={30} />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-[#5a5d68]">{emptyLabel[activeFilter]}</p>
-                      <p className="mt-1 text-xs text-[#3a3d47]">
+                      <p className="text-sm font-semibold text-[#9CA3AF]">{emptyLabel[activeFilter]}</p>
+                      <p className="mt-1 text-xs text-[#D1D5DB]">
                         {activeFilter === "all"
                           ? "Messages from all channels will appear here."
                           : "Try a different filter."}
@@ -513,17 +506,17 @@ export default function InboxPage() {
       {/* ════════════════════════════════════════════════════════════════════
           CENTER PANEL — conversation view
       ════════════════════════════════════════════════════════════════════ */}
-      <div className="flex min-w-0 flex-1 flex-col bg-[#0d1018]">
+      <div className="flex min-w-0 flex-1 flex-col bg-[#F7F8FA]">
         {!threadId ? (
 
           /* Empty state */
           <div className="flex flex-1 flex-col items-center justify-center gap-6">
-            <div className="flex size-20 items-center justify-center rounded-3xl bg-[#0f1219] shadow-[0_0_40px_rgba(99,102,241,0.08)]">
+            <div className="flex size-20 items-center justify-center rounded-3xl bg-white border border-[#E5E7EB] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
               <AppleberryIcon size={44} />
             </div>
             <div className="text-center">
-              <h3 className="text-base font-semibold text-[#5a5d68]">Select a conversation</h3>
-              <p className="mt-1 text-sm text-[#3a3d47]">
+              <h3 className="text-base font-semibold text-[#9CA3AF]">Select a conversation</h3>
+              <p className="mt-1 text-sm text-[#D1D5DB]">
                 Pick a thread on the left to read and reply.
               </p>
             </div>
@@ -532,32 +525,25 @@ export default function InboxPage() {
         ) : (
           <>
             {/* ── Thread header ────────────────────────────────────────────── */}
-            <div className="border-b border-[#1a1f2a] bg-[#0b0e14] px-5 py-3">
+            <div className="border-b border-[#E5E7EB] bg-white px-5 py-3">
               {active && (
                 <div className="flex flex-wrap items-center justify-between gap-3">
 
                   {/* Contact info */}
                   <div className="flex items-center gap-3">
                     <div className="relative shrink-0">
-                      <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-[#6366F1]/25 to-[#EC4899]/15 text-sm font-bold text-[#818cf8] ring-1 ring-[#6366F1]/30">
+                      <div className="flex size-9 items-center justify-center rounded-full bg-[#EEF2FF] text-sm font-bold text-[#4338CA] ring-1 ring-[#C7D2FE]">
                         {contactInitials}
                       </div>
                       {channelMeta && (
-                        <span
-                          className={cn(
-                            "absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full ring-1 ring-[#0b0e14]",
-                            active.channel === "WHATSAPP"  ? "bg-emerald-500/25" :
-                            active.channel === "MESSENGER" ? "bg-blue-500/25" :
-                            active.channel === "TELEGRAM"  ? "bg-sky-500/25" : "bg-pink-500/25",
-                          )}
-                        >
+                        <span className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-white ring-1 ring-[#E5E7EB]">
                           <channelMeta.icon className={cn("size-2", channelMeta.color)} strokeWidth={2.5} />
                         </span>
                       )}
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-semibold text-[#111827]">
                         {active.contact.firstName} {active.contact.lastName}
                       </p>
                       <div className="mt-0.5 flex items-center gap-1.5">
@@ -580,11 +566,11 @@ export default function InboxPage() {
                           </span>
                         )}
                         {active.assignedTo ? (
-                          <span className="text-[11px] text-[#3e4148]">
-                            · <span className="text-[#818cf8]">{active.assignedTo.name ?? active.assignedTo.email}</span>
+                          <span className="text-[11px] text-[#9CA3AF]">
+                            · <span className="text-[#6366F1]">{active.assignedTo.name ?? active.assignedTo.email}</span>
                           </span>
                         ) : (
-                          <span className="text-[11px] text-[#2a2d37]">· Unassigned</span>
+                          <span className="text-[11px] text-[#D1D5DB]">· Unassigned</span>
                         )}
                       </div>
                     </div>
@@ -599,10 +585,10 @@ export default function InboxPage() {
                           patchMutation.mutate({ status: v });
                       }}
                     >
-                      <SelectTrigger className="h-7.5 w-[108px] rounded-lg border-[#1e2330] bg-[#12151c] text-[11px] text-[#9b9da6] focus:ring-0">
+                      <SelectTrigger className="h-8 w-[108px] rounded-lg border-[#E5E7EB] bg-[#F9FAFB] text-[11px] text-[#6B7280] focus:ring-0">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="rounded-xl border-[#262B33]/40 bg-[#161a21]">
+                      <SelectContent className="rounded-xl border-[#E5E7EB] bg-white shadow-lg">
                         {Object.entries(STATUS_META).map(([key, s]) => (
                           <SelectItem key={key} value={key}>
                             <span className="flex items-center gap-2">
@@ -618,7 +604,7 @@ export default function InboxPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7.5 rounded-lg border-[#1e2330] bg-[#12151c] px-3 text-[11px] text-[#9b9da6] hover:bg-[#1e2330] hover:text-white"
+                      className="h-8 rounded-lg border-[#E5E7EB] bg-[#F9FAFB] px-3 text-[11px] text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]"
                       onClick={() => me && patchMutation.mutate({ assignedToId: me.id })}
                       disabled={!me || patchMutation.isPending}
                     >
@@ -632,7 +618,7 @@ export default function InboxPage() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-7.5 w-7.5 rounded-lg p-0 text-[#3e4148] hover:bg-[#161a21] hover:text-[#7a7d87]"
+                      className="h-8 w-8 rounded-lg p-0 text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#6B7280]"
                       onClick={() => patchMutation.mutate({ assignedToId: null })}
                       disabled={patchMutation.isPending}
                       title="Unassign"
@@ -640,12 +626,12 @@ export default function InboxPage() {
                       <UserMinus className="size-3.5" />
                     </Button>
 
-                    <div className="h-4 w-px bg-[#1a1f2a]" />
+                    <div className="h-4 w-px bg-[#E5E7EB]" />
 
                     <button
                       type="button"
                       onClick={() => setShowAssign((v) => !v)}
-                      className="text-[10px] text-[#3e4148] transition-colors hover:text-[#5a5d68]"
+                      className="text-[10px] text-[#9CA3AF] transition-colors hover:text-[#6B7280]"
                       title="Assign to user by ID"
                     >
                       {showAssign ? "hide" : "···"}
@@ -657,10 +643,10 @@ export default function InboxPage() {
                       variant="ghost"
                       size="sm"
                       className={cn(
-                        "h-7.5 w-7.5 rounded-lg p-0 transition-colors",
+                        "h-8 w-8 rounded-lg p-0 transition-colors",
                         showInfoPanel
-                          ? "bg-[#6366F1]/15 text-[#818cf8]"
-                          : "text-[#3e4148] hover:bg-[#161a21] hover:text-[#7a7d87]",
+                          ? "bg-[#EEF2FF] text-[#4338CA]"
+                          : "text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#6B7280]",
                       )}
                       onClick={() => setShowInfoPanel((v) => !v)}
                       title="Contact details"
@@ -675,9 +661,9 @@ export default function InboxPage() {
 
               {/* UUID assign (advanced) */}
               {showAssign && (
-                <div className="mt-3 flex items-center gap-2 border-t border-[#1a1f2a] pt-3">
+                <div className="mt-3 flex items-center gap-2 border-t border-[#F3F4F6] pt-3">
                   <Input
-                    className="h-8 flex-1 rounded-lg border-[#1e2330] bg-[#12151c] text-xs text-white placeholder:text-[#3e4148] focus-visible:ring-[#6366F1]/30"
+                    className="h-8 flex-1 rounded-lg border-[#E5E7EB] bg-[#F9FAFB] text-xs text-[#111827] placeholder:text-[#9CA3AF] focus-visible:ring-[#6366F1]/20"
                     placeholder="Assign to user UUID…"
                     value={assignUserId}
                     onChange={(e) => setAssignUserId(e.target.value)}
@@ -710,14 +696,14 @@ export default function InboxPage() {
                   <div className="flex flex-col px-6 py-5">
                     {messagesFetching && messages.length === 0 ? (
                       <div className="space-y-4 pt-2">
-                        <Skeleton className="ml-auto h-14 w-[58%] rounded-2xl bg-[#161a21]" />
-                        <Skeleton className="h-10 w-[45%] rounded-2xl bg-[#161a21]" />
-                        <Skeleton className="ml-auto h-12 w-[50%] rounded-2xl bg-[#161a21]" />
-                        <Skeleton className="h-8 w-[35%] rounded-2xl bg-[#161a21]" />
+                        <Skeleton className="ml-auto h-14 w-[58%] rounded-2xl bg-[#F3F4F6]" />
+                        <Skeleton className="h-10 w-[45%] rounded-2xl bg-[#F3F4F6]" />
+                        <Skeleton className="ml-auto h-12 w-[50%] rounded-2xl bg-[#F3F4F6]" />
+                        <Skeleton className="h-8 w-[35%] rounded-2xl bg-[#F3F4F6]" />
                       </div>
                     ) : timeline.length === 0 ? (
                       <div className="flex flex-1 flex-col items-center justify-center py-16">
-                        <p className="text-xs text-[#3e4148]">No messages yet — say hello!</p>
+                        <p className="text-xs text-[#D1D5DB]">No messages yet — say hello!</p>
                       </div>
                     ) : (
                       timeline.map((entry) => {
@@ -733,18 +719,18 @@ export default function InboxPage() {
                         return (
                           <div
                             key={gi}
-                            className={cn("mb-3 flex items-end gap-2.5", isOut ? "flex-row-reverse" : "flex-row")}
+                            className={cn("mb-4 flex items-end gap-2.5", isOut ? "flex-row-reverse" : "flex-row")}
                           >
                             {/* Inbound avatar */}
                             {!isOut && (
-                              <div className="mb-5 flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1e2330] text-[10px] font-bold text-[#6366F1] ring-1 ring-[#2d3141]">
+                              <div className="mb-5 flex size-7 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[10px] font-bold text-[#4338CA] ring-1 ring-[#C7D2FE]">
                                 {contactInitials}
                               </div>
                             )}
 
-                            <div className={cn("flex max-w-[70%] flex-col gap-0.5", isOut ? "items-end" : "items-start")}>
+                            <div className={cn("flex max-w-[68%] flex-col gap-0.5", isOut ? "items-end" : "items-start")}>
                               {/* Sender label */}
-                              <span className="mb-0.5 px-1 text-[10px] font-medium text-[#3e4148]">
+                              <span className="mb-0.5 px-1 text-[10px] font-medium text-[#9CA3AF]">
                                 {isOut ? "You" : `${active?.contact.firstName ?? "Customer"}`}
                               </span>
 
@@ -758,8 +744,8 @@ export default function InboxPage() {
                                     className={cn(
                                       "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                                       isOut
-                                        ? "stitch-gradient text-white shadow-[0_2px_14px_-3px_rgba(99,102,241,0.45)]"
-                                        : "bg-[#141820] text-[#d1d3db] ring-1 ring-[#1e2330]",
+                                        ? "bg-[#EEF2FF] text-[#3730A3]"
+                                        : "bg-white text-[#111827] border border-[#E5E7EB] shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
                                       count > 1 && isFirst && !isLast && (isOut ? "rounded-br-[6px]" : "rounded-bl-[6px]"),
                                       count > 1 && !isFirst && !isLast && (isOut ? "rounded-r-[6px]"  : "rounded-l-[6px]"),
                                       count > 1 && !isFirst && isLast  && (isOut ? "rounded-tr-[6px]" : "rounded-tl-[6px]"),
@@ -772,14 +758,14 @@ export default function InboxPage() {
 
                               {/* Timestamp + delivery status */}
                               <div className={cn("flex items-center gap-1 px-1", isOut ? "flex-row-reverse" : "flex-row")}>
-                                <span className="text-[10px] text-[#3a3d47]">
+                                <span className="text-[10px] text-[#9CA3AF]">
                                   {new Date(lastMsg.createdAt).toLocaleTimeString([], {
                                     hour: "2-digit",
                                     minute: "2-digit",
                                   })}
                                 </span>
                                 {isOut && (
-                                  <CheckCheck className="size-3 text-[#3e4148]" />
+                                  <CheckCheck className="size-3 text-[#9CA3AF]" />
                                 )}
                               </div>
                             </div>
@@ -793,21 +779,21 @@ export default function InboxPage() {
 
                 {/* ── Messenger 24h warning ────────────────────────────── */}
                 {isMessenger && (
-                  <div className="flex items-center gap-2.5 border-t border-amber-500/10 bg-amber-500/[0.04] px-5 py-2.5">
-                    <AlertCircle className="size-3.5 shrink-0 text-amber-500/70" />
-                    <p className="text-xs text-amber-500/60">
-                      <span className="font-semibold text-amber-400">24-hour window</span>
+                  <div className="flex items-center gap-2.5 border-t border-amber-100 bg-amber-50 px-5 py-2.5">
+                    <AlertCircle className="size-3.5 shrink-0 text-amber-500" />
+                    <p className="text-xs text-amber-700">
+                      <span className="font-semibold">24-hour window</span>
                       {" "}— You can only reply within 24 hours of the customer&apos;s last message on Messenger.
                     </p>
                   </div>
                 )}
 
                 {/* ── Composer ─────────────────────────────────────────── */}
-                <div className="border-t border-[#1a1f2a] bg-[#0b0e14] px-5 py-4">
-                  <div className="overflow-hidden rounded-xl border border-[#1e2330] bg-[#0f1219] transition-all focus-within:border-[#2d3248] focus-within:shadow-[0_0_0_1px_rgba(99,102,241,0.15)]">
+                <div className="border-t border-[#E5E7EB] bg-white px-5 py-4">
+                  <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white transition-all focus-within:border-[#C7D2FE] focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)]">
                     <Textarea
                       rows={3}
-                      className="min-h-[72px] resize-none rounded-none border-none bg-transparent px-4 pt-3 text-sm text-white placeholder:text-[#3a3d47] focus-visible:ring-0"
+                      className="min-h-[72px] resize-none rounded-none border-none bg-transparent px-4 pt-3 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus-visible:ring-0"
                       placeholder="Write a reply… (⌘↵ to send)"
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
@@ -816,37 +802,37 @@ export default function InboxPage() {
                           sendMutation.mutate();
                       }}
                     />
-                    <div className="flex items-center justify-between border-t border-[#1a1f2a] px-3 py-2">
+                    <div className="flex items-center justify-between border-t border-[#F3F4F6] px-3 py-2">
                       {/* Left: icon actions */}
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          className="text-[#3a3d47] transition-colors hover:text-[#6b6d74]"
+                          className="text-[#9CA3AF] transition-colors hover:text-[#6B7280]"
                           title="Emoji (coming soon)"
                         >
                           <Smile className="size-4" />
                         </button>
                         <button
                           type="button"
-                          className="text-[#3a3d47] transition-colors hover:text-[#6b6d74]"
+                          className="text-[#9CA3AF] transition-colors hover:text-[#6B7280]"
                           title="Attach file (coming soon)"
                         >
                           <Paperclip className="size-4" />
                         </button>
-                        <div className="h-3 w-px bg-[#1e2330]" />
+                        <div className="h-3 w-px bg-[#E5E7EB]" />
                         {draft.length > 0 ? (
-                          <span className="text-[10px] text-[#3e4148]">
+                          <span className="text-[10px] text-[#9CA3AF]">
                             {draft.length} chars
                           </span>
                         ) : (
-                          <span className="text-[10px] text-[#252830]">⌘↵ to send</span>
+                          <span className="text-[10px] text-[#D1D5DB]">⌘↵ to send</span>
                         )}
                       </div>
 
                       {/* Right: send button */}
                       <Button
                         size="sm"
-                        className="h-7.5 rounded-lg px-4 text-xs font-semibold stitch-gradient shadow-[0_2px_12px_-2px_rgba(99,102,241,0.45)] transition-opacity hover:opacity-90 disabled:opacity-40"
+                        className="h-8 rounded-lg px-4 text-xs font-semibold stitch-gradient text-white shadow-[0_1px_4px_rgba(99,102,241,0.3)] transition-opacity hover:opacity-90 disabled:opacity-40"
                         onClick={() => sendMutation.mutate()}
                         disabled={sendMutation.isPending || !draft.trim()}
                       >
@@ -862,19 +848,19 @@ export default function InboxPage() {
 
               {/* ── Right info panel ──────────────────────────────────────── */}
               {showInfoPanel && active && (
-                <div className="flex w-60 shrink-0 flex-col overflow-y-auto border-l border-[#1a1f2a] bg-[#0b0e14]">
+                <div className="flex w-60 shrink-0 flex-col overflow-y-auto border-l border-[#E5E7EB] bg-white/90 backdrop-blur-sm">
 
                   {/* Contact card */}
-                  <div className="border-b border-[#1a1f2a] px-4 pb-5 pt-4">
+                  <div className="border-b border-[#F3F4F6] px-4 pb-5 pt-4">
                     <div className="flex flex-col items-center text-center">
-                      <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#6366F1]/20 to-[#EC4899]/15 text-lg font-bold text-[#818cf8] ring-1 ring-[#6366F1]/25">
+                      <div className="flex size-14 items-center justify-center rounded-2xl bg-[#EEF2FF] text-lg font-bold text-[#4338CA] ring-1 ring-[#C7D2FE]">
                         {contactInitials}
                       </div>
-                      <h3 className="mt-3 text-sm font-semibold text-white">
+                      <h3 className="mt-3 text-sm font-semibold text-[#111827]">
                         {active.contact.firstName} {active.contact.lastName}
                       </h3>
                       {active.contact.phone && !active.contact.phone.startsWith("fb:") && (
-                        <p className="mt-0.5 flex items-center gap-1 text-xs text-[#5a5d68]">
+                        <p className="mt-0.5 flex items-center gap-1 text-xs text-[#9CA3AF]">
                           <Phone className="size-3" />
                           {active.contact.phone}
                         </p>
@@ -883,26 +869,26 @@ export default function InboxPage() {
                   </div>
 
                   {/* Channel info */}
-                  <div className="border-b border-[#1a1f2a] px-4 py-4">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#3e4148]">
+                  <div className="border-b border-[#F3F4F6] px-4 py-4">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">
                       Channel
                     </p>
                     <div className="flex items-center gap-2">
                       {channelMeta && (
                         <channelMeta.icon className={cn("size-3.5", channelMeta.color)} strokeWidth={1.75} />
                       )}
-                      <span className="text-xs font-medium text-[#9b9da6]">
+                      <span className="text-xs font-medium text-[#374151]">
                         {channelMeta?.label ?? active.channel}
                       </span>
                       {active.channel === "MESSENGER" && active.fbPage && (
-                        <span className="text-xs text-[#4a4d56]">· {active.fbPage.name}</span>
+                        <span className="text-xs text-[#9CA3AF]">· {active.fbPage.name}</span>
                       )}
                     </div>
                   </div>
 
                   {/* Status */}
-                  <div className="border-b border-[#1a1f2a] px-4 py-4">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#3e4148]">
+                  <div className="border-b border-[#F3F4F6] px-4 py-4">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">
                       Status
                     </p>
                     {statusMeta && (
@@ -917,20 +903,20 @@ export default function InboxPage() {
 
                   {/* Assignee */}
                   <div className="px-4 py-4">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#3e4148]">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">
                       Assigned to
                     </p>
                     {active.assignedTo ? (
                       <div className="flex items-center gap-2">
-                        <div className="flex size-6 items-center justify-center rounded-full bg-[#6366F1]/15 text-[9px] font-bold text-[#818cf8]">
+                        <div className="flex size-6 items-center justify-center rounded-full bg-[#EEF2FF] text-[9px] font-bold text-[#4338CA]">
                           {(active.assignedTo.name ?? active.assignedTo.email ?? "?")[0].toUpperCase()}
                         </div>
-                        <span className="text-xs text-[#9b9da6]">
+                        <span className="text-xs text-[#374151]">
                           {active.assignedTo.name ?? active.assignedTo.email}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-xs text-[#3e4148]">Unassigned</span>
+                      <span className="text-xs text-[#9CA3AF]">Unassigned</span>
                     )}
                   </div>
                 </div>

@@ -196,34 +196,34 @@ export default function WhatsAppAccountsPage() {
 
             {/* Create dialog */}
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogContent className="rounded-xl sm:max-w-md bg-[#161a21] border-[#262B33]/40">
+              <DialogContent className="rounded-xl sm:max-w-md bg-[#F9FAFB] border-[#E5E7EB]">
                 <DialogHeader>
-                  <DialogTitle className="text-xl text-white">New WhatsApp account</DialogTitle>
+                  <DialogTitle className="text-xl text-[#111827]">New WhatsApp account</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                   <div className="grid gap-2">
-                    <Label className="text-[#a9abb3]">Display name</Label>
+                    <Label className="text-[#6B7280]">Display name</Label>
                     <Input
-                      className="rounded-xl bg-[#0f1219] border-[#262B33]/40 text-white placeholder:text-[#5a5d68]"
+                      className="rounded-xl bg-white border-[#E5E7EB] text-[#111827] placeholder:text-[#9CA3AF]"
                       placeholder="e.g. Support Line"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label className="text-[#a9abb3]">Provider</Label>
+                    <Label className="text-[#6B7280]">Provider</Label>
                     <Select value={providerType} onValueChange={(v) => setProviderType(v ?? "BAILEYS")}>
-                      <SelectTrigger className="rounded-xl bg-[#0f1219] border-[#262B33]/40 text-white">
+                      <SelectTrigger className="rounded-xl bg-white border-[#E5E7EB] text-[#111827]">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="rounded-xl bg-[#161a21] border-[#262B33]/40">
-                        <SelectItem value="BAILEYS" className="text-[#ecedf6]">Phone pairing code (Baileys)</SelectItem>
-                        <SelectItem value="CLOUD"   className="text-[#ecedf6]">Meta Cloud API</SelectItem>
-                        <SelectItem value="MOCK"    className="text-[#ecedf6]">Mock (testing)</SelectItem>
+                      <SelectContent className="rounded-xl bg-[#F9FAFB] border-[#E5E7EB]">
+                        <SelectItem value="BAILEYS" className="text-[#111827]">Phone pairing code (Baileys)</SelectItem>
+                        <SelectItem value="CLOUD"   className="text-[#111827]">Meta Cloud API</SelectItem>
+                        <SelectItem value="MOCK"    className="text-[#111827]">Mock (testing)</SelectItem>
                       </SelectContent>
                     </Select>
                     {providerType === "BAILEYS" && (
-                      <p className="text-xs text-[#6b6d74]">
+                      <p className="text-xs text-[#6B7280]">
                         After saving, scan the QR code to link your WhatsApp number.
                       </p>
                     )}
@@ -244,9 +244,9 @@ export default function WhatsAppAccountsPage() {
 
             {/* Link modal — QR + pairing code */}
             <Dialog open={!!pairingAccountId} onOpenChange={closeLinkModal}>
-              <DialogContent className="rounded-xl sm:max-w-sm bg-[#161a21] border-[#262B33]/40">
+              <DialogContent className="rounded-xl sm:max-w-sm bg-[#F9FAFB] border-[#E5E7EB]">
                 <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-xl text-white">
+                  <DialogTitle className="flex items-center gap-2 text-xl text-[#111827]">
                     <Smartphone className="size-5" />
                     Link WhatsApp
                   </DialogTitle>
@@ -258,40 +258,40 @@ export default function WhatsAppAccountsPage() {
                       <Wifi className="size-8 text-emerald-500" />
                     </div>
                     <p className="font-semibold text-emerald-400">Connected successfully!</p>
-                    <p className="text-center text-sm text-[#6b6d74]">
+                    <p className="text-center text-sm text-[#6B7280]">
                       Your WhatsApp number is now live and ready.
                     </p>
                     <Button className="rounded-xl" onClick={closeLinkModal}>Done</Button>
                   </div>
                 ) : linkMode === "qr" ? (
                   <div className="flex flex-col items-center gap-4 py-2">
-                    <p className="text-sm text-center text-[#6b6d74]">
+                    <p className="text-sm text-center text-[#6B7280]">
                       Open WhatsApp → Settings → Linked Devices → Link a Device, then scan this QR code.
                     </p>
 
                     {connectMutation.isPending ? (
-                      <div className="flex size-[260px] items-center justify-center rounded-xl border border-[#1e2330] bg-[#0f1219]">
-                        <Loader2 className="size-8 animate-spin text-[#5a5d68]" />
+                      <div className="flex size-[260px] items-center justify-center rounded-xl border border-[#E5E7EB] bg-white">
+                        <Loader2 className="size-8 animate-spin text-[#9CA3AF]" />
                       </div>
                     ) : qrDataUrl ? (
-                      <div className="rounded-xl overflow-hidden border border-[#1e2330] shadow-sm">
+                      <div className="rounded-xl overflow-hidden border border-[#E5E7EB] shadow-sm">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={qrDataUrl} alt="WhatsApp QR code" width={260} height={260} />
                       </div>
                     ) : (
-                      <div className="flex size-[260px] items-center justify-center rounded-xl border border-[#1e2330] bg-[#0f1219]">
-                        <div className="flex flex-col items-center gap-2 text-[#5a5d68]">
+                      <div className="flex size-[260px] items-center justify-center rounded-xl border border-[#E5E7EB] bg-white">
+                        <div className="flex flex-col items-center gap-2 text-[#9CA3AF]">
                           <QrCode className="size-8" />
                           <span className="text-xs">Generating QR…</span>
                         </div>
                       </div>
                     )}
 
-                    <p className="text-xs text-[#6b6d74] text-center">
+                    <p className="text-xs text-[#6B7280] text-center">
                       QR code refreshes automatically. Scan it quickly.
                     </p>
                     <button
-                      className="text-xs text-[#818cf8] underline underline-offset-2 hover:text-[#6366F1]"
+                      className="text-xs text-[#6366F1] underline underline-offset-2 hover:text-[#6366F1]"
                       onClick={() => { setLinkMode("pairing"); setPairingCode(null); }}
                     >
                       Use pairing code instead
@@ -299,21 +299,21 @@ export default function WhatsAppAccountsPage() {
                   </div>
                 ) : pairingCode ? (
                   <div className="flex flex-col items-center gap-4 py-4">
-                    <p className="text-sm text-center text-[#6b6d74]">
+                    <p className="text-sm text-center text-[#6B7280]">
                       Open WhatsApp → Settings → Linked Devices → Link a Device → Link with phone number instead
                     </p>
                     <div className="flex items-center justify-center rounded-xl border-2 border-[#6366F1]/30 bg-[#6366F1]/5 px-6 py-4">
-                      <span className="font-mono text-4xl font-bold tracking-[0.3em] text-[#818cf8]">
+                      <span className="font-mono text-4xl font-bold tracking-[0.3em] text-[#6366F1]">
                         {pairingCode}
                       </span>
                     </div>
-                    <p className="text-xs text-[#6b6d74] text-center">Enter this code in WhatsApp when prompted.</p>
-                    <div className="flex items-center gap-2 rounded-lg bg-[#1e2330] px-3 py-2 text-xs text-[#6b6d74]">
+                    <p className="text-xs text-[#6B7280] text-center">Enter this code in WhatsApp when prompted.</p>
+                    <div className="flex items-center gap-2 rounded-lg bg-[#F3F4F6] px-3 py-2 text-xs text-[#6B7280]">
                       <Loader2 className="size-3 animate-spin" />
                       Waiting for confirmation…
                     </div>
                     <button
-                      className="text-xs text-[#818cf8] underline underline-offset-2 hover:text-[#6366F1]"
+                      className="text-xs text-[#6366F1] underline underline-offset-2 hover:text-[#6366F1]"
                       onClick={switchToQr}
                     >
                       Scan QR code instead
@@ -321,13 +321,13 @@ export default function WhatsAppAccountsPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4 py-2">
-                    <p className="text-sm text-[#6b6d74]">
+                    <p className="text-sm text-[#6B7280]">
                       Enter your WhatsApp phone number (with country code) to generate a pairing code.
                     </p>
                     <div className="grid gap-2">
-                      <Label className="text-[#a9abb3]">Phone number</Label>
+                      <Label className="text-[#6B7280]">Phone number</Label>
                       <Input
-                        className="rounded-xl font-mono bg-[#0f1219] border-[#262B33]/40 text-white placeholder:text-[#5a5d68]"
+                        className="rounded-xl font-mono bg-white border-[#E5E7EB] text-[#111827] placeholder:text-[#9CA3AF]"
                         placeholder="+27821234567"
                         value={pairingPhone}
                         onChange={(e) => setPairingPhone(e.target.value)}
@@ -342,7 +342,7 @@ export default function WhatsAppAccountsPage() {
                       Get pairing code
                     </Button>
                     <button
-                      className="text-xs text-[#818cf8] underline underline-offset-2 text-center hover:text-[#6366F1]"
+                      className="text-xs text-[#6366F1] underline underline-offset-2 text-center hover:text-[#6366F1]"
                       onClick={switchToQr}
                     >
                       Scan QR code instead
@@ -375,10 +375,10 @@ export default function WhatsAppAccountsPage() {
               <div
                 key={a.id}
                 className={cn(
-                  "overflow-hidden rounded-2xl border bg-[#0f1219] transition-all duration-200 hover:shadow-lg",
+                  "overflow-hidden rounded-2xl border bg-white transition-all duration-200 hover:shadow-lg",
                   isConnected
-                    ? "border-[#1a2820] hover:border-emerald-900/60"
-                    : "border-[#1a1f2a] hover:border-[#262B33]",
+                    ? "border-emerald-200 hover:border-emerald-900/60"
+                    : "border-[#E5E7EB] hover:border-[#D1D5DB]",
                 )}
               >
                 {/* Top accent */}
@@ -386,7 +386,7 @@ export default function WhatsAppAccountsPage() {
                   "h-0.5 w-full",
                   isConnected
                     ? "bg-gradient-to-r from-emerald-500/80 to-emerald-400/40"
-                    : "bg-[#1e2330]",
+                    : "bg-[#F3F4F6]",
                 )} />
 
                 {/* Card header */}
@@ -394,16 +394,16 @@ export default function WhatsAppAccountsPage() {
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "flex size-11 shrink-0 items-center justify-center rounded-xl",
-                      isConnected ? "bg-emerald-500/10" : "bg-[#161a21]",
+                      isConnected ? "bg-emerald-500/10" : "bg-[#F9FAFB]",
                     )}>
                       <Smartphone className={cn(
                         "size-5",
-                        isConnected ? "text-emerald-400" : "text-[#5a5d68]",
+                        isConnected ? "text-emerald-400" : "text-[#9CA3AF]",
                       )} />
                     </div>
                     <div>
-                      <p className="font-semibold text-sm leading-tight text-white">{a.name}</p>
-                      <p className="font-mono text-xs text-[#6b6d74] mt-0.5">
+                      <p className="font-semibold text-sm leading-tight text-[#111827]">{a.name}</p>
+                      <p className="font-mono text-xs text-[#6B7280] mt-0.5">
                         {a.phone ?? "Not linked"}
                       </p>
                     </div>
@@ -414,7 +414,7 @@ export default function WhatsAppAccountsPage() {
                     "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
                     isConnected
                       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                      : "border-[#262B33]/60 bg-[#161a21] text-[#5a5d68]",
+                      : "border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]",
                   )}>
                     {isConnected ? (
                       <CheckCircle2 className="size-3" />
@@ -426,25 +426,25 @@ export default function WhatsAppAccountsPage() {
                 </div>
 
                 {/* Stats row */}
-                <div className="grid grid-cols-2 divide-x divide-[#1e2330] border-t border-[#1e2330]">
+                <div className="grid grid-cols-2 divide-x divide-[#F3F4F6] border-t border-[#E5E7EB]">
                   <div className="px-5 py-3 text-center">
-                    <p className="text-xl font-bold text-white">
+                    <p className="text-xl font-bold text-[#111827]">
                       {isConnected ? (
                         <Wifi className="mx-auto size-5 text-emerald-400" />
                       ) : (
-                        <WifiOff className="mx-auto size-5 text-[#3e4148]" />
+                        <WifiOff className="mx-auto size-5 text-[#9CA3AF]" />
                       )}
                     </p>
                     <p className={cn(
                       "text-[10px] font-medium uppercase tracking-widest mt-1",
-                      isConnected ? "text-emerald-400" : "text-[#5a5d68]",
+                      isConnected ? "text-emerald-400" : "text-[#9CA3AF]",
                     )}>
                       {isConnected ? "Connected" : "Offline"}
                     </p>
                   </div>
                   <div className="px-5 py-3 text-center">
-                    <p className="text-xl font-bold text-white">{accountActiveItems(a.id)}</p>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-[#5a5d68] mt-0.5">
+                    <p className="text-xl font-bold text-[#111827]">{accountActiveItems(a.id)}</p>
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-[#9CA3AF] mt-0.5">
                       Active Rules
                     </p>
                   </div>
@@ -452,29 +452,29 @@ export default function WhatsAppAccountsPage() {
 
                 {/* Status bar */}
                 <div className={cn(
-                  "flex items-center gap-2 border-t border-[#1e2330] px-5 py-2.5",
-                  isConnected ? "bg-emerald-500/5" : "bg-[#0b0e14]/50",
+                  "flex items-center gap-2 border-t border-[#E5E7EB] px-5 py-2.5",
+                  isConnected ? "bg-emerald-500/5" : "bg-[#F7F8FA]/50",
                 )}>
                   {isConnected ? (
                     <Wifi className="size-3.5 text-emerald-500" />
                   ) : (
-                    <WifiOff className="size-3.5 text-[#3e4148]" />
+                    <WifiOff className="size-3.5 text-[#9CA3AF]" />
                   )}
                   <span className={cn(
                     "text-xs font-medium",
-                    isConnected ? "text-emerald-400" : "text-[#5a5d68]",
+                    isConnected ? "text-emerald-400" : "text-[#9CA3AF]",
                   )}>
                     {isConnected ? "Autoresponders active — receiving messages" : "Not receiving messages"}
                   </span>
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex gap-2 border-t border-[#1e2330] px-4 py-3">
+                <div className="flex gap-2 border-t border-[#E5E7EB] px-4 py-3">
                   <Link href={`/autoresponder?account=${a.id}`} className="flex-1">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full rounded-xl border-[#1e2330] bg-[#161a21] text-xs text-[#9b9da6] gap-1.5 hover:border-[#2d3141] hover:bg-[#1e2330] hover:text-white"
+                      className="w-full rounded-xl border-[#E5E7EB] bg-[#F9FAFB] text-xs text-[#6B7280] gap-1.5 hover:border-[#D1D5DB] hover:bg-[#F3F4F6] hover:text-[#111827]"
                     >
                       <Bot className="size-3.5" />
                       Add rule
@@ -484,7 +484,7 @@ export default function WhatsAppAccountsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full rounded-xl border-[#1e2330] bg-[#161a21] text-xs text-[#9b9da6] gap-1.5 hover:border-[#2d3141] hover:bg-[#1e2330] hover:text-white"
+                      className="w-full rounded-xl border-[#E5E7EB] bg-[#F9FAFB] text-xs text-[#6B7280] gap-1.5 hover:border-[#D1D5DB] hover:bg-[#F3F4F6] hover:text-[#111827]"
                     >
                       <List className="size-3.5" />
                       Rules{accountTotalItems(a.id) > 0 ? ` (${accountTotalItems(a.id)})` : ""}
@@ -522,13 +522,13 @@ export default function WhatsAppAccountsPage() {
 
       {/* Help callout */}
       {accounts.length > 0 && (
-        <div className="rounded-xl border border-[#1a1f2a] bg-[#0f1219] px-5 py-4 text-sm text-[#6b6d74]">
-          <p className="font-medium text-white mb-1">How it works</p>
+        <div className="rounded-xl border border-[#E5E7EB] bg-white px-5 py-4 text-sm text-[#6B7280]">
+          <p className="font-medium text-[#111827] mb-1">How it works</p>
           <p>
             Each number runs its own{" "}
             <Link
               href="/autoresponder"
-              className="font-medium text-[#818cf8] underline-offset-2 hover:underline"
+              className="font-medium text-[#6366F1] underline-offset-2 hover:underline"
             >
               autoresponder rules
             </Link>{" "}

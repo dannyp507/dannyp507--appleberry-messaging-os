@@ -57,15 +57,15 @@ export default function ContactGroupDetailPage() {
   return (
     <div className="page-container space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/contacts" className="text-[#a9abb3] hover:text-white transition-colors">
+        <Link href="/contacts" className="text-[#6B7280] hover:text-[#111827] transition-colors">
           <span className="material-symbols-outlined">arrow_back</span>
         </Link>
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-white">{group?.name ?? "Contact Group"}</h2>
-          <p className="text-sm text-[#a9abb3] mt-0.5">{total.toLocaleString()} contacts</p>
+          <h2 className="text-2xl font-bold text-[#111827]">{group?.name ?? "Contact Group"}</h2>
+          <p className="text-sm text-[#6B7280] mt-0.5">{total.toLocaleString()} contacts</p>
         </div>
         <button onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}
-          className="px-4 py-2 glass-pane rounded-lg text-sm font-medium text-[#a9abb3] hover:text-white transition-all flex items-center gap-2">
+          className="px-4 py-2 glass-pane rounded-lg text-sm font-medium text-[#6B7280] hover:text-[#111827] transition-all flex items-center gap-2">
           <span className="material-symbols-outlined text-sm">download</span>
           {exportMutation.isPending ? "Exporting…" : "Export CSV"}
         </button>
@@ -79,8 +79,8 @@ export default function ContactGroupDetailPage() {
           { label: "Invalid", value: items.filter(c => !c.isValid).length, color: "text-[#ff6e84]" },
           { label: "Duplicate", value: items.filter(c => c.isDuplicate).length, color: "text-amber-400" },
         ].map(({ label, value, color }) => (
-          <div key={label} className="bg-[#161a21] border border-[#262B33]/20 rounded-xl p-4">
-            <p className="text-[10px] font-bold text-[#73757d] uppercase tracking-widest mb-1">{label}</p>
+          <div key={label} className="bg-[#F9FAFB] border border-[#F3F4F6] rounded-xl p-4">
+            <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest mb-1">{label}</p>
             <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</p>
           </div>
         ))}
@@ -88,16 +88,16 @@ export default function ContactGroupDetailPage() {
 
       {/* Search */}
       <div className="relative">
-        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#73757d] text-sm">search</span>
+        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] text-sm">search</span>
         <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} placeholder="Search contacts…"
-          className="w-full bg-[#161a21] border border-[#262B33]/30 rounded-xl pl-9 pr-4 py-3 text-sm text-white placeholder:text-[#73757d] focus:outline-none focus:border-[#6366F1]/60" />
+          className="w-full bg-[#F9FAFB] border border-[#F3F4F6] rounded-xl pl-9 pr-4 py-3 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#6366F1]/60" />
       </div>
 
       {/* Table */}
-      <div className="bg-[#161a21] border border-[#262B33]/20 rounded-2xl overflow-hidden">
+      <div className="bg-[#F9FAFB] border border-[#F3F4F6] rounded-2xl overflow-hidden">
         <table className="w-full text-left">
           <thead>
-            <tr className="text-[10px] font-bold text-[#73757d] uppercase tracking-widest bg-[#1c2028]/50">
+            <tr className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest bg-[#F3F4F6]/50">
               <th className="px-6 py-3">Name</th>
               <th className="px-6 py-3">Phone</th>
               <th className="px-6 py-3">Email</th>
@@ -106,16 +106,16 @@ export default function ContactGroupDetailPage() {
           </thead>
           <tbody className="divide-y divide-[#262B33]/10">
             {isLoading ? (
-              <tr><td colSpan={4} className="px-6 py-8 text-center text-sm text-[#73757d]">Loading…</td></tr>
+              <tr><td colSpan={4} className="px-6 py-8 text-center text-sm text-[#9CA3AF]">Loading…</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={4} className="px-6 py-8 text-center text-sm text-[#73757d]">No contacts found.</td></tr>
+              <tr><td colSpan={4} className="px-6 py-8 text-center text-sm text-[#9CA3AF]">No contacts found.</td></tr>
             ) : items.map((c) => (
-              <tr key={c.id} className="hover:bg-[#262B33]/10 transition-colors">
+              <tr key={c.id} className="hover:bg-[#F3F4F6]/10 transition-colors">
                 <td className="px-6 py-3">
-                  <p className="text-sm font-medium text-white">{c.firstName} {c.lastName}</p>
+                  <p className="text-sm font-medium text-[#111827]">{c.firstName} {c.lastName}</p>
                 </td>
-                <td className="px-6 py-3 text-sm text-[#a9abb3] font-mono">{c.phone}</td>
-                <td className="px-6 py-3 text-sm text-[#a9abb3]">{c.email ?? "—"}</td>
+                <td className="px-6 py-3 text-sm text-[#6B7280] font-mono">{c.phone}</td>
+                <td className="px-6 py-3 text-sm text-[#6B7280]">{c.email ?? "—"}</td>
                 <td className="px-6 py-3">
                   <div className="flex gap-1.5">
                     {c.isDuplicate && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">Duplicate</span>}
@@ -132,14 +132,14 @@ export default function ContactGroupDetailPage() {
 
       {pages > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-[#73757d]">Page {page + 1} of {pages}</span>
+          <span className="text-[#9CA3AF]">Page {page + 1} of {pages}</span>
           <div className="flex gap-2">
             <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 rounded-lg bg-[#161a21] border border-[#262B33]/30 text-[#a9abb3] disabled:opacity-40 hover:text-white transition-colors">
+              className="px-3 py-1.5 rounded-lg bg-[#F9FAFB] border border-[#F3F4F6] text-[#6B7280] disabled:opacity-40 hover:text-[#111827] transition-colors">
               Previous
             </button>
             <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 rounded-lg bg-[#161a21] border border-[#262B33]/30 text-[#a9abb3] disabled:opacity-40 hover:text-white transition-colors">
+              className="px-3 py-1.5 rounded-lg bg-[#F9FAFB] border border-[#F3F4F6] text-[#6B7280] disabled:opacity-40 hover:text-[#111827] transition-colors">
               Next
             </button>
           </div>

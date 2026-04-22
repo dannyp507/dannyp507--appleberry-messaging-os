@@ -51,7 +51,7 @@ function ChannelCard({
   return (
     <div
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-2xl border bg-[#0f1219] transition-all duration-200 hover:shadow-lg",
+        "group relative flex flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]",
         borderClass,
       )}
     >
@@ -75,8 +75,8 @@ function ChannelCard({
             className={cn(
               "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
               connected
-                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                : "border-[#262B33]/60 bg-[#161a21] text-[#5a5d68]",
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]",
             )}
           >
             {connected ? (
@@ -90,25 +90,25 @@ function ChannelCard({
 
         {/* Name + description */}
         <div className="space-y-1.5">
-          <h3 className="text-base font-semibold text-white">{name}</h3>
-          <p className="text-sm leading-relaxed text-[#6b6d74]">{description}</p>
+          <h3 className="text-base font-semibold text-[#111827]">{name}</h3>
+          <p className="text-sm leading-relaxed text-[#6B7280]">{description}</p>
         </div>
 
         {/* Count stat */}
         <div className="flex items-baseline gap-1.5">
-          <span className="text-3xl font-bold text-white">{count}</span>
-          <span className="text-sm text-[#5a5d68]">
+          <span className="text-3xl font-bold text-[#111827]">{count}</span>
+          <span className="text-sm text-[#9CA3AF]">
             {count === 1 ? countLabel : `${countLabel}s`} connected
           </span>
         </div>
       </div>
 
       {/* Footer CTA */}
-      <div className="border-t border-[#1a1f2a] px-6 py-4">
+      <div className="border-t border-[#E5E7EB] px-6 py-4">
         <Link href={href} className="w-full">
           <Button
             variant="ghost"
-            className="w-full justify-between rounded-xl border border-[#1e2330] bg-[#161a21] px-4 py-2.5 text-sm font-medium text-[#9b9da6] hover:border-[#2d3141] hover:bg-[#1e2330] hover:text-white"
+            className="w-full justify-between rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm font-medium text-[#6B7280] hover:border-[#C7D2FE] hover:bg-[#EEF2FF] hover:text-[#4338CA]"
           >
             {cta}
             <ArrowRight className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
@@ -158,10 +158,10 @@ export default function ChannelsPage() {
       connected: waAccounts.some((a) => a.session?.status === "CONNECTED"),
       href: "/whatsapp-accounts",
       cta: "Manage WhatsApp",
-      accentClass: "bg-gradient-to-r from-emerald-500/80 to-emerald-400/40",
-      iconBgClass: "bg-emerald-500/10",
-      iconColorClass: "text-emerald-400",
-      borderClass: "border-[#1a2820] hover:border-emerald-900/60",
+      accentClass: "bg-gradient-to-r from-emerald-400 to-emerald-200",
+      iconBgClass: "bg-emerald-50",
+      iconColorClass: "text-emerald-600",
+      borderClass: "border-emerald-100 hover:border-emerald-300",
     },
     {
       id: "facebook",
@@ -174,10 +174,10 @@ export default function ChannelsPage() {
       connected: fbPages.some((p) => p.isActive),
       href: "/facebook-pages",
       cta: "Manage Pages",
-      accentClass: "bg-gradient-to-r from-blue-500/80 to-blue-400/40",
-      iconBgClass: "bg-blue-500/10",
-      iconColorClass: "text-blue-400",
-      borderClass: "border-[#1a1f2e] hover:border-blue-900/60",
+      accentClass: "bg-gradient-to-r from-blue-400 to-blue-200",
+      iconBgClass: "bg-blue-50",
+      iconColorClass: "text-blue-600",
+      borderClass: "border-blue-100 hover:border-blue-300",
     },
     {
       id: "telegram",
@@ -190,10 +190,10 @@ export default function ChannelsPage() {
       connected: tgAccounts.some((a) => a.isActive),
       href: "/telegram-accounts",
       cta: "Manage Bots",
-      accentClass: "bg-gradient-to-r from-sky-500/80 to-sky-400/40",
-      iconBgClass: "bg-sky-500/10",
-      iconColorClass: "text-sky-400",
-      borderClass: "border-[#191f26] hover:border-sky-900/60",
+      accentClass: "bg-gradient-to-r from-sky-400 to-sky-200",
+      iconBgClass: "bg-sky-50",
+      iconColorClass: "text-sky-600",
+      borderClass: "border-sky-100 hover:border-sky-300",
     },
   ];
 
@@ -207,26 +207,26 @@ export default function ChannelsPage() {
       />
 
       {/* Summary strip */}
-      <div className="flex flex-wrap items-center gap-6 rounded-xl border border-[#1a1f2a] bg-[#0f1219] px-5 py-4">
+      <div className="flex flex-wrap items-center gap-6 rounded-xl border border-[#E5E7EB] bg-white px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <div className="flex items-center gap-2.5">
           <MessageCircle className="size-4 text-[#6366F1]" strokeWidth={2} />
-          <span className="text-sm font-medium text-white">
+          <span className="text-sm font-medium text-[#111827]">
             {totalConnected} of {channels.length} channels active
           </span>
         </div>
-        <div className="hidden h-4 w-px bg-[#1e2330] sm:block" />
-        <p className="text-sm text-[#5a5d68]">
+        <div className="hidden h-4 w-px bg-[#E5E7EB] sm:block" />
+        <p className="text-sm text-[#6B7280]">
           All inbound messages appear in{" "}
           <Link
             href="/inbox"
-            className="font-medium text-[#818cf8] underline-offset-2 hover:underline"
+            className="font-medium text-[#6366F1] underline-offset-2 hover:underline"
           >
             Inbox
           </Link>{" "}
           with channel badges. Automate responses under{" "}
           <Link
             href="/autoresponder"
-            className="font-medium text-[#818cf8] underline-offset-2 hover:underline"
+            className="font-medium text-[#6366F1] underline-offset-2 hover:underline"
           >
             Automation
           </Link>
