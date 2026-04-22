@@ -109,6 +109,7 @@ type Group = {
   response: string;
   matchType: "EXACT" | "CONTAINS" | "REGEX";
   mediaUrl: string | null;
+  useAi: boolean;
 };
 
 function buildGroups(rules: AutoresponderRule[]): Group[] {
@@ -126,6 +127,7 @@ function buildGroups(rules: AutoresponderRule[]): Group[] {
     response: items[0].response,
     matchType: items[0].matchType,
     mediaUrl: items[0].mediaUrl ?? null,
+    useAi: items[0].useAi ?? false,
   }));
 }
 
@@ -276,6 +278,15 @@ function AccountSection({
                 >
                   {group.matchType}
                 </Badge>
+                {group.useAi && (
+                  <Badge
+                    variant="outline"
+                    className="rounded-md text-[11px] border-violet-300 bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400 flex items-center gap-1"
+                  >
+                    <Bot className="size-2.5" />
+                    AI
+                  </Badge>
+                )}
               </div>
 
               {/* Keywords */}
@@ -364,6 +375,7 @@ export default function ChatbotItemsPage() {
   const [itemKeywords, setItemKeywords] = useState("");
   const [itemResponse, setItemResponse] = useState("");
   const [itemMatchType, setItemMatchType] = useState<"EXACT" | "CONTAINS">("EXACT");
+  const [itemUseAi, setItemUseAi] = useState(false);
   const [itemMediaUrl, setItemMediaUrl] = useState<string | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const mediaFileRef = useRef<HTMLInputElement>(null);
@@ -400,7 +412,7 @@ export default function ChatbotItemsPage() {
     mutationFn: async () => {
       const keywords = itemKeywords.split(",").map((k) => k.trim()).filter(Boolean);
       if (!keywords.length) throw new Error("At least one keyword required");
-      if (!itemResponse.trim() && !itemMediaUrl) throw new Error("Response or media required");
+      if (!itemUseAi && !itemResponse.trim() && !itemMediaUrl) throw new Error("Response or media required");
       for (const kw of keywords) {
         await api.post("/autoresponder/rules", {
           name: itemName.trim() || kw,
@@ -408,6 +420,7 @@ export default function ChatbotItemsPage() {
           matchType: itemMatchType,
           response: itemResponse.trim(),
           active: true,
+          useAi: itemUseAi,
           whatsappAccountId: dialogAccountId ?? undefined,
           ...(itemMediaUrl ? { mediaUrl: itemMediaUrl } : {}),
         });
@@ -425,7 +438,7 @@ export default function ChatbotItemsPage() {
     mutationFn: async (group: Group) => {
       const keywords = itemKeywords.split(",").map((k) => k.trim()).filter(Boolean);
       if (!keywords.length) throw new Error("At least one keyword required");
-      if (!itemResponse.trim() && !itemMediaUrl) throw new Error("Response or media required");
+      if (!itemUseAi && !itemResponse.trim() && !itemMediaUrl) throw new Error("Response or media required");
       for (const r of group.items) await api.delete(`/autoresponder/rules/${r.id}`);
       for (const kw of keywords) {
         await api.post("/autoresponder/rules", {
@@ -434,6 +447,7 @@ export default function ChatbotItemsPage() {
           matchType: itemMatchType,
           response: itemResponse.trim(),
           active: group.active,
+          useAi: itemUseAi,
           whatsappAccountId: dialogAccountId ?? undefined,
           ...(itemMediaUrl ? { mediaUrl: itemMediaUrl } : {}),
         });
@@ -474,6 +488,7 @@ export default function ChatbotItemsPage() {
     setItemKeywords("");
     setItemResponse("");
     setItemMatchType("EXACT");
+    setItemUseAi(false);
     setItemMediaUrl(null);
     setDialogOpen(true);
   };
@@ -485,6 +500,7 @@ export default function ChatbotItemsPage() {
     setItemKeywords(group.items.map((i) => i.keyword).join(", "));
     setItemResponse(group.response);
     setItemMatchType(group.matchType === "EXACT" ? "EXACT" : "CONTAINS");
+    setItemUseAi(group.useAi ?? false);
     setItemMediaUrl(group.mediaUrl ?? null);
     setDialogOpen(true);
   };
@@ -733,15 +749,49 @@ export default function ChatbotItemsPage() {
               </Select>
             </div>
 
+            {/* AI toggle */}
+            <div
+              className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors cursor-pointer select-none ${itemUseAi ? "border-violet-300 bg-violet-50 dark:bg-violet-900/20" : "border-border/60 hover:bg-muted/30"}`}
+              onClick={() => setItemUseAi((v) => !v)}
+            >
+              <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${itemUseAi ? "bg-violet-500/20" : "bg-muted"}`}>
+                <Bot className={`size-4 ${itemUseAi ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-sm font-semibold ${itemUseAi ? "text-violet-700 dark:text-violet-300" : "text-foreground"}`}>
+                    AI Reply
+                  </p>
+                  {/* toggle pill */}
+                  <div className={`relative h-5 w-9 rounded-full transition-colors ${itemUseAi ? "bg-violet-500" : "bg-muted-foreground/30"}`}>
+                    <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${itemUseAi ? "left-4" : "left-0.5"}`} />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {itemUseAi
+                    ? "The response box below is your AI system prompt — the AI will generate a dynamic reply for each message."
+                    : "Enable to let AI generate the response. The response box becomes the AI system prompt."}
+                </p>
+              </div>
+            </div>
+
             <div className="grid gap-2">
-              <Label>Response message</Label>
+              <Label>{itemUseAi ? "AI system prompt" : "Response message"}</Label>
               <Textarea
                 className="rounded-xl font-mono text-sm"
                 rows={5}
-                placeholder="Type the reply to send when this keyword is matched… (optional if media is attached)"
+                placeholder={itemUseAi
+                  ? "e.g. You are a helpful assistant for Acme Co. Answer questions about repairs, pricing, and hours. Keep replies under 2 sentences."
+                  : "Type the reply to send when this keyword is matched… (optional if media is attached)"}
                 value={itemResponse}
                 onChange={(e) => setItemResponse(e.target.value)}
               />
+              {itemUseAi && (
+                <p className="text-xs text-muted-foreground">
+                  Requires an AI provider configured in{" "}
+                  <a href="/settings/ai" className="underline text-violet-600 dark:text-violet-400">Settings → AI Providers</a>.
+                </p>
+              )}
             </div>
 
             {/* Media attachment */}
@@ -817,7 +867,7 @@ export default function ChatbotItemsPage() {
                 (editingGroup ? editMutation.isPending : createMutation.isPending) ||
                 uploadingMedia ||
                 !itemKeywords.trim() ||
-                (!itemResponse.trim() && !itemMediaUrl)
+                (!itemUseAi && !itemResponse.trim() && !itemMediaUrl)
               }
               onClick={() => {
                 if (editingGroup) editMutation.mutate(editingGroup);

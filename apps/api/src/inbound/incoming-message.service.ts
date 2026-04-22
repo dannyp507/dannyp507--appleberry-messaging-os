@@ -155,7 +155,30 @@ export class IncomingMessageService {
         data: { status: ChatbotRunStatus.COMPLETED, currentNodeId: null },
       });
 
-      if (r.mediaUrl) {
+      if (r.useAi) {
+        // AI rule: `response` is the system prompt — generate a dynamic reply
+        const recentMessages = await this.prisma.inboxMessage.findMany({
+          where: { inboxThreadId: thread.id },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: { direction: true, message: true },
+        });
+        const aiReply = await this.ai.generateReply(
+          { workspaceId, contactId: contact.id, threadId: thread.id, recentMessages: recentMessages.reverse() },
+          job.text,
+          r.response?.trim() || undefined,
+        );
+        const message = aiReply ?? "I'm sorry, I couldn't process that right now. Type HUMAN to speak to a team member.";
+        await this.messages.enqueueOutboundText({
+          workspaceId,
+          whatsappAccountId: account.id,
+          to: replyTo,
+          message,
+          contactId: contact.id,
+          inboxThreadId: thread.id,
+        });
+        this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched (AI) for account ${account.id}`);
+      } else if (r.mediaUrl) {
         // Media rule: send a single media message — response text becomes caption
         const caption = this.substituteVars(r.response?.trim() ?? '', senderName);
         await this.messages.enqueueOutboundText({

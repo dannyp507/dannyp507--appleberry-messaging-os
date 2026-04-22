@@ -45,4 +45,12 @@ export class CreateAutoresponderDto {
   @IsOptional()
   @IsString()
   mediaUrl?: string;
+
+  /**
+   * When true the `response` field is treated as an AI system prompt.
+   * The AI generates the reply dynamically instead of sending a static text.
+   */
+  @IsOptional()
+  @IsBoolean()
+  useAi?: boolean;
 }

@@ -943,6 +943,8 @@ model AutoresponderRule {
   mediaUrl          String?
   priority          Int                    @default(0)
   active            Boolean                @default(true)
+  /// When true, `response` is used as the AI system prompt instead of the static reply text
+  useAi             Boolean                @default(false)
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
