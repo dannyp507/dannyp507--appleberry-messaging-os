@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import type { Workspace } from '@prisma/client';
 import { WorkspaceAiSettingsService } from './workspace-ai-settings.service';
 import { UpsertAiSettingsDto } from './dto/upsert-ai-settings.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -11,15 +12,15 @@ export class WorkspaceAiSettingsController {
   constructor(private readonly svc: WorkspaceAiSettingsService) {}
 
   @Get()
-  get(@CurrentWorkspace() workspaceId: string) {
-    return this.svc.get(workspaceId);
+  get(@CurrentWorkspace() ws: Workspace) {
+    return this.svc.get(ws.id);
   }
 
   @Put()
   upsert(
-    @CurrentWorkspace() workspaceId: string,
+    @CurrentWorkspace() ws: Workspace,
     @Body() dto: UpsertAiSettingsDto,
   ) {
-    return this.svc.upsert(workspaceId, dto);
+    return this.svc.upsert(ws.id, dto);
   }
 }
