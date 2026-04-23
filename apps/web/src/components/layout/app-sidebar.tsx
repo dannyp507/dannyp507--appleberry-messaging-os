@@ -81,14 +81,14 @@ function NavItem({
       className={cn(
         "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
         active
-          ? "bg-[#EEF2FF] text-[#4338CA] after:absolute after:left-0 after:top-1/2 after:-translate-y-1/2 after:h-5 after:w-0.5 after:rounded-r-full after:bg-gradient-to-b after:from-[#6366F1] after:to-[#EC4899]"
-          : "text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]",
+          ? "bg-[#EEF2FF] dark:bg-[rgba(99,102,241,0.15)] text-[#4338CA] dark:text-[#a5b4fc] after:absolute after:left-0 after:top-1/2 after:-translate-y-1/2 after:h-5 after:w-0.5 after:rounded-r-full after:bg-gradient-to-b after:from-[#6366F1] after:to-[#EC4899]"
+          : "text-[#6B7280] dark:text-[#8b92a8] hover:bg-[#F3F4F6] dark:hover:bg-[#1e2433] hover:text-[#111827] dark:hover:text-[#f3f4f6]",
       )}
     >
       <Icon
         className={cn(
           "size-[17px] shrink-0 transition-colors",
-          active ? "text-[#6366F1]" : "text-[#9CA3AF]",
+          active ? "text-[#6366F1]" : "text-[#9CA3AF] dark:text-[#4b5563]",
         )}
         strokeWidth={active ? 2.25 : 1.75}
       />
@@ -101,7 +101,7 @@ function NavItem({
 
 function SectionLabel({ label }: { label: string }) {
   return (
-    <p className="mb-0.5 mt-4 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">
+    <p className="mb-0.5 mt-4 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF] dark:text-[#4b5563]">
       {label}
     </p>
   );
@@ -126,7 +126,7 @@ function SectionLinkLabel({
       onClick={onClick}
       className={cn(
         "group mb-0.5 mt-4 flex items-center justify-between px-3 transition-colors",
-        active ? "text-[#6366F1]" : "text-[#9CA3AF] hover:text-[#6B7280]",
+        active ? "text-[#6366F1]" : "text-[#9CA3AF] dark:text-[#4b5563] hover:text-[#6B7280] dark:hover:text-[#8b92a8]",
       )}
     >
       <span className="text-[10px] font-bold uppercase tracking-[0.12em]">
@@ -154,14 +154,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="px-5 py-5">
         <Link href="/" className="flex items-center gap-3" onClick={onNavigate}>
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-[0_1px_4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white dark:bg-[#1a1f2e] shadow-[0_1px_4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.06)]">
             <AppleberryIcon size={22} />
           </div>
           <div>
             <h1 className="text-[15px] font-bold leading-none tracking-tight stitch-text">
               Appleberry
             </h1>
-            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">
+            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF] dark:text-[#4b5563]">
               Messaging OS
             </p>
           </div>
@@ -241,7 +241,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </ScrollArea>
 
       {/* Footer */}
-      <div className="border-t border-[#E5E7EB] px-2.5 py-3">
+      <div className="border-t border-[#E5E7EB] dark:border-[#1e2433] px-2.5 py-3">
         <NavItem
           href="/help"
           label="Help & Support"
@@ -261,14 +261,14 @@ export function AppSidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[#E5E7EB] bg-white/90 backdrop-blur-sm md:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[#E5E7EB] dark:border-[#1e2433] bg-white/90 dark:bg-[#111420]/95 backdrop-blur-sm md:flex">
         <SidebarContent />
       </aside>
 
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetContent
           side="left"
-          className="w-60 border-[#E5E7EB] bg-white p-0"
+          className="w-60 border-[#E5E7EB] dark:border-[#1e2433] bg-white dark:bg-[#111420] p-0"
         >
           <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
         </SheetContent>
@@ -284,7 +284,7 @@ export function MobileMenuButton() {
       type="button"
       variant="ghost"
       size="icon"
-      className="md:hidden text-[#9CA3AF] hover:text-[#111827] hover:bg-[#F3F4F6]"
+      className="md:hidden text-[#9CA3AF] dark:text-[#8b92a8] hover:text-[#111827] dark:hover:text-[#f3f4f6] hover:bg-[#F3F4F6] dark:hover:bg-[#1e2433]"
       onClick={() => setOpen(true)}
       aria-label="Open menu"
     >

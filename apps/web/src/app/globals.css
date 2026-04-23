@@ -130,7 +130,48 @@
   }
 }
 
-/* Minimal scrollbar — light theme */
+/* ── Dark theme variables ────────────────────────────────────────────────── */
+.dark {
+  --background: #0f1117;
+  --foreground: #f3f4f6;
+  --card: #1a1f2e;
+  --card-foreground: #f3f4f6;
+  --popover: #1e2433;
+  --popover-foreground: #f3f4f6;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #1e2433;
+  --secondary-foreground: #f3f4f6;
+  --muted: #12161f;
+  --muted-foreground: #8b92a8;
+  --accent: rgba(99, 102, 241, 0.15);
+  --accent-foreground: #a5b4fc;
+  --destructive: #ef4444;
+  --border: #1e2433;
+  --input: #1a1f2e;
+  --ring: #6366f1;
+  --chart-1: #818cf8;
+  --chart-2: #f472b6;
+  --chart-3: #34d399;
+  --chart-4: #fbbf24;
+  --chart-5: #c084fc;
+  --sidebar: #111420;
+  --sidebar-foreground: #f3f4f6;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(99, 102, 241, 0.15);
+  --sidebar-accent-foreground: #a5b4fc;
+  --sidebar-border: #1e2433;
+  --sidebar-ring: #6366f1;
+}
+
+/* Dark glass-pane override */
+.dark .glass-pane {
+  background: rgba(15, 17, 23, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Minimal scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -141,6 +182,9 @@
 ::-webkit-scrollbar-thumb {
   background: #D1D5DB;
   border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #6366f1;

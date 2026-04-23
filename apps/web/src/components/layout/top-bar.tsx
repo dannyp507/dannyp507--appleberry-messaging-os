@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, usePathname } from "next/navigation";
 import { MobileMenuButton } from "./app-sidebar";
+import { useTheme } from "@/components/theme-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Sun, Moon } from "lucide-react";
 import { useMemo } from "react";
 
 const routeLabels: Record<string, string> = {
@@ -53,6 +55,7 @@ export function TopBar() {
   const workspaceId = useAuthStore((s) => s.workspaceId);
   const logout = useAuthStore((s) => s.logout);
   const setTokens = useAuthStore((s) => s.setTokens);
+  const { theme, toggle } = useTheme();
 
   const { data: workspaces = [] } = useQuery({
     queryKey: qk.workspaces,
@@ -93,7 +96,7 @@ export function TopBar() {
     "?";
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b border-[#E5E7EB] bg-white/80 backdrop-blur-md px-6">
+    <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b border-[#E5E7EB] dark:border-[#1e2433] bg-white/80 dark:bg-[#0f1117]/85 backdrop-blur-md px-6">
       {/* Left: mobile menu + breadcrumb */}
       <div className="flex items-center gap-4">
         <MobileMenuButton />
@@ -103,32 +106,45 @@ export function TopBar() {
             onValueChange={(v) => { if (v) switchMutation.mutate(v); }}
             disabled={switchMutation.isPending || workspaces.length === 0}
           >
-            <SelectTrigger className="h-8 w-auto min-w-[120px] border-none bg-transparent text-[#6B7280] hover:text-[#111827] shadow-none px-0 gap-1 focus:ring-0">
+            <SelectTrigger className="h-8 w-auto min-w-[120px] border-none bg-transparent text-[#6B7280] dark:text-[#8b92a8] hover:text-[#111827] dark:hover:text-[#f3f4f6] shadow-none px-0 gap-1 focus:ring-0">
               <SelectValue placeholder={currentName}>{currentName}</SelectValue>
             </SelectTrigger>
-            <SelectContent className="bg-white border-[#E5E7EB] shadow-lg">
+            <SelectContent className="bg-white dark:bg-[#1e2433] border-[#E5E7EB] dark:border-[#2a3147] shadow-lg">
               {workspaces.map((w) => (
-                <SelectItem key={w.id} value={w.id} className="text-[#111827]">
+                <SelectItem key={w.id} value={w.id} className="text-[#111827] dark:text-[#f3f4f6]">
                   {w.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <span className="text-[#D1D5DB] font-bold">/</span>
+          <span className="text-[#D1D5DB] dark:text-[#374151] font-bold">/</span>
           <span className="font-semibold text-[#6366F1]">{pageLabel}</span>
         </div>
       </div>
 
-      {/* Right: status + user */}
-      <div className="flex items-center gap-3">
+      {/* Right: status + theme toggle + user */}
+      <div className="flex items-center gap-2">
         {/* Online dot */}
         <div className="hidden items-center gap-1.5 md:flex">
           <div className="size-2 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.5)]" />
         </div>
 
-        {/* Notification */}
-        <button className="text-[#9CA3AF] hover:text-[#6B7280] transition-colors">
-          <span className="material-symbols-outlined text-[22px]">notifications</span>
+        {/* Dark mode toggle */}
+        <button
+          onClick={toggle}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          className="flex size-8 items-center justify-center rounded-lg text-[#9CA3AF] dark:text-[#8b92a8] hover:text-[#6366F1] dark:hover:text-[#a5b4fc] hover:bg-[#EEF2FF] dark:hover:bg-[rgba(99,102,241,0.12)] transition-colors"
+        >
+          {theme === "dark" ? (
+            <Sun className="size-[18px]" />
+          ) : (
+            <Moon className="size-[18px]" />
+          )}
+        </button>
+
+        {/* Notification bell */}
+        <button className="flex size-8 items-center justify-center rounded-lg text-[#9CA3AF] dark:text-[#8b92a8] hover:text-[#6366F1] dark:hover:text-[#a5b4fc] hover:bg-[#EEF2FF] dark:hover:bg-[rgba(99,102,241,0.12)] transition-colors">
+          <span className="material-symbols-outlined text-[20px]">notifications</span>
         </button>
 
         {/* User dropdown */}
@@ -138,29 +154,29 @@ export function TopBar() {
               {initials}
             </div>
             <div className="hidden text-left md:block">
-              <p className="text-xs font-semibold text-[#111827] leading-none">
+              <p className="text-xs font-semibold text-[#111827] dark:text-[#f3f4f6] leading-none">
                 {user?.name ?? "User"}
               </p>
-              <p className="text-[10px] text-[#9CA3AF] mt-0.5">
+              <p className="text-[10px] text-[#9CA3AF] dark:text-[#8b92a8] mt-0.5">
                 {user?.email?.split("@")[0]}
               </p>
             </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="w-56 bg-white border-[#E5E7EB] shadow-lg"
+            className="w-56 bg-white dark:bg-[#1e2433] border-[#E5E7EB] dark:border-[#2a3147] shadow-lg"
           >
             <DropdownMenuLabel>
               <div className="flex flex-col gap-0.5">
-                <span className="font-medium text-[#111827]">{user?.name ?? "User"}</span>
-                <span className="text-xs font-normal text-[#9CA3AF]">
+                <span className="font-medium text-[#111827] dark:text-[#f3f4f6]">{user?.name ?? "User"}</span>
+                <span className="text-xs font-normal text-[#9CA3AF] dark:text-[#8b92a8]">
                   {user?.email}
                 </span>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator className="bg-[#E5E7EB]" />
+            <DropdownMenuSeparator className="bg-[#E5E7EB] dark:bg-[#2a3147]" />
             <DropdownMenuItem
-              className="text-[#6B7280] hover:text-[#111827] focus:text-[#111827] focus:bg-[#F3F4F6] cursor-pointer"
+              className="text-[#6B7280] dark:text-[#8b92a8] hover:text-[#111827] dark:hover:text-[#f3f4f6] focus:text-[#111827] dark:focus:text-[#f3f4f6] focus:bg-[#F3F4F6] dark:focus:bg-[#2a3147] cursor-pointer"
               onClick={async () => {
                 try {
                   await api.post("/auth/logout");
