@@ -274,8 +274,27 @@ export class IncomingMessageService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // STEP 4: AI fallback
+    // STEP 4: Default / fallback rule — account-scoped first, then workspace-wide
+    // This replaces (or enhances) the bare AI fallback so that users can configure
+    // a custom AI system prompt (or static reply) that fires for any unmatched message.
     // ─────────────────────────────────────────────────────────────────────────
+    const defaultRule = await this.prisma.autoresponderRule.findFirst({
+      where: {
+        workspaceId,
+        active: true,
+        isDefault: true,
+        facebookPageId: null,
+        OR: [
+          { whatsappAccountId: account.id },
+          { whatsappAccountId: null },
+        ],
+      },
+      orderBy: [
+        { whatsappAccountId: 'desc' }, // prefer account-scoped default
+        { priority: 'desc' },
+      ],
+    });
+
     const recent = await this.prisma.inboxMessage.findMany({
       where: { threadId: thread.id },
       orderBy: { createdAt: 'desc' },
@@ -283,6 +302,57 @@ export class IncomingMessageService {
       select: { direction: true, message: true },
     });
 
+    if (defaultRule) {
+      if (defaultRule.useAi) {
+        // Use the default rule's system prompt for AI generation
+        const aiReply = await this.ai.generateReply(
+          { workspaceId, contactId: contact.id, threadId: thread.id, recentMessages: recent.reverse() },
+          job.text,
+          defaultRule.response?.trim() || undefined,
+        );
+        const message = aiReply ?? "I'm sorry, I couldn't process that right now. Type HUMAN to speak to a team member.";
+        await this.messages.enqueueOutboundText({
+          workspaceId,
+          whatsappAccountId: account.id,
+          to: replyTo,
+          message,
+          contactId: contact.id,
+          inboxThreadId: thread.id,
+        });
+        this.logger.log(`Default rule fired (AI) for account ${account.id}`);
+      } else if (defaultRule.mediaUrl) {
+        const caption = this.substituteVars(defaultRule.response?.trim() ?? '', senderName);
+        await this.messages.enqueueOutboundText({
+          workspaceId,
+          whatsappAccountId: account.id,
+          to: replyTo,
+          message: caption,
+          contactId: contact.id,
+          inboxThreadId: thread.id,
+          mediaUrl: defaultRule.mediaUrl,
+        });
+        this.logger.log(`Default rule fired (media) for account ${account.id}`);
+      } else {
+        const parts = defaultRule.response
+          .split(/\n---\n/)
+          .map((p) => this.substituteVars(p.trim(), senderName))
+          .filter(Boolean);
+        for (const part of parts) {
+          await this.messages.enqueueOutboundText({
+            workspaceId,
+            whatsappAccountId: account.id,
+            to: replyTo,
+            message: part,
+            contactId: contact.id,
+            inboxThreadId: thread.id,
+          });
+        }
+        this.logger.log(`Default rule fired (static) for account ${account.id}`);
+      }
+      return;
+    }
+
+    // ── No default rule configured → bare AI fallback (no custom system prompt) ──
     const reply = await this.ai.generateReply(
       {
         workspaceId,

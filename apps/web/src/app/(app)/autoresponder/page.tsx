@@ -112,6 +112,7 @@ type Group = {
   matchType: "EXACT" | "CONTAINS" | "REGEX";
   mediaUrl: string | null;
   useAi: boolean;
+  isDefault: boolean;
 };
 
 function buildGroups(rules: AutoresponderRule[]): Group[] {
@@ -130,6 +131,7 @@ function buildGroups(rules: AutoresponderRule[]): Group[] {
     matchType: items[0].matchType,
     mediaUrl: items[0].mediaUrl ?? null,
     useAi: items[0].useAi ?? false,
+    isDefault: items[0].isDefault ?? false,
   }));
 }
 
@@ -323,6 +325,15 @@ function AccountSection({
                 >
                   {group.matchType}
                 </Badge>
+                {group.isDefault && (
+                  <Badge
+                    variant="outline"
+                    className="rounded-md text-[11px] border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 flex items-center gap-1"
+                  >
+                    <MessageSquare className="size-2.5" />
+                    Default
+                  </Badge>
+                )}
                 {group.useAi && (
                   <Badge
                     variant="outline"
@@ -421,6 +432,7 @@ export default function ChatbotItemsPage() {
   const [itemResponse, setItemResponse] = useState("");
   const [itemMatchType, setItemMatchType] = useState<"EXACT" | "CONTAINS">("EXACT");
   const [itemUseAi, setItemUseAi] = useState(false);
+  const [itemIsDefault, setItemIsDefault] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [itemMediaUrl, setItemMediaUrl] = useState<string | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
@@ -467,6 +479,7 @@ export default function ChatbotItemsPage() {
           response: itemResponse.trim(),
           active: true,
           useAi: itemUseAi,
+          isDefault: itemIsDefault,
           whatsappAccountId: dialogAccountId ?? undefined,
           ...(itemMediaUrl ? { mediaUrl: itemMediaUrl } : {}),
         });
@@ -494,6 +507,7 @@ export default function ChatbotItemsPage() {
           response: itemResponse.trim(),
           active: group.active,
           useAi: itemUseAi,
+          isDefault: itemIsDefault,
           whatsappAccountId: dialogAccountId ?? undefined,
           ...(itemMediaUrl ? { mediaUrl: itemMediaUrl } : {}),
         });
@@ -576,6 +590,7 @@ export default function ChatbotItemsPage() {
     setItemResponse("");
     setItemMatchType("EXACT");
     setItemUseAi(false);
+    setItemIsDefault(false);
     setItemMediaUrl(null);
     setDialogOpen(true);
   };
@@ -588,6 +603,7 @@ export default function ChatbotItemsPage() {
     setItemResponse(group.response);
     setItemMatchType(group.matchType === "EXACT" ? "EXACT" : "CONTAINS");
     setItemUseAi(group.useAi ?? false);
+    setItemIsDefault(group.isDefault ?? false);
     setItemMediaUrl(group.mediaUrl ?? null);
     setDialogOpen(true);
   };
@@ -875,6 +891,31 @@ export default function ChatbotItemsPage() {
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Default fallback toggle */}
+            <div
+              className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors cursor-pointer select-none ${itemIsDefault ? "border-amber-300 bg-amber-50 dark:bg-amber-900/20" : "border-border/60 hover:bg-muted/30"}`}
+              onClick={() => setItemIsDefault((v) => !v)}
+            >
+              <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${itemIsDefault ? "bg-amber-500/20" : "bg-muted"}`}>
+                <MessageSquare className={`size-4 ${itemIsDefault ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-sm font-semibold ${itemIsDefault ? "text-amber-700 dark:text-amber-300" : "text-foreground"}`}>
+                    Default fallback
+                  </p>
+                  <div className={`relative h-5 w-9 rounded-full transition-colors ${itemIsDefault ? "bg-amber-500" : "bg-muted-foreground/30"}`}>
+                    <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${itemIsDefault ? "left-4" : "left-0.5"}`} />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {itemIsDefault
+                    ? "This rule fires for any message that didn't match a keyword. The keyword above is ignored."
+                    : "Enable to use this as the catch-all reply when no keyword matches. Perfect for AI with a business system prompt."}
+                </p>
+              </div>
             </div>
 
             {/* AI toggle */}

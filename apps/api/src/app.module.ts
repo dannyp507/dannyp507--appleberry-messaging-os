@@ -29,6 +29,7 @@ import { WorkspacesModule } from './workspaces/workspaces.module';
 import { TelegramAccountsModule } from './telegram-accounts/telegram-accounts.module';
 import { FacebookPagesModule } from './facebook-pages/facebook-pages.module';
 import { WorkspaceAiSettingsModule } from './workspace-ai-settings/workspace-ai-settings.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -67,6 +68,7 @@ import { AppController } from './app.controller';
     TelegramAccountsModule,
     FacebookPagesModule,
     WorkspaceAiSettingsModule,
+    NotificationsModule,
   ],
   providers: [
     {

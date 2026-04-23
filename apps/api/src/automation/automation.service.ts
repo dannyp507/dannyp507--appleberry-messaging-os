@@ -36,6 +36,7 @@ export class AutomationService {
         priority: dto.priority ?? 0,
         active: dto.active ?? true,
         useAi: dto.useAi ?? false,
+        isDefault: dto.isDefault ?? false,
       },
     });
   }
@@ -55,6 +56,7 @@ export class AutomationService {
         ...(dto.mediaUrl !== undefined && { mediaUrl: dto.mediaUrl || null }),
         ...(dto.facebookPageId !== undefined && { facebookPageId: dto.facebookPageId || null }),
         ...(dto.useAi !== undefined && { useAi: dto.useAi }),
+        ...(dto.isDefault !== undefined && { isDefault: dto.isDefault }),
       },
     });
   }

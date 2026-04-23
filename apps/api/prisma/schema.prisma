@@ -213,6 +213,8 @@ enum NotificationType {
   SUCCESS
   WARNING
   ERROR
+  NEW_MESSAGE
+  HUMAN_REQUESTED
 }
 
 // ─── Users & Orgs ─────────────────────────────���───────────────────────���───────
@@ -292,6 +294,7 @@ model Workspace {
   webhookEndpoints     WebhookEndpoint[]
   cannedReplies        CannedReply[]
   notifications        Notification[]
+  pushSubscriptions    PushSubscription[]
   imports              Import[]
   exports              Export[]
   billingEvents        BillingEvent[]
@@ -945,6 +948,8 @@ model AutoresponderRule {
   active            Boolean                @default(true)
   /// When true, `response` is used as the AI system prompt instead of the static reply text
   useAi             Boolean                @default(false)
+  /// When true, this rule fires for ANY message that didn't match a keyword rule (acts as AI fallback with a custom system prompt)
+  isDefault         Boolean                @default(false)
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
@@ -1170,6 +1175,22 @@ model Notification {
 
   @@index([workspaceId, isRead])
   @@index([userId, isRead])
+}
+
+// ─── Browser Push Subscriptions ──────────────────────────────────────────────
+
+model PushSubscription {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  endpoint    String   @unique
+  p256dh      String
+  auth        String
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 // ─── Imports & Exports ───────────────────��────────────────────────────────────

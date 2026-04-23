@@ -53,4 +53,13 @@ export class CreateAutoresponderDto {
   @IsOptional()
   @IsBoolean()
   useAi?: boolean;
+
+  /**
+   * When true this rule fires for ANY message that didn't match a keyword rule.
+   * Acts as the AI/static fallback for the whole account or workspace.
+   * The keyword field is still saved but ignored for matching.
+   */
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
 }
