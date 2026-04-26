@@ -7,6 +7,7 @@ import {
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import { CONTACTS_IMPORT_QUEUE, type ContactsImportJob } from '../queue/queue.constants';
 import { normalizePhoneE164 } from './phone.util';
 import type { CreateContactDto } from './dto/create-contact.dto';
@@ -17,6 +18,7 @@ export class ContactsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly billing: BillingService,
+    private readonly integrations: IntegrationsService,
     @InjectQueue(CONTACTS_IMPORT_QUEUE) private readonly importQueue: Queue,
   ) {}
 
@@ -91,10 +93,22 @@ export class ContactsService {
       }
     }
 
-    return this.prisma.contact.findUniqueOrThrow({
+    const result = await this.prisma.contact.findUniqueOrThrow({
       where: { id: contact.id },
       include: { tags: { include: { tag: true } } },
     });
+
+    // Fire-and-forget: sync new contact to Google Sheet if configured
+    void this.integrations.appendLeadRow(workspaceId, {
+      firstName: result.firstName,
+      lastName: result.lastName ?? '',
+      phone: result.phone,
+      email: result.email ?? '',
+      source: 'Manual',
+      notes: '',
+    });
+
+    return result;
   }
 
   async remove(workspaceId: string, id: string) {

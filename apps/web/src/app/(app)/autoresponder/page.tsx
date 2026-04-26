@@ -811,14 +811,14 @@ export default function ChatbotItemsPage() {
 
       {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="rounded-xl sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90vh] flex-col rounded-xl sm:max-w-lg">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="text-xl">
               {editingGroup ? "Edit chatbot item" : "New chatbot item"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="grid flex-1 gap-4 overflow-y-auto py-2 pr-1">
             {/* Scope badge */}
             <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
               {dialogAccountId ? (
@@ -1026,7 +1026,7 @@ export default function ChatbotItemsPage() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 pt-2">
             <Button variant="outline" className="rounded-xl" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>

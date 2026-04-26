@@ -237,7 +237,12 @@ export class IncomingMessageService {
       where: {
         workspaceId,
         active: true,
-        NOT: { channel: 'MESSENGER' },
+        // NULL-safe: include triggers with no channel (all channels) or any non-MESSENGER channel.
+        // NOT: { channel: 'MESSENGER' } would incorrectly exclude NULL-channel rows.
+        OR: [
+          { channel: null },
+          { channel: { not: 'MESSENGER' } },
+        ],
       },
       orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     });

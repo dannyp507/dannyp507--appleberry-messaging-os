@@ -13,6 +13,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 import { AiService } from '../ai/ai.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -25,6 +26,7 @@ export class ChatbotEngineService {
     @Inject(forwardRef(() => MessagesService))
     private readonly messages: MessagesService,
     private readonly ai: AiService,
+    private readonly integrations: IntegrationsService,
   ) {}
 
   private readVars(run: { variables: unknown }): Record<string, string> {
@@ -44,6 +46,14 @@ export class ChatbotEngineService {
       where: { id: runId },
       data: { variables: next },
     });
+  }
+
+  /**
+   * Resolve a template string like "Hello {{name}}, your service is {{service}}"
+   * using the current run variables.
+   */
+  private interpolate(template: string, vars: Record<string, string>): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
   }
 
   async startFlow(params: {
@@ -198,16 +208,15 @@ export class ChatbotEngineService {
         return;
       }
 
-      const sendCtx = {
-        ...ctx,
-        whatsappAccountId: accountId,
-      };
+      const sendCtx = { ...ctx, whatsappAccountId: accountId };
 
       switch (node.type) {
+        // ── Text message ────────────────────────────────────────────────────
         case ChatbotNodeType.TEXT: {
           const content = (node.content ?? {}) as JsonRecord;
-          const text =
-            typeof content.text === 'string' ? content.text : '';
+          const vars = this.readVars(run);
+          const raw = typeof content.text === 'string' ? content.text : '';
+          const text = this.interpolate(raw, vars);
           if (text) {
             await this.messages.enqueueOutboundText({
               workspaceId: run.workspaceId,
@@ -219,20 +228,17 @@ export class ChatbotEngineService {
             });
           }
           const next = await this.pickNextLinear(node.id);
-          if (!next) {
-            await this.completeRun(runId);
-            return;
-          }
-          await this.prisma.chatbotRun.update({
-            where: { id: runId },
-            data: { currentNodeId: next },
-          });
+          if (!next) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: next } });
           continue;
         }
+
+        // ── Question (waits for user reply) ─────────────────────────────────
         case ChatbotNodeType.QUESTION: {
           const content = (node.content ?? {}) as JsonRecord;
-          const prompt =
-            typeof content.prompt === 'string' ? content.prompt : '';
+          const vars = this.readVars(run);
+          const raw = typeof content.prompt === 'string' ? content.prompt : '';
+          const prompt = this.interpolate(raw, vars);
           if (prompt) {
             await this.messages.enqueueOutboundText({
               workspaceId: run.workspaceId,
@@ -243,73 +249,48 @@ export class ChatbotEngineService {
               inboxThreadId: sendCtx.inboxThreadId ?? null,
             });
           }
-          return;
+          return; // wait for next inbound message
         }
+
+        // ── Condition branch ────────────────────────────────────────────────
         case ChatbotNodeType.CONDITION: {
           const vars = this.readVars(run);
           const cnd = (node.content ?? {}) as JsonRecord;
-          const key =
-            typeof cnd.variableKey === 'string' ? cnd.variableKey : 'lastInput';
+          const key = typeof cnd.variableKey === 'string' ? cnd.variableKey : 'lastInput';
           const value = vars[key] ?? '';
           const next = await this.pickConditionEdge(node.id, value);
-          if (!next) {
-            await this.completeRun(runId);
-            return;
-          }
-          await this.prisma.chatbotRun.update({
-            where: { id: runId },
-            data: { currentNodeId: next },
-          });
+          if (!next) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: next } });
           continue;
         }
+
+        // ── Webhook / Tag action ─────────────────────────────────────────────
         case ChatbotNodeType.WEBHOOK: {
-          await this.executeAction(run.workspaceId, run.contactId, node.content);
+          await this.executeTagAction(run.workspaceId, run.contactId, node.content);
           const next = await this.pickNextLinear(node.id);
-          if (!next) {
-            await this.completeRun(runId);
-            return;
-          }
-          await this.prisma.chatbotRun.update({
-            where: { id: runId },
-            data: { currentNodeId: next },
-          });
+          if (!next) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: next } });
           continue;
         }
+
+        // ── AI Reply ────────────────────────────────────────────────────────
         case ChatbotNodeType.AI_REPLY: {
           const content = (node.content ?? {}) as JsonRecord;
-          const systemPrompt =
-            typeof content.systemPrompt === 'string'
-              ? content.systemPrompt
-              : undefined;
-
-          // Gather last 10 inbox messages as context
+          const systemPrompt = typeof content.systemPrompt === 'string' ? content.systemPrompt : undefined;
           const thread = await this.prisma.inboxThread.findFirst({
             where: { workspaceId: run.workspaceId, contactId: run.contactId },
             orderBy: { updatedAt: 'desc' },
-            include: {
-              messages: {
-                orderBy: { createdAt: 'desc' },
-                take: 10,
-              },
-            },
+            include: { messages: { orderBy: { createdAt: 'desc' }, take: 10 } },
           });
           const recentMessages = (thread?.messages ?? [])
             .reverse()
             .map((m) => ({ direction: m.direction, message: m.message }));
-
           const vars = this.readVars(run);
-          const lastInput = vars.lastInput ?? '';
-
           const reply = await this.ai.generateReply(
-            {
-              workspaceId: run.workspaceId,
-              contactId: run.contactId,
-              recentMessages,
-            },
-            lastInput,
+            { workspaceId: run.workspaceId, contactId: run.contactId, recentMessages },
+            vars.lastInput ?? '',
             systemPrompt,
           );
-
           if (reply) {
             await this.messages.enqueueOutboundText({
               workspaceId: run.workspaceId,
@@ -320,20 +301,174 @@ export class ChatbotEngineService {
               inboxThreadId: sendCtx.inboxThreadId ?? null,
             });
           }
-
           const aiNext = await this.pickNextLinear(node.id);
-          if (!aiNext) {
-            await this.completeRun(runId);
-            return;
-          }
-          await this.prisma.chatbotRun.update({
-            where: { id: runId },
-            data: { currentNodeId: aiNext },
-          });
+          if (!aiNext) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: aiNext } });
           continue;
         }
+
+        // ── Save to Google Sheet ─────────────────────────────────────────────
+        case ChatbotNodeType.SAVE_TO_SHEET: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const vars = this.readVars(run);
+
+          // Build lead data from field mappings: { sheetColumn: "{{variableKey}}" }
+          // Also auto-populate contact fields
+          const fieldMap = (content.fields ?? {}) as Record<string, string>;
+          const leadData: Record<string, string> = {
+            firstName: run.contact.firstName ?? '',
+            lastName:  run.contact.lastName  ?? '',
+            phone:     run.contact.phone     ?? '',
+            email:     run.contact.email     ?? '',
+            timestamp: new Date().toISOString(),
+          };
+
+          // Merge with mapped fields (values are interpolated templates)
+          for (const [col, template] of Object.entries(fieldMap)) {
+            if (typeof template === 'string') {
+              leadData[col] = this.interpolate(template, vars);
+            }
+          }
+
+          try {
+            await this.integrations.appendLeadRow(run.workspaceId, leadData);
+            this.logger.log(`SAVE_TO_SHEET: saved row for contact ${run.contactId}`);
+          } catch (err) {
+            this.logger.error(`SAVE_TO_SHEET failed for workspace ${run.workspaceId}: ${err}`);
+            // Non-fatal — continue flow even if Sheets is not configured
+          }
+
+          const next = await this.pickNextLinear(node.id);
+          if (!next) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: next } });
+          continue;
+        }
+
+        // ── Check Calendar Availability ───────────────────────────────────────
+        case ChatbotNodeType.CHECK_CALENDAR: {
+          const content  = (node.content ?? {}) as JsonRecord;
+          const vars     = this.readVars(run);
+
+          const dateVar   = typeof content.dateVariable   === 'string' ? content.dateVariable   : 'date';
+          const hourVar   = typeof content.hourVariable   === 'string' ? content.hourVariable   : 'hour';
+          const resultVar = typeof content.resultVariable === 'string' ? content.resultVariable : 'availability';
+
+          const dateStr = vars[dateVar] ?? '';
+          const hourRaw = vars[hourVar] ?? '';
+          const hour    = parseInt(hourRaw, 10) || 10;
+
+          let availabilityMsg = 'I could not check the calendar. Please call us to book.';
+
+          try {
+            const result = await this.integrations.checkAvailability(run.workspaceId, {
+              date: dateStr,
+              hour,
+            });
+
+            if (result.available) {
+              availabilityMsg = `Great news! ${dateStr} at ${hour}:00 is available.`;
+              vars[resultVar] = 'available';
+              vars['availableDate'] = dateStr;
+              vars['availableHour'] = String(hour);
+            } else if (result.nextSlot) {
+              const ns = result.nextSlot as { date: string; hour: number };
+              availabilityMsg = `That slot is taken. The next available slot is ${ns.date} at ${ns.hour}:00. Would you like to book that instead?`;
+              vars[resultVar] = 'next_slot';
+              vars['availableDate'] = ns.date;
+              vars['availableHour'] = String(ns.hour);
+            } else {
+              availabilityMsg = 'Unfortunately there are no available slots in the near future. Please contact us directly.';
+              vars[resultVar] = 'unavailable';
+            }
+          } catch (err) {
+            this.logger.error(`CHECK_CALENDAR failed for workspace ${run.workspaceId}: ${err}`);
+            vars[resultVar] = 'error';
+          }
+
+          // Store availability message so the next TEXT/QUESTION node can use {{availability}}
+          vars['availabilityMessage'] = availabilityMsg;
+          await this.writeVars(runId, vars);
+
+          const next = await this.pickNextLinear(node.id);
+          if (!next) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: next } });
+          continue;
+        }
+
+        // ── Create Booking ────────────────────────────────────────────────────
+        case ChatbotNodeType.CREATE_BOOKING: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const vars    = this.readVars(run);
+
+          const nameVar    = typeof content.nameVariable    === 'string' ? content.nameVariable    : 'name';
+          const emailVar   = typeof content.emailVariable   === 'string' ? content.emailVariable   : 'email';
+          const serviceVar = typeof content.serviceVariable === 'string' ? content.serviceVariable : 'service';
+          const dateVar    = typeof content.dateVariable    === 'string' ? content.dateVariable    : 'availableDate';
+          const hourVar    = typeof content.hourVariable    === 'string' ? content.hourVariable    : 'availableHour';
+          const resultVar  = typeof content.resultVariable  === 'string' ? content.resultVariable  : 'bookingLink';
+
+          const name    = vars[nameVar]    || `${run.contact.firstName ?? ''} ${run.contact.lastName ?? ''}`.trim() || 'Customer';
+          const email   = vars[emailVar]   || run.contact.email || '';
+          const service = vars[serviceVar] || 'Appointment';
+          const date    = vars[dateVar]    || '';
+          const hour    = parseInt(vars[hourVar] ?? '10', 10) || 10;
+
+          let confirmMsg = 'Your booking has been confirmed! We will send you a calendar invite.';
+
+          try {
+            // Build ISO datetime: "2025-06-15T10:00:00"
+            const startTime = date
+              ? `${date}T${String(hour).padStart(2, '0')}:00:00`
+              : new Date().toISOString();
+
+            const booking = await this.integrations.createBooking(run.workspaceId, {
+              title:         `${service} — ${name}`,
+              startTime,
+              customerName:  name,
+              customerEmail: email || undefined,
+              notes:         `Booked via WhatsApp chatbot flow`,
+            });
+
+            const link = (booking as { htmlLink?: string }).htmlLink ?? '';
+            vars[resultVar] = link;
+            vars['bookingConfirmation'] = link
+              ? `✅ Booking confirmed! View your appointment: ${link}`
+              : '✅ Booking confirmed! You will receive a calendar invite shortly.';
+            confirmMsg = vars['bookingConfirmation'];
+
+            this.logger.log(`CREATE_BOOKING: booked for contact ${run.contactId} on ${date} at ${hour}:00`);
+          } catch (err) {
+            this.logger.error(`CREATE_BOOKING failed for workspace ${run.workspaceId}: ${err}`);
+            vars[resultVar] = '';
+            vars['bookingConfirmation'] = '❌ Sorry, we could not complete the booking. Please contact us directly.';
+            confirmMsg = vars['bookingConfirmation'];
+          }
+
+          await this.writeVars(runId, vars);
+
+          // Send confirmation message immediately
+          await this.messages.enqueueOutboundText({
+            workspaceId:        run.workspaceId,
+            whatsappAccountId:  accountId,
+            to:                 run.contact.phone,
+            message:            confirmMsg,
+            contactId:          run.contactId,
+            inboxThreadId:      sendCtx.inboxThreadId ?? null,
+          });
+
+          const next = await this.pickNextLinear(node.id);
+          if (!next) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: next } });
+          continue;
+        }
+
         default:
-          return;
+          // Unknown node type — skip to next linear node
+          this.logger.warn(`Unknown node type: ${node.type as string} — skipping`);
+          const skipNext = await this.pickNextLinear(node.id);
+          if (!skipNext) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: skipNext } });
+          continue;
       }
     }
   }
@@ -366,7 +501,7 @@ export class ChatbotEngineService {
     return fallback?.toNodeId ?? null;
   }
 
-  private async executeAction(
+  private async executeTagAction(
     workspaceId: string,
     contactId: string,
     content: unknown,
@@ -382,9 +517,7 @@ export class ChatbotEngineService {
         create: { workspaceId, name },
       });
       await this.prisma.contactTag.upsert({
-        where: {
-          contactId_tagId: { contactId, tagId: tag.id },
-        },
+        where: { contactId_tagId: { contactId, tagId: tag.id } },
         update: {},
         create: { contactId, tagId: tag.id },
       });

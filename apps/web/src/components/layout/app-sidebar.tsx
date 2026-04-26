@@ -55,10 +55,11 @@ const channelsNav = [
 ] satisfies NavEntry[];
 
 const settingsNav = [
-  { href: "/settings",          label: "Settings",      icon: Settings   },
-  { href: "/settings/ai",       label: "AI Providers",  icon: Sparkles   },
-  { href: "/settings/billing",  label: "Billing",       icon: CreditCard },
-  { href: "/settings/api-keys", label: "API Keys",      icon: Key        },
+  { href: "/settings",                  label: "Settings",      icon: Settings   },
+  { href: "/settings/integrations",     label: "Integrations",  icon: Share2     },
+  { href: "/settings/ai",               label: "AI Providers",  icon: Sparkles   },
+  { href: "/settings/billing",          label: "Billing",       icon: CreditCard },
+  { href: "/settings/api-keys",         label: "API Keys",      icon: Key        },
 ] satisfies NavEntry[];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -246,7 +247,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           href="/help"
           label="Help & Support"
           icon={HelpCircle}
-          active={false}
+          active={isActive("/help")}
           onClick={onNavigate}
         />
       </div>

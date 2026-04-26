@@ -32,7 +32,7 @@ export class TelegramAccountsService {
 
   async create(workspaceId: string, dto: CreateTelegramAccountDto) {
     const me = await this.getMe(dto.botToken);
-    return this.prisma.telegramAccount.create({
+    const account = await this.prisma.telegramAccount.create({
       data: {
         workspaceId,
         name: dto.name,
@@ -41,10 +41,12 @@ export class TelegramAccountsService {
         botId: BigInt(me.id),
       },
     });
+    // BigInt can't be JSON-serialised — convert botId to string before returning
+    return { ...account, botId: account.botId?.toString() ?? null };
   }
 
-  list(workspaceId: string) {
-    return this.prisma.telegramAccount.findMany({
+  async list(workspaceId: string) {
+    const rows = await this.prisma.telegramAccount.findMany({
       where: { workspaceId },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -58,6 +60,7 @@ export class TelegramAccountsService {
         updatedAt: true,
       },
     });
+    return rows.map((r) => ({ ...r, botId: r.botId?.toString() ?? null }));
   }
 
   async findOne(workspaceId: string, id: string) {
@@ -75,7 +78,7 @@ export class TelegramAccountsService {
       },
     });
     if (!account) throw new NotFoundException('Telegram account not found');
-    return account;
+    return { ...account, botId: account.botId?.toString() ?? null };
   }
 
   async remove(workspaceId: string, id: string) {

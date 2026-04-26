@@ -84,8 +84,14 @@ export interface AutoresponderRule {
 export interface KeywordTrigger {
   id: string;
   keyword: string;
-  replyMessage: string;
-  isActive: boolean;
+  matchType: string;
+  actionType: string;
+  targetId: string | null;
+  response: string | null;
+  /** replyMessage kept for backwards compat — maps to response in the API */
+  replyMessage?: string;
+  active: boolean;
+  priority: number;
   createdAt: string;
 }
 
@@ -113,6 +119,7 @@ export interface WhatsAppAccount {
   name: string;
   phone: string | null;
   providerType: "MOCK" | "CLOUD" | "BAILEYS";
+  sessionStatus: "CONNECTING" | "CONNECTED" | "DISCONNECTED";
   createdAt: string;
   session?: {
     status: "CONNECTING" | "CONNECTED" | "DISCONNECTED";
@@ -188,7 +195,16 @@ export interface InboxMessage {
 }
 
 export type ChatbotFlowStatus = "DRAFT" | "ACTIVE";
-export type ChatbotNodeType = "TEXT" | "QUESTION" | "CONDITION" | "ACTION";
+export type ChatbotNodeType =
+  | "TEXT"
+  | "QUESTION"
+  | "CONDITION"
+  | "ACTION"
+  | "AI_REPLY"
+  | "SAVE_TO_SHEET"
+  | "CHECK_CALENDAR"
+  | "CREATE_BOOKING"
+  | "WEBHOOK";
 
 export interface ChatbotFlowSummary {
   id: string;
@@ -233,4 +249,54 @@ export interface DashboardAnalytics {
     outboundMessagesThisMonth: number;
     outboundLimit: number;
   };
+}
+
+// ─── Google Integration types ────────────────────────────────────────────────
+
+export interface GoogleSpreadsheet {
+  id: string;
+  name: string;
+}
+
+export interface GoogleSheetTab {
+  id: number;
+  title: string;
+}
+
+export interface GoogleCalendarItem {
+  id: string;
+  summary: string;
+  primary?: boolean;
+}
+
+export interface GoogleSheetsConfig {
+  id: string;
+  workspaceId: string;
+  sheetId: string;
+  sheetName: string;
+  fields: string[];
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoogleCalendarConfig {
+  id: string;
+  workspaceId: string;
+  calendarId: string;
+  businessEmail: string;
+  slotDuration: number;
+  bookingWindowDays: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoogleIntegrationStatus {
+  connected: boolean;
+  email?: string;
+  hasSheets?: boolean;
+  hasCalendar?: boolean;
+  sheetsConfig?: GoogleSheetsConfig | null;
+  calendarConfig?: GoogleCalendarConfig | null;
 }

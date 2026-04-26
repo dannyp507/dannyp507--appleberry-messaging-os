@@ -32,6 +32,8 @@ interface SessionEntry {
   pairingPhone: string | null; // if set, use pairing code instead of QR on next qr event
   status: 'PENDING_QR' | 'PENDING_PAIRING' | 'CONNECTED' | 'DISCONNECTED';
   accountId: string;
+  /** LID → phone JID map — populated by contacts.upsert events */
+  lidMap: Map<string, string>;
 }
 
 @Injectable()
@@ -119,6 +121,7 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
       pairingPhone: pairingPhone ? pairingPhone.replace(/\D/g, '') : null,
       status: pairingPhone ? 'PENDING_PAIRING' : 'PENDING_QR',
       accountId,
+      lidMap: new Map(),
     };
     this.sessions.set(accountId, entry);
 
@@ -130,6 +133,28 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     });
 
     socket.ev.on('creds.update', saveCreds);
+
+    // Build LID → @s.whatsapp.net map so we can resolve @lid JIDs when sending replies
+    socket.ev.on('contacts.upsert', (contacts) => {
+      for (const c of contacts) {
+        if (c.id?.endsWith('@lid') && c.notify) {
+          // Some versions expose the linked phone JID via lid field or name-based lookup
+          // Store as-is and also check for a phone field
+          const phone = (c as Record<string, unknown>).phone as string | undefined;
+          if (phone) {
+            const phoneJid = phone.replace(/\D/g, '') + '@s.whatsapp.net';
+            entry.lidMap.set(c.id, phoneJid);
+          }
+        }
+        // Build reverse map: if we have a contact with both a lid and a phone JID
+        if (c.id?.endsWith('@s.whatsapp.net')) {
+          const lid = (c as Record<string, unknown>).lid as string | undefined;
+          if (lid) {
+            entry.lidMap.set(lid, c.id);
+          }
+        }
+      }
+    });
 
     socket.ev.on('connection.update', async (update: BaileysEventMap['connection.update']) => {
       const { connection, lastDisconnect, qr } = update;
@@ -234,6 +259,16 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
           null;
         if (!text) continue;
         const remoteJid = msg.key.remoteJid ?? '';
+
+        // Try to resolve LID JIDs to phone JIDs using participant or verifiedBizName fields
+        if (remoteJid.endsWith('@lid')) {
+          // Check if the message carries a participant field with the phone JID
+          const participant = msg.key.participant ?? (msg as Record<string, unknown>).participant as string | undefined;
+          if (participant && participant.endsWith('@s.whatsapp.net')) {
+            entry.lidMap.set(remoteJid, participant);
+          }
+        }
+
         // For @s.whatsapp.net JIDs extract the phone number; for @lid or others keep as-is
         const from = remoteJid.includes('@s.whatsapp.net')
           ? remoteJid.replace('@s.whatsapp.net', '')
@@ -262,10 +297,14 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     if (!entry || entry.status !== 'CONNECTED') {
       throw new Error(`No active Baileys session for account ${accountId}`);
     }
-    // If `to` is already a full JID (contains @) use it directly — handles @lid accounts.
-    // Otherwise strip non-digits and append @s.whatsapp.net for standard phone numbers.
-    const jid = to.includes('@') ? to : to.replace(/\D/g, '') + '@s.whatsapp.net';
-    this.logger.log(`Sending to JID ${jid} for account ${accountId}`);
+    // Resolve @lid JIDs to @s.whatsapp.net using the contacts map.
+    // @lid JIDs are multi-device linked-device IDs — replies to them are silently dropped
+    // by WhatsApp unless resolved to the real phone JID first.
+    const rawJid = to.includes('@') ? to : to.replace(/\D/g, '') + '@s.whatsapp.net';
+    const jid = rawJid.endsWith('@lid')
+      ? (entry.lidMap.get(rawJid) ?? rawJid)
+      : rawJid;
+    this.logger.log(`Sending to JID ${jid}${jid !== rawJid ? ` (resolved from ${rawJid})` : ''} for account ${accountId}`);
     await entry.socket.sendMessage(jid, { text });
   }
 
@@ -279,7 +318,8 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     if (!entry || entry.status !== 'CONNECTED') {
       throw new Error(`No active Baileys session for account ${accountId}`);
     }
-    const jid = to.includes('@') ? to : to.replace(/\D/g, '') + '@s.whatsapp.net';
+    const rawJid = to.includes('@') ? to : to.replace(/\D/g, '') + '@s.whatsapp.net';
+    const jid = rawJid.endsWith('@lid') ? (entry.lidMap.get(rawJid) ?? rawJid) : rawJid;
     const ext = path.extname(filePath).toLowerCase().replace('.', '');
     const buffer = fs.readFileSync(filePath);
     const cap = caption && caption.trim() ? caption.trim() : undefined;

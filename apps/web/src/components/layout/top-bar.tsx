@@ -42,6 +42,7 @@ const routeLabels: Record<string, string> = {
   "/facebook-pages": "Facebook Pages",
   "/link-generator": "Links & QR Codes",
   "/settings": "Settings",
+  "/settings/integrations": "Integrations",
   "/settings/ai": "AI Providers",
   "/settings/billing": "Billing & Usage",
   "/settings/api-keys": "API Keys",
