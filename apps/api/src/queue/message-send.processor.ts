@@ -47,6 +47,13 @@ export class MessageSendProcessor extends WorkerHost {
       campaignRecipientId,
       campaignId,
       mediaUrl,
+      buttons,
+      buttonsHeader,
+      buttonsFooter,
+      sections,
+      listButtonText,
+      listHeader,
+      listFooter,
     } = job.data;
 
     const log = await this.prisma.messageLog.findUnique({
@@ -117,14 +124,34 @@ export class MessageSendProcessor extends WorkerHost {
         throw err;
       }
 
-      if (mediaUrl) {
-        const uploadsBase = this.config.get<string>('UPLOADS_BASE_DIR') ?? '/app/uploads';
-        const relPath = mediaUrl.replace(/^\/uploads/, '');
-        const absPath = path.join(uploadsBase, relPath);
-        if (provider.sendMedia) {
-          await provider.sendMedia(to, absPath, message || undefined, accountId);
+      if (buttons?.length) {
+        if (provider.sendButtons) {
+          await provider.sendButtons(to, message, buttons, buttonsHeader, buttonsFooter, accountId);
         } else {
-          // Provider doesn't support media — fall back to text caption
+          if (message) await provider.sendText(to, message, accountId);
+        }
+      } else if (sections?.length) {
+        if (provider.sendList) {
+          await provider.sendList(
+            to,
+            message,
+            listButtonText ?? 'View options',
+            sections,
+            listHeader,
+            listFooter,
+            accountId,
+          );
+        } else {
+          if (message) await provider.sendText(to, message, accountId);
+        }
+      } else if (mediaUrl) {
+        const uploadsBase = this.config.get<string>('UPLOADS_BASE_DIR') ?? '/app/uploads';
+        const filePath = mediaUrl.startsWith('http')
+          ? mediaUrl
+          : path.join(uploadsBase, mediaUrl.replace(/^\/uploads/, ''));
+        if (provider.sendMedia) {
+          await provider.sendMedia(to, filePath, message || undefined, accountId);
+        } else {
           if (message) await provider.sendText(to, message, accountId);
         }
       } else {

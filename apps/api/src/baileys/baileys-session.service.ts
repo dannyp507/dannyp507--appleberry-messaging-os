@@ -231,6 +231,9 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
         const text =
           msg.message?.conversation ??
           msg.message?.extendedTextMessage?.text ??
+          msg.message?.buttonsResponseMessage?.selectedButtonId ??
+          msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ??
+          msg.message?.templateButtonReplyMessage?.selectedId ??
           null;
         if (!text) {
           this.logger.warn(
@@ -317,6 +320,71 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
       });
     }
     this.logger.log(`Sent media (${ext}) to JID ${jid} for account ${accountId}`);
+  }
+
+  async sendButtons(
+    accountId: string,
+    to: string,
+    body: string,
+    buttons: Array<{ id: string; title: string }>,
+    header?: string,
+    footer?: string,
+  ): Promise<void> {
+    const entry = this.sessions.get(accountId);
+    if (!entry || entry.status !== 'CONNECTED') {
+      throw new Error(`No active Baileys session for account ${accountId}`);
+    }
+    const jid = to.includes('@') ? to : to.replace(/\D/g, '') + '@s.whatsapp.net';
+
+    await entry.socket.sendMessage(jid, {
+      buttons: buttons.slice(0, 3).map((b) => ({
+        buttonId: b.id,
+        buttonText: { displayText: b.title },
+        type: 1,
+      })),
+      text: body,
+      ...(header ? { title: header } : {}),
+      ...(footer ? { footer } : {}),
+      headerType: 1,
+    } as Parameters<WASocket['sendMessage']>[1]);
+
+    this.logger.log(`Sent buttons to JID ${jid} for account ${accountId}`);
+  }
+
+  async sendList(
+    accountId: string,
+    to: string,
+    body: string,
+    buttonText: string,
+    sections: Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }>,
+    header?: string,
+    footer?: string,
+  ): Promise<void> {
+    const entry = this.sessions.get(accountId);
+    if (!entry || entry.status !== 'CONNECTED') {
+      throw new Error(`No active Baileys session for account ${accountId}`);
+    }
+    const jid = to.includes('@') ? to : to.replace(/\D/g, '') + '@s.whatsapp.net';
+
+    await entry.socket.sendMessage(jid, {
+      listMessage: {
+        title: header ?? '',
+        text: body,
+        footerText: footer ?? '',
+        buttonText,
+        listType: 1, // SINGLE_SELECT
+        sections: sections.map((s) => ({
+          title: s.title,
+          rows: s.rows.map((r) => ({
+            rowId: r.id,
+            title: r.title,
+            description: r.description ?? '',
+          })),
+        })),
+      },
+    } as Parameters<WASocket['sendMessage']>[1]);
+
+    this.logger.log(`Sent list to JID ${jid} for account ${accountId}`);
   }
 
   getQrCode(accountId: string): string | null {

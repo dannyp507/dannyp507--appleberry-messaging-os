@@ -110,7 +110,12 @@ export class ChatbotEngineService {
     if (!run?.currentNode) {
       return false;
     }
-    if (run.currentNode.type !== ChatbotNodeType.QUESTION) {
+    const waitingTypes: ChatbotNodeType[] = [
+      ChatbotNodeType.QUESTION,
+      ChatbotNodeType.BUTTONS,
+      ChatbotNodeType.LIST,
+    ];
+    if (!waitingTypes.includes(run.currentNode.type)) {
       return false;
     }
 
@@ -124,7 +129,15 @@ export class ChatbotEngineService {
     vars.lastInput = params.text.trim();
     await this.writeVars(run.id, vars);
 
-    const nextNodeId = await this.pickNextLinear(run.currentNode.id);
+    // BUTTONS and LIST route by condition edge (matching button/row ID); QUESTION advances linearly
+    const isInteractive =
+      run.currentNode.type === ChatbotNodeType.BUTTONS ||
+      run.currentNode.type === ChatbotNodeType.LIST;
+
+    const nextNodeId = isInteractive
+      ? await this.pickConditionEdge(run.currentNode.id, params.text.trim())
+      : await this.pickNextLinear(run.currentNode.id);
+
     if (!nextNodeId) {
       await this.completeRun(run.id);
       return true;
@@ -331,6 +344,89 @@ export class ChatbotEngineService {
             data: { currentNodeId: aiNext },
           });
           continue;
+        }
+        case ChatbotNodeType.MEDIA: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const mediaUrl = typeof content.url === 'string' ? content.url : '';
+          const caption = typeof content.caption === 'string' ? content.caption : undefined;
+          if (mediaUrl) {
+            await this.messages.enqueueOutboundText({
+              workspaceId: run.workspaceId,
+              whatsappAccountId: accountId,
+              to: run.contact.phone,
+              message: caption ?? '',
+              contactId: run.contactId,
+              inboxThreadId: sendCtx.inboxThreadId ?? null,
+              mediaUrl,
+            });
+          }
+          const mediaNext = await this.pickNextLinear(node.id);
+          if (!mediaNext) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: mediaNext } });
+          continue;
+        }
+        case ChatbotNodeType.BUTTONS: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const body = typeof content.body === 'string' ? content.body : '';
+          const header = typeof content.header === 'string' ? content.header : undefined;
+          const footer = typeof content.footer === 'string' ? content.footer : undefined;
+          const rawButtons = Array.isArray(content.buttons) ? content.buttons as Array<{ id: string; title: string }> : [];
+          if (body && rawButtons.length) {
+            await this.messages.enqueueOutboundButtons({
+              workspaceId: run.workspaceId,
+              whatsappAccountId: accountId,
+              to: run.contact.phone,
+              body,
+              buttons: rawButtons,
+              header,
+              footer,
+              contactId: run.contactId,
+              inboxThreadId: sendCtx.inboxThreadId ?? null,
+            });
+          }
+          // Park here — wait for button reply to arrive via handleIncomingMessage
+          return;
+        }
+        case ChatbotNodeType.LIST: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const body = typeof content.body === 'string' ? content.body : '';
+          const buttonText = typeof content.buttonText === 'string' ? content.buttonText : 'View options';
+          const header = typeof content.header === 'string' ? content.header : undefined;
+          const footer = typeof content.footer === 'string' ? content.footer : undefined;
+          const rawSections = Array.isArray(content.sections)
+            ? (content.sections as Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }>)
+            : [];
+          if (body && rawSections.length) {
+            await this.messages.enqueueOutboundList({
+              workspaceId: run.workspaceId,
+              whatsappAccountId: accountId,
+              to: run.contact.phone,
+              body,
+              buttonText,
+              sections: rawSections,
+              header,
+              footer,
+              contactId: run.contactId,
+              inboxThreadId: sendCtx.inboxThreadId ?? null,
+            });
+          }
+          // Park here — wait for list selection to arrive via handleIncomingMessage
+          return;
+        }
+        case ChatbotNodeType.DELAY: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const seconds = typeof content.seconds === 'number' ? content.seconds : 0;
+          if (seconds > 0) {
+            await new Promise<void>((r) => setTimeout(r, Math.min(seconds, 30) * 1000));
+          }
+          const delayNext = await this.pickNextLinear(node.id);
+          if (!delayNext) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: delayNext } });
+          continue;
+        }
+        case ChatbotNodeType.END: {
+          await this.completeRun(runId);
+          return;
         }
         default:
           return;

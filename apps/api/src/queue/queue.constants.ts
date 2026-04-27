@@ -16,6 +16,10 @@ export type IncomingMessageJob = {
   externalMessageId?: string;
 };
 
+export type ButtonItem = { id: string; title: string };
+export type ListRow = { id: string; title: string; description?: string };
+export type ListSection = { title: string; rows: ListRow[] };
+
 export type SendMessageJob = {
   messageLogId: string;
   to: string;
@@ -24,10 +28,17 @@ export type SendMessageJob = {
   accountId: string;
   campaignId?: string;
   campaignRecipientId?: string;
-  /** Relative URL path to a media file, e.g. '/uploads/media/abc.jpg'.
-   *  When set the processor sends a media message (image/video/document/audio)
-   *  instead of plain text; `message` becomes the caption. */
+  /** When set, sends a media message; `message` becomes the caption. */
   mediaUrl?: string;
+  /** When set, sends an interactive button message (up to 3 buttons). */
+  buttons?: ButtonItem[];
+  buttonsHeader?: string;
+  buttonsFooter?: string;
+  /** When set, sends an interactive list message. */
+  sections?: ListSection[];
+  listButtonText?: string;
+  listHeader?: string;
+  listFooter?: string;
 };
 
 export type ContactsImportJob = {

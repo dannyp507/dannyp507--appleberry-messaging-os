@@ -9,6 +9,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   MESSAGES_SEND_QUEUE,
+  type ButtonItem,
+  type ListSection,
   type SendMessageJob,
 } from '../queue/queue.constants';
 import type { SendMessageDto } from './dto/send-message.dto';
@@ -128,6 +130,128 @@ export class MessagesService {
       workspaceId: params.workspaceId,
       accountId: account.id,
       ...(params.mediaUrl ? { mediaUrl: params.mediaUrl } : {}),
+    };
+
+    await this.sendQueue.add('send-text', job, {
+      jobId: `msg-${log.id}`,
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 2000 },
+    });
+
+    return { messageLogId: log.id, status: MessageLogStatus.PENDING, queued: true };
+  }
+
+  async enqueueOutboundButtons(params: {
+    workspaceId: string;
+    whatsappAccountId: string;
+    to: string;
+    body: string;
+    buttons: ButtonItem[];
+    header?: string;
+    footer?: string;
+    contactId?: string | null;
+    inboxThreadId?: string | null;
+  }) {
+    const account = await this.prisma.whatsAppAccount.findFirst({
+      where: { id: params.whatsappAccountId, workspaceId: params.workspaceId },
+    });
+    if (!account) throw new NotFoundException('WhatsApp account not found');
+
+    const providerLabel =
+      account.providerType === WhatsAppProviderType.CLOUD ? 'CLOUD' : 'MOCK';
+
+    const log = await this.prisma.messageLog.create({
+      data: {
+        workspaceId: params.workspaceId,
+        whatsappAccountId: account.id,
+        contactId: params.contactId ?? null,
+        message: params.body,
+        status: MessageLogStatus.PENDING,
+        provider: providerLabel,
+      },
+    });
+
+    if (params.inboxThreadId) {
+      await this.prisma.inboxMessage.create({
+        data: {
+          threadId: params.inboxThreadId,
+          direction: InboxMessageDirection.OUTBOUND,
+          message: params.body,
+        },
+      });
+    }
+
+    const job: SendMessageJob = {
+      messageLogId: log.id,
+      to: params.to,
+      message: params.body,
+      workspaceId: params.workspaceId,
+      accountId: account.id,
+      buttons: params.buttons,
+      buttonsHeader: params.header,
+      buttonsFooter: params.footer,
+    };
+
+    await this.sendQueue.add('send-text', job, {
+      jobId: `msg-${log.id}`,
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 2000 },
+    });
+
+    return { messageLogId: log.id, status: MessageLogStatus.PENDING, queued: true };
+  }
+
+  async enqueueOutboundList(params: {
+    workspaceId: string;
+    whatsappAccountId: string;
+    to: string;
+    body: string;
+    buttonText: string;
+    sections: ListSection[];
+    header?: string;
+    footer?: string;
+    contactId?: string | null;
+    inboxThreadId?: string | null;
+  }) {
+    const account = await this.prisma.whatsAppAccount.findFirst({
+      where: { id: params.whatsappAccountId, workspaceId: params.workspaceId },
+    });
+    if (!account) throw new NotFoundException('WhatsApp account not found');
+
+    const providerLabel =
+      account.providerType === WhatsAppProviderType.CLOUD ? 'CLOUD' : 'MOCK';
+
+    const log = await this.prisma.messageLog.create({
+      data: {
+        workspaceId: params.workspaceId,
+        whatsappAccountId: account.id,
+        contactId: params.contactId ?? null,
+        message: params.body,
+        status: MessageLogStatus.PENDING,
+        provider: providerLabel,
+      },
+    });
+
+    if (params.inboxThreadId) {
+      await this.prisma.inboxMessage.create({
+        data: {
+          threadId: params.inboxThreadId,
+          direction: InboxMessageDirection.OUTBOUND,
+          message: params.body,
+        },
+      });
+    }
+
+    const job: SendMessageJob = {
+      messageLogId: log.id,
+      to: params.to,
+      message: params.body,
+      workspaceId: params.workspaceId,
+      accountId: account.id,
+      sections: params.sections,
+      listButtonText: params.buttonText,
+      listHeader: params.header,
+      listFooter: params.footer,
     };
 
     await this.sendQueue.add('send-text', job, {
