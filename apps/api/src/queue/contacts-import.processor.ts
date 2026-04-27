@@ -38,12 +38,32 @@ export class ContactsImportProcessor extends WorkerHost {
     let skippedInvalid = 0;
     let duplicates = 0;
 
+    // Case-insensitive column lookup helper
+    const col = (row: Record<string, string>, ...keys: string[]): string => {
+      const lower = Object.fromEntries(Object.entries(row).map(([k, v]) => [k.toLowerCase().trim(), v]));
+      for (const k of keys) {
+        const v = lower[k.toLowerCase()];
+        if (v !== undefined && v !== '') return v.trim();
+      }
+      return '';
+    };
+
     for (const row of rows) {
-      const firstName = row.firstName ?? row.FirstName ?? row.first_name ?? '';
-      const lastName = row.lastName ?? row.LastName ?? row.last_name ?? '';
-      const phoneRaw = row.phone ?? row.Phone ?? row.mobile ?? '';
-      const email = row.email ?? row.Email ?? undefined;
-      const tagsRaw = row.tags ?? row.Tags ?? '';
+      // Accept many common export formats from phones, Google Contacts, Excel, CRMs
+      const fullName = col(row, 'name', 'full name', 'fullname', 'contact name', 'display name');
+      const firstName = col(row, 'firstname', 'first name', 'first_name', 'given name', 'forename')
+        || (fullName ? fullName.split(' ')[0] : '');
+      const lastName = col(row, 'lastname', 'last name', 'last_name', 'surname', 'family name')
+        || (fullName && fullName.includes(' ') ? fullName.split(' ').slice(1).join(' ') : '');
+      const phoneRaw = col(row,
+        'phone', 'phone number', 'phonenumber', 'phone_number',
+        'mobile', 'mobile number', 'mobilenumber', 'mobile_number',
+        'cell', 'cell number', 'cellnumber', 'cell_number',
+        'telephone', 'tel', 'whatsapp', 'whatsapp number',
+        'contact', 'number',
+      );
+      const email = col(row, 'email', 'email address', 'emailaddress') || undefined;
+      const tagsRaw = col(row, 'tags', 'tag', 'labels', 'categories', 'group');
 
       const { e164, isValid } = normalizePhoneE164(
         phoneRaw,
