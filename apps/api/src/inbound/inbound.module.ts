@@ -8,6 +8,7 @@ import { QueueModule } from '../queue/queue.module';
 import { IncomingMessageService } from './incoming-message.service';
 import { WebhookSecretGuard } from './guards/webhook-secret.guard';
 import { WebhooksController } from './webhooks.controller';
+import { CloudWebhookController } from './cloud-webhook.controller';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { WebhooksController } from './webhooks.controller';
     forwardRef(() => ChatbotModule),
     forwardRef(() => QueueModule),
   ],
-  controllers: [WebhooksController],
+  controllers: [WebhooksController, CloudWebhookController],
   providers: [IncomingMessageService, WebhookSecretGuard],
   exports: [IncomingMessageService],
 })
