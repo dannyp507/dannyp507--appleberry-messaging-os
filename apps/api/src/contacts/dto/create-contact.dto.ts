@@ -5,9 +5,9 @@ export class CreateContactDto {
   @MinLength(1)
   firstName!: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(1)
-  lastName!: string;
+  lastName?: string;
 
   @IsString()
   @MinLength(5)

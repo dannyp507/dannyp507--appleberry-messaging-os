@@ -70,7 +70,7 @@ export class ContactsService {
       data: {
         workspaceId,
         firstName: dto.firstName,
-        lastName: dto.lastName,
+        lastName: dto.lastName ?? '',
         phone: e164,
         email: dto.email ?? null,
         isValid: true,

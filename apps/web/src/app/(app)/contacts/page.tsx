@@ -94,7 +94,7 @@ export default function ContactsPage() {
     mutationFn: async () => {
       await api.post("/contacts", {
         firstName,
-        lastName,
+        lastName: lastName || undefined,
         phone,
         email: email || undefined,
         defaultCountry,
@@ -107,6 +107,7 @@ export default function ContactsPage() {
       setLastName("");
       setPhone("");
       setEmail("");
+      toast.success("Contact saved");
     },
     onError: (e) => toast.error("Could not create contact", getApiErrorMessage(e)),
   });
@@ -150,6 +151,7 @@ export default function ContactsPage() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      toast.success("Contact deleted");
     },
     onError: (e) => toast.error("Could not delete contact", getApiErrorMessage(e)),
   });
@@ -182,25 +184,27 @@ export default function ContactsPage() {
                 </DialogHeader>
                 <div className="grid gap-3 py-2">
                   <div className="grid gap-2">
-                    <Label>First name</Label>
+                    <Label>First name <span className="text-destructive">*</span></Label>
                     <Input
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Last name</Label>
+                    <Label>Last name (optional)</Label>
                     <Input
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Phone</Label>
+                    <Label>Phone <span className="text-destructive">*</span></Label>
                     <Input
+                      placeholder="+27821234567 or 0821234567"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                     />
+                    <p className="text-xs text-muted-foreground">Include country code (+27) or select the country below.</p>
                   </div>
                   <div className="grid gap-2">
                     <Label>Email (optional)</Label>
@@ -211,17 +215,29 @@ export default function ContactsPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Default country (phone parsing)</Label>
-                    <Input
-                      value={defaultCountry}
-                      onChange={(e) => setDefaultCountry(e.target.value)}
-                    />
+                    <Label>Country code for phone parsing</Label>
+                    <Select value={defaultCountry} onValueChange={setDefaultCountry}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ZA">🇿🇦 South Africa (ZA)</SelectItem>
+                        <SelectItem value="US">🇺🇸 United States (US)</SelectItem>
+                        <SelectItem value="GB">🇬🇧 United Kingdom (GB)</SelectItem>
+                        <SelectItem value="NG">🇳🇬 Nigeria (NG)</SelectItem>
+                        <SelectItem value="KE">🇰🇪 Kenya (KE)</SelectItem>
+                        <SelectItem value="GH">🇬🇭 Ghana (GH)</SelectItem>
+                        <SelectItem value="IN">🇮🇳 India (IN)</SelectItem>
+                        <SelectItem value="AE">🇦🇪 UAE (AE)</SelectItem>
+                        <SelectItem value="AU">🇦🇺 Australia (AU)</SelectItem>
+                        <SelectItem value="BR">🇧🇷 Brazil (BR)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Used to parse local numbers without a country code.</p>
                   </div>
                 </div>
                 <DialogFooter>
                   <Button
                     onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending}
+                    disabled={createMutation.isPending || !firstName.trim() || phone.trim().length < 5}
                   >
                     Save
                   </Button>
