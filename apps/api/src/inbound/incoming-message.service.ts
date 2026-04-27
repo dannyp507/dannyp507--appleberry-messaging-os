@@ -387,10 +387,11 @@ export class IncomingMessageService {
     if (mode === KeywordMatchType.EXACT || mode === AutoresponderMatchType.EXACT) {
       return t === k;
     }
-    // CONTAINS: for short keywords (≤3 chars like "1","2","hi") use word-boundary
-    // matching to prevent "1" from matching inside "12" or "21"
+    // CONTAINS: for short keywords (≤3 chars like "1","2","hi") use \b word-boundary
+    // matching to prevent "1" from matching inside "12" or "21", while still
+    // matching "hi," / "hi!" / "hi." where the original \s-only regex would fail.
     if (k.length <= 3) {
-      const wordBoundary = new RegExp(`(?:^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
+      const wordBoundary = new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
       return wordBoundary.test(t);
     }
     return t.includes(k);

@@ -232,7 +232,14 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
           msg.message?.conversation ??
           msg.message?.extendedTextMessage?.text ??
           null;
-        if (!text) continue;
+        if (!text) {
+          this.logger.warn(
+            `Inbound from ${msg.key.remoteJid ?? 'unknown'} has no extractable text — ` +
+            `types present: [${Object.keys(msg.message ?? {}).join(', ')}] ` +
+            `msgId=${msg.key.id ?? 'none'}`,
+          );
+          continue;
+        }
         const remoteJid = msg.key.remoteJid ?? '';
         // For @s.whatsapp.net JIDs extract the phone number; for @lid or others keep as-is
         const from = remoteJid.includes('@s.whatsapp.net')
