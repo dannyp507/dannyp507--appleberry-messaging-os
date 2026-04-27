@@ -98,6 +98,9 @@ export default function WhatsAppAccountsPage() {
       setProviderType("BAILEYS");
       if (account.providerType === "BAILEYS") {
         openLinkModal(account.id);
+      } else if (account.providerType === "CLOUD") {
+        // Immediately redirect to Meta OAuth so the user doesn't have to find the button on the card
+        metaConnectMutation.mutate(account.id);
       } else {
         toast.success("Account added");
       }
