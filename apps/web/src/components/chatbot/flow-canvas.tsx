@@ -2,7 +2,7 @@
 
 import "@xyflow/react/dist/style.css";
 
-import { ChatbotFlowNode } from "@/components/chatbot/chatbot-flow-node";
+import { ChatbotFlowNode, type ChatbotNodeData } from "@/components/chatbot/chatbot-flow-node";
 import { api, getApiErrorMessage } from "@/lib/api/client";
 import type { ChatbotFlowDetail } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
@@ -28,9 +28,34 @@ const nodeTypes = { chatbot: ChatbotFlowNode };
 
 function nodeLabel(n: ChatbotFlowDetail["nodes"][0]): string {
   const c = n.content as Record<string, unknown>;
-  if (typeof c.text === "string" && c.text.trim()) {
-    const t = c.text.trim();
-    return t.length > 32 ? `${t.slice(0, 32)}…` : t;
+  const clip = (s: string, len = 32) => s.length > len ? `${s.slice(0, len)}…` : s;
+
+  switch (n.type) {
+    case "TEXT":
+      if (typeof c.text === "string" && c.text.trim()) return clip(c.text.trim());
+      break;
+    case "QUESTION":
+      if (typeof c.prompt === "string" && c.prompt.trim()) return clip(c.prompt.trim());
+      break;
+    case "BUTTONS":
+    case "LIST":
+      if (typeof c.body === "string" && c.body.trim()) return clip(c.body.trim());
+      break;
+    case "MEDIA":
+      if (typeof c.caption === "string" && c.caption.trim()) return clip(c.caption.trim());
+      if (typeof c.url === "string" && c.url.trim()) return clip(c.url.split("/").pop() ?? "media");
+      break;
+    case "DELAY":
+      if (typeof c.seconds === "number") return `Wait ${c.seconds}s`;
+      break;
+    case "END":
+      return "End of flow";
+    case "AI_REPLY":
+      return typeof c.systemPrompt === "string" && c.systemPrompt.trim()
+        ? clip(c.systemPrompt.trim())
+        : "AI reply";
+    case "CONDITION":
+      return typeof c.variableKey === "string" ? `if ${c.variableKey}` : "Condition";
   }
   return `${n.type} · ${n.id.slice(0, 8)}`;
 }
@@ -47,19 +72,24 @@ function toNodes(detail: ChatbotFlowDetail): Node[] {
       data: {
         kind: n.type,
         label: nodeLabel(n),
-      },
+        content: n.content as Record<string, unknown>,
+      } satisfies ChatbotNodeData,
     };
   });
 }
 
 function toEdges(detail: ChatbotFlowDetail): Edge[] {
-  return detail.edges.map((e) => ({
-    id: e.id,
-    source: e.fromNodeId,
-    target: e.toNodeId,
-    animated: true,
-    style: { strokeWidth: 2 },
-  }));
+  return detail.edges.map((e) => {
+    const cond = e.condition as { equals?: string } | null;
+    return {
+      id: e.id,
+      source: e.fromNodeId,
+      target: e.toNodeId,
+      animated: true,
+      style: { strokeWidth: 2 },
+      ...(cond?.equals ? { label: `= "${cond.equals}"` } : {}),
+    };
+  });
 }
 
 function FlowCanvasInner({
@@ -116,6 +146,24 @@ function FlowCanvasInner({
   const onConnect = useCallback(
     async (c: Connection) => {
       if (!c.source || !c.target) return;
+
+      // For branching nodes, prompt for the value this edge should match.
+      // Leave blank to create a fallback (default) edge with no condition.
+      const sourceNode = nodes.find((n) => n.id === c.source);
+      const sourceKind = (sourceNode?.data as ChatbotNodeData)?.kind ?? "";
+      let condition: { equals: string } | undefined;
+      if (["BUTTONS", "LIST", "CONDITION"].includes(sourceKind)) {
+        const hint =
+          sourceKind === "BUTTONS" ? "button ID (e.g. btn1)" :
+          sourceKind === "LIST"    ? "row ID (e.g. row1)" :
+                                     "variable value to match";
+        const val = window.prompt(
+          `Enter the ${hint} this edge should match.\nLeave blank to create a fallback (default) branch.`,
+        );
+        if (val === null) return; // cancelled — don't create the edge
+        if (val.trim()) condition = { equals: val.trim() };
+      }
+
       try {
         const { data } = await api.post<{
           id: string;
@@ -124,6 +172,7 @@ function FlowCanvasInner({
         }>(`/chatbot/flows/${flowId}/edges`, {
           fromNodeId: c.source,
           toNodeId: c.target,
+          ...(condition ? { condition } : {}),
         });
         setEdges((eds) =>
           addEdge(
@@ -133,6 +182,7 @@ function FlowCanvasInner({
               target: data.toNodeId,
               animated: true,
               style: { strokeWidth: 2 },
+              ...(condition?.equals ? { label: `= "${condition.equals}"` } : {}),
             },
             eds,
           ),

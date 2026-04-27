@@ -36,7 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Upload, Sparkles, Copy, Check } from "lucide-react";
+import { Download, Upload, Sparkles, Copy, Check, Plus, Trash2 } from "lucide-react";
 import { api, getApiErrorMessage } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
 import type {
@@ -52,8 +52,27 @@ const NODE_TYPES: ChatbotNodeType[] = [
   "TEXT",
   "QUESTION",
   "CONDITION",
-  "ACTION",
+  "BUTTONS",
+  "LIST",
+  "MEDIA",
+  "DELAY",
+  "AI_REPLY",
+  "WEBHOOK",
+  "END",
 ];
+
+const NODE_TYPE_LABELS: Partial<Record<ChatbotNodeType, string>> = {
+  TEXT:      "TEXT — Send a message",
+  QUESTION:  "QUESTION — Ask for input",
+  CONDITION: "CONDITION — Branch on variable",
+  BUTTONS:   "BUTTONS — Interactive buttons",
+  LIST:      "LIST — Interactive list",
+  MEDIA:     "MEDIA — Send image/video/file",
+  DELAY:     "DELAY — Wait N seconds",
+  AI_REPLY:  "AI_REPLY — AI-generated reply",
+  WEBHOOK:   "WEBHOOK — External call / tag action",
+  END:       "END — End the flow",
+};
 
 export default function ChatbotPage() {
   const queryClient = useQueryClient();
@@ -62,7 +81,30 @@ export default function ChatbotPage() {
   const [flowName, setFlowName] = useState("");
 
   const [nodeType, setNodeType] = useState<ChatbotNodeType>("TEXT");
+  // Generic fields for most node types
+  const [nodeContent, setNodeContent] = useState<Record<string, unknown>>({});
+  // BUTTONS-specific rows
+  const [btnRows, setBtnRows] = useState([
+    { id: "btn1", title: "" },
+    { id: "btn2", title: "" },
+  ]);
+  // LIST-specific rows
+  const [listRows, setListRows] = useState([
+    { id: "row1", title: "", description: "" },
+  ]);
+  // WEBHOOK: keep raw JSON textarea for complex payloads
   const [nodeContentJson, setNodeContentJson] = useState("{}");
+
+  const handleTypeChange = (t: ChatbotNodeType) => {
+    setNodeType(t as ChatbotNodeType);
+    setNodeContent({});
+    setNodeContentJson("{}");
+    setBtnRows([{ id: "btn1", title: "" }, { id: "btn2", title: "" }]);
+    setListRows([{ id: "row1", title: "", description: "" }]);
+  };
+
+  const nc = (key: string, val: unknown) =>
+    setNodeContent((p) => ({ ...p, [key]: val }));
 
   // Import state
   const fileRef = useRef<HTMLInputElement>(null);
@@ -156,14 +198,25 @@ export default function ChatbotPage() {
   const addNodeMutation = useMutation({
     mutationFn: async () => {
       if (!selectedId || !detail) return;
-      let content: Record<string, unknown> = {};
-      try {
-        content = JSON.parse(nodeContentJson || "{}") as Record<
-          string,
-          unknown
-        >;
-      } catch {
-        throw new Error("Node content must be valid JSON");
+      let content: Record<string, unknown>;
+      if (nodeType === "BUTTONS") {
+        content = {
+          ...nodeContent,
+          buttons: btnRows.filter((b) => b.id.trim() && b.title.trim()),
+        };
+      } else if (nodeType === "LIST") {
+        content = {
+          ...nodeContent,
+          sections: [{ title: "Options", rows: listRows.filter((r) => r.id.trim() && r.title.trim()) }],
+        };
+      } else if (nodeType === "WEBHOOK") {
+        try {
+          content = JSON.parse(nodeContentJson || "{}") as Record<string, unknown>;
+        } catch {
+          throw new Error("Webhook content must be valid JSON");
+        }
+      } else {
+        content = { ...nodeContent };
       }
       const n = detail.nodes.length;
       await api.post(`/chatbot/flows/${selectedId}/nodes`, {
@@ -510,32 +563,255 @@ export default function ChatbotPage() {
                     )}
                   </div>
 
-                  <div className="space-y-2 border-t pt-4">
+                  <div className="space-y-3 border-t pt-4">
                     <h3 className="text-sm font-medium">Add node</h3>
-                    <Select
-                      value={nodeType}
-                      onValueChange={(v) =>
-                        setNodeType((v ?? "TEXT") as ChatbotNodeType)
-                      }
-                    >
+                    <Select value={nodeType} onValueChange={handleTypeChange}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {NODE_TYPES.map((t) => (
                           <SelectItem key={t} value={t}>
-                            {t}
+                            {NODE_TYPE_LABELS[t] ?? t}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Textarea
-                      rows={4}
-                      className="font-mono text-xs"
-                      value={nodeContentJson}
-                      onChange={(e) => setNodeContentJson(e.target.value)}
-                      placeholder='JSON object, e.g. {"text":"Hello"}'
-                    />
+
+                    {/* TEXT */}
+                    {nodeType === "TEXT" && (
+                      <Textarea
+                        rows={3}
+                        placeholder="Message to send…"
+                        value={(nodeContent.text as string) ?? ""}
+                        onChange={(e) => nc("text", e.target.value)}
+                      />
+                    )}
+
+                    {/* QUESTION */}
+                    {nodeType === "QUESTION" && (
+                      <div className="space-y-2">
+                        <Textarea
+                          rows={3}
+                          placeholder="Question to ask the user…"
+                          value={(nodeContent.prompt as string) ?? ""}
+                          onChange={(e) => nc("prompt", e.target.value)}
+                        />
+                        <Input
+                          placeholder="Variable name to store answer (e.g. name)"
+                          value={(nodeContent.variableKey as string) ?? ""}
+                          onChange={(e) => nc("variableKey", e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    {/* CONDITION */}
+                    {nodeType === "CONDITION" && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Variable to test</Label>
+                        <Input
+                          placeholder="e.g. lastInput or answer"
+                          value={(nodeContent.variableKey as string) ?? ""}
+                          onChange={(e) => nc("variableKey", e.target.value)}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Draw edges from this node and enter the matching value per edge.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* BUTTONS */}
+                    {nodeType === "BUTTONS" && (
+                      <div className="space-y-2">
+                        <Textarea
+                          rows={2}
+                          placeholder="Message body (required)…"
+                          value={(nodeContent.body as string) ?? ""}
+                          onChange={(e) => nc("body", e.target.value)}
+                        />
+                        <Input
+                          placeholder="Header text (optional)"
+                          value={(nodeContent.header as string) ?? ""}
+                          onChange={(e) => nc("header", e.target.value)}
+                        />
+                        <Input
+                          placeholder="Footer text (optional)"
+                          value={(nodeContent.footer as string) ?? ""}
+                          onChange={(e) => nc("footer", e.target.value)}
+                        />
+                        <Label className="text-xs text-muted-foreground">Buttons (max 3) — ID is used for routing</Label>
+                        {btnRows.map((b, i) => (
+                          <div key={i} className="flex gap-1.5 items-center">
+                            <Input
+                              className="w-24 text-xs"
+                              placeholder={`btn${i + 1}`}
+                              value={b.id}
+                              onChange={(e) => setBtnRows((r) => r.map((x, j) => j === i ? { ...x, id: e.target.value } : x))}
+                            />
+                            <Input
+                              className="flex-1 text-xs"
+                              placeholder="Button label"
+                              value={b.title}
+                              onChange={(e) => setBtnRows((r) => r.map((x, j) => j === i ? { ...x, title: e.target.value } : x))}
+                            />
+                            {btnRows.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setBtnRows((r) => r.filter((_, j) => j !== i))}
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {btnRows.length < 3 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setBtnRows((r) => [...r, { id: `btn${r.length + 1}`, title: "" }])}
+                          >
+                            <Plus className="size-3 mr-1" /> Add button
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* LIST */}
+                    {nodeType === "LIST" && (
+                      <div className="space-y-2">
+                        <Textarea
+                          rows={2}
+                          placeholder="Message body (required)…"
+                          value={(nodeContent.body as string) ?? ""}
+                          onChange={(e) => nc("body", e.target.value)}
+                        />
+                        <Input
+                          placeholder="List button label (e.g. View options)"
+                          value={(nodeContent.buttonText as string) ?? ""}
+                          onChange={(e) => nc("buttonText", e.target.value)}
+                        />
+                        <Input
+                          placeholder="Header text (optional)"
+                          value={(nodeContent.header as string) ?? ""}
+                          onChange={(e) => nc("header", e.target.value)}
+                        />
+                        <Input
+                          placeholder="Footer text (optional)"
+                          value={(nodeContent.footer as string) ?? ""}
+                          onChange={(e) => nc("footer", e.target.value)}
+                        />
+                        <Label className="text-xs text-muted-foreground">Rows — ID is used for routing</Label>
+                        {listRows.map((r, i) => (
+                          <div key={i} className="flex gap-1.5 items-center">
+                            <Input
+                              className="w-20 text-xs"
+                              placeholder={`row${i + 1}`}
+                              value={r.id}
+                              onChange={(e) => setListRows((rs) => rs.map((x, j) => j === i ? { ...x, id: e.target.value } : x))}
+                            />
+                            <Input
+                              className="flex-1 text-xs"
+                              placeholder="Row title"
+                              value={r.title}
+                              onChange={(e) => setListRows((rs) => rs.map((x, j) => j === i ? { ...x, title: e.target.value } : x))}
+                            />
+                            <Input
+                              className="flex-1 text-xs"
+                              placeholder="Description (optional)"
+                              value={r.description}
+                              onChange={(e) => setListRows((rs) => rs.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
+                            />
+                            {listRows.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setListRows((rs) => rs.filter((_, j) => j !== i))}
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setListRows((rs) => [...rs, { id: `row${rs.length + 1}`, title: "", description: "" }])}
+                        >
+                          <Plus className="size-3 mr-1" /> Add row
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* MEDIA */}
+                    {nodeType === "MEDIA" && (
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="Public URL (https://…)"
+                          value={(nodeContent.url as string) ?? ""}
+                          onChange={(e) => nc("url", e.target.value)}
+                        />
+                        <Input
+                          placeholder="Caption (optional)"
+                          value={(nodeContent.caption as string) ?? ""}
+                          onChange={(e) => nc("caption", e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    {/* DELAY */}
+                    {nodeType === "DELAY" && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Seconds to wait (max 30)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={30}
+                          placeholder="5"
+                          value={(nodeContent.seconds as number) ?? ""}
+                          onChange={(e) => nc("seconds", Number(e.target.value))}
+                        />
+                      </div>
+                    )}
+
+                    {/* AI_REPLY */}
+                    {nodeType === "AI_REPLY" && (
+                      <Textarea
+                        rows={3}
+                        placeholder="System prompt for AI (optional — leave blank to use workspace default)"
+                        value={(nodeContent.systemPrompt as string) ?? ""}
+                        onChange={(e) => nc("systemPrompt", e.target.value)}
+                      />
+                    )}
+
+                    {/* WEBHOOK — keeps raw JSON for advanced users */}
+                    {nodeType === "WEBHOOK" && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Payload (JSON). Use{" "}
+                          <code className="text-[11px]">{`{"type":"TAG","tagName":"hot-lead"}`}</code>{" "}
+                          to tag the contact.
+                        </Label>
+                        <Textarea
+                          rows={4}
+                          className="font-mono text-xs"
+                          value={nodeContentJson}
+                          onChange={(e) => setNodeContentJson(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    {/* END — no fields needed */}
+                    {nodeType === "END" && (
+                      <p className="text-xs text-muted-foreground">
+                        Marks the end of the flow. No further nodes will be visited.
+                      </p>
+                    )}
+
                     <Button
                       size="sm"
                       type="button"
