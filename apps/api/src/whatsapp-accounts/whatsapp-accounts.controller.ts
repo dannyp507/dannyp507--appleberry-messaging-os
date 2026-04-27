@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentWorkspace } from '../common/decorators/current-workspace.decorator';
@@ -70,5 +70,18 @@ export class WhatsappAccountsController {
     @Body() dto: CreateWhatsAppAccountDto,
   ) {
     return this.accounts.create(workspace.id, dto);
+  }
+
+  @Get(':id/meta-oauth-url')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  @HttpCode(HttpStatus.OK)
+  async getMetaOAuthUrl(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const url = await this.accounts.buildMetaOAuthUrl(workspace.id, id);
+    return { url };
   }
 }

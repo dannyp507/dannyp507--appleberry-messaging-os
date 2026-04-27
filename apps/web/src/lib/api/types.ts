@@ -113,6 +113,7 @@ export interface WhatsAppAccount {
   name: string;
   phone: string | null;
   providerType: "MOCK" | "CLOUD" | "BAILEYS";
+  cloudPhoneNumberId: string | null;
   createdAt: string;
   session?: {
     status: "CONNECTING" | "CONNECTED" | "DISCONNECTED";

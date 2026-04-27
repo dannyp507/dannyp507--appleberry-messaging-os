@@ -1,16 +1,27 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
 import { BaileysSessionService } from '../baileys/baileys-session.service';
+import { RedisService } from '../redis/redis.service';
 import type { CreateWhatsAppAccountDto } from './dto/create-whatsapp-account.dto';
 import * as QRCode from 'qrcode';
 
+const GRAPH_VERSION = 'v21.0';
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const OAUTH_STATE_TTL = 600; // 10 minutes
+
 @Injectable()
 export class WhatsappAccountsService {
+  private readonly logger = new Logger(WhatsappAccountsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly billing: BillingService,
     private readonly baileys: BaileysSessionService,
+    private readonly redis: RedisService,
+    private readonly config: ConfigService,
   ) {}
 
   list(workspaceId: string) {
@@ -112,5 +123,52 @@ export class WhatsappAccountsService {
       where: { id, workspaceId },
       data: { isPaused: false },
     });
+  }
+
+  /**
+   * Build the Meta OAuth URL for WhatsApp Embedded Signup.
+   * Stores { workspaceId, accountId } in Redis under a CSRF state token (10 min TTL).
+   * The callback handler reads this state to know which account to update.
+   */
+  async buildMetaOAuthUrl(workspaceId: string, accountId: string): Promise<string> {
+    const appId =
+      this.config.get<string>('META_APP_ID') ??
+      this.config.get<string>('FACEBOOK_APP_ID') ??
+      '';
+    if (!appId) {
+      throw new BadRequestException(
+        'Meta app not configured — set META_APP_ID (or FACEBOOK_APP_ID) env var',
+      );
+    }
+
+    const account = await this.findOne(workspaceId, accountId);
+    if (account.providerType !== 'CLOUD') {
+      throw new BadRequestException('Meta Embedded Signup is only available for Cloud API accounts');
+    }
+
+    const state = randomUUID();
+    await this.redis.redis.set(
+      `meta:wa:oauth:${state}`,
+      JSON.stringify({ workspaceId, accountId }),
+      'EX',
+      OAUTH_STATE_TTL,
+    );
+
+    const apiUrl =
+      this.config.get<string>('API_URL') ??
+      this.config.get<string>('API_PUBLIC_URL') ??
+      'http://localhost:3001';
+    const callbackUrl = `${apiUrl}/webhooks/whatsapp/meta-callback`;
+
+    const params = new URLSearchParams({
+      client_id: appId,
+      redirect_uri: callbackUrl,
+      scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management',
+      response_type: 'code',
+      state,
+    });
+
+    this.logger.log(`Built Meta OAuth URL for account ${accountId}`);
+    return `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`;
   }
 }

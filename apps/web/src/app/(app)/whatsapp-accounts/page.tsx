@@ -29,6 +29,7 @@ import {
   Bot,
   CheckCircle2,
   Circle,
+  ExternalLink,
   List,
   Loader2,
   PhoneCall,
@@ -39,12 +40,15 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type LinkMode = "qr" | "pairing";
 
 export default function WhatsAppAccountsPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [providerType, setProviderType] = useState("BAILEYS");
@@ -130,6 +134,41 @@ export default function WhatsAppAccountsPage() {
       toast.success("Disconnected");
     },
     onError: () => toast.error("Could not disconnect"),
+  });
+
+  // Handle redirect params from Meta OAuth callback
+  useEffect(() => {
+    const cloudConnected = searchParams.get("cloud_connected");
+    const error = searchParams.get("error");
+    if (cloudConnected) {
+      toast.success("WhatsApp number connected via Meta!");
+      void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
+      router.replace("/whatsapp-accounts");
+    } else if (error) {
+      const messages: Record<string, string> = {
+        invalid_state: "Session expired — please try again.",
+        token_exchange_failed: "Meta login failed — please try again.",
+        no_waba: "No WhatsApp Business Account found on your Meta account.",
+        no_phone_number: "No phone number found on your WhatsApp Business Account.",
+        missing_params: "Meta login was cancelled.",
+        unknown: "Something went wrong during Meta login.",
+      };
+      toast.error(messages[error] ?? `Meta login error: ${error}`);
+      router.replace("/whatsapp-accounts");
+    }
+  }, [searchParams, queryClient, router]);
+
+  const metaConnectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await api.get<{ url: string }>(
+        `/whatsapp/accounts/${id}/meta-oauth-url`
+      );
+      return data.url;
+    },
+    onSuccess: (url) => {
+      window.location.href = url;
+    },
+    onError: () => toast.error("Could not start Meta login. Check that META_APP_ID is configured."),
   });
 
   const { data: statusData } = useQuery({
@@ -511,6 +550,19 @@ export default function WhatsAppAccountsPage() {
                       {disconnectMutation.isPending && disconnectMutation.variables === a.id
                         ? <Loader2 className="size-3.5 animate-spin" />
                         : "Disconnect"}
+                    </Button>
+                  )}
+                  {a.providerType === "CLOUD" && !a.cloudPhoneNumberId && (
+                    <Button
+                      size="sm"
+                      className="rounded-xl text-xs"
+                      disabled={metaConnectMutation.isPending && metaConnectMutation.variables === a.id}
+                      onClick={() => metaConnectMutation.mutate(a.id)}
+                    >
+                      {metaConnectMutation.isPending && metaConnectMutation.variables === a.id
+                        ? <Loader2 className="mr-1 size-3.5 animate-spin" />
+                        : <ExternalLink className="mr-1 size-3.5" />}
+                      Connect via Meta
                     </Button>
                   )}
                 </div>

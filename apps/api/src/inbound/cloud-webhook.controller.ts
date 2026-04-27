@@ -6,8 +6,12 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import type { Response } from 'express';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { Public } from '../common/decorators/public.decorator';
 import { INCOMING_MESSAGES_QUEUE, type IncomingMessageJob } from '../queue/queue.constants';
+
+const GRAPH_VERSION = 'v21.0';
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 // ── Meta Cloud API webhook payload types ─────────────────────────────────────
 
@@ -55,6 +59,7 @@ export class CloudWebhookController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly redis: RedisService,
     @InjectQueue(INCOMING_MESSAGES_QUEUE) private readonly incomingQueue: Queue,
   ) {}
 
@@ -134,7 +139,167 @@ export class CloudWebhookController {
     void this.processPayload(payload);
   }
 
+  /**
+   * GET /webhooks/whatsapp/meta-callback
+   * Meta redirects the user here after completing Embedded Signup.
+   * Exchanges the code for a long-lived token, fetches WABA + phone number,
+   * saves credentials to the WhatsAppAccount row, subscribes to the WABA
+   * webhook, then redirects the user back to the frontend.
+   */
+  @Public()
+  @Get('meta-callback')
+  async metaOAuthCallback(
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') error: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const frontendUrl =
+      this.config.get<string>('FRONTEND_URL') ??
+      this.config.get<string>('WEB_APP_URL') ??
+      'http://localhost:3000';
+    const failUrl = (reason: string) =>
+      `${frontendUrl}/whatsapp-accounts?error=${encodeURIComponent(reason)}`;
+
+    if (error || !code || !state) {
+      res.redirect(failUrl(error ?? 'missing_params'));
+      return;
+    }
+
+    const stateJson = await this.redis.redis.get(`meta:wa:oauth:${state}`);
+    if (!stateJson) {
+      res.redirect(failUrl('invalid_state'));
+      return;
+    }
+    await this.redis.redis.del(`meta:wa:oauth:${state}`);
+
+    const { workspaceId, accountId } = JSON.parse(stateJson) as {
+      workspaceId: string;
+      accountId: string;
+    };
+
+    const appId =
+      this.config.get<string>('META_APP_ID') ??
+      this.config.get<string>('FACEBOOK_APP_ID') ??
+      '';
+    const appSecret =
+      this.config.get<string>('META_APP_SECRET') ??
+      this.config.get<string>('FACEBOOK_APP_SECRET') ??
+      '';
+    const apiUrl =
+      this.config.get<string>('API_URL') ??
+      this.config.get<string>('API_PUBLIC_URL') ??
+      'http://localhost:3001';
+    const callbackUrl = `${apiUrl}/webhooks/whatsapp/meta-callback`;
+
+    try {
+      // Step 1 — exchange code for short-lived user token
+      const tokenRes = await fetch(
+        `${GRAPH_BASE}/oauth/access_token?` +
+          new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: callbackUrl, code }),
+      );
+      const tokenData = (await tokenRes.json()) as {
+        access_token?: string;
+        error?: { message: string };
+      };
+      if (!tokenData.access_token) {
+        this.logger.error(`Meta token exchange failed: ${tokenData.error?.message}`);
+        res.redirect(failUrl('token_exchange_failed'));
+        return;
+      }
+
+      // Step 2 — extend to long-lived token (~60 days)
+      const longRes = await fetch(
+        `${GRAPH_BASE}/oauth/access_token?` +
+          new URLSearchParams({
+            grant_type: 'fb_exchange_token',
+            client_id: appId,
+            client_secret: appSecret,
+            fb_exchange_token: tokenData.access_token,
+          }),
+      );
+      const longData = (await longRes.json()) as { access_token?: string };
+      const longToken = longData.access_token ?? tokenData.access_token;
+
+      // Step 3 — get the WABAs the user authorised
+      const wabaRes = await fetch(
+        `${GRAPH_BASE}/me/whatsapp_business_accounts?fields=id,name&access_token=${longToken}`,
+      );
+      const wabaData = (await wabaRes.json()) as {
+        data?: Array<{ id: string; name: string }>;
+        error?: { message: string };
+      };
+      if (!wabaData.data?.length) {
+        this.logger.warn(`No WABAs returned for account ${accountId}: ${wabaData.error?.message}`);
+        res.redirect(failUrl('no_waba'));
+        return;
+      }
+      const waba = wabaData.data[0];
+
+      // Step 4 — get phone numbers for that WABA
+      const phoneRes = await fetch(
+        `${GRAPH_BASE}/${waba.id}/phone_numbers?fields=id,display_phone_number,verified_name&access_token=${longToken}`,
+      );
+      const phoneData = (await phoneRes.json()) as {
+        data?: Array<{ id: string; display_phone_number: string; verified_name: string }>;
+        error?: { message: string };
+      };
+      if (!phoneData.data?.length) {
+        this.logger.warn(`No phone numbers for WABA ${waba.id}: ${phoneData.error?.message}`);
+        res.redirect(failUrl('no_phone_number'));
+        return;
+      }
+      const phone = phoneData.data[0];
+
+      // Step 5 — save credentials and mark account as connected
+      await this.prisma.whatsAppAccount.updateMany({
+        where: { id: accountId, workspaceId },
+        data: {
+          cloudPhoneNumberId: phone.id,
+          cloudAccessToken: longToken,
+          cloudWabaId: waba.id,
+          phone: phone.display_phone_number,
+          sessionStatus: 'CONNECTED',
+        },
+      });
+
+      // Step 6 — subscribe the WABA to this app's webhook (best-effort)
+      await this.subscribeWabaToWebhook(waba.id, longToken);
+
+      this.logger.log(
+        `Meta Embedded Signup complete: account=${accountId} waba=${waba.id} phoneId=${phone.id}`,
+      );
+      res.redirect(`${frontendUrl}/whatsapp-accounts?cloud_connected=1`);
+    } catch (err) {
+      this.logger.error(`Meta OAuth callback error for account ${accountId}:`, err);
+      res.redirect(failUrl('unknown'));
+    }
+  }
+
   // ── Private helpers ─────────────────────────────────────────────────────────
+
+  private async subscribeWabaToWebhook(wabaId: string, accessToken: string): Promise<void> {
+    try {
+      const res = await fetch(`${GRAPH_BASE}/${wabaId}/subscribed_apps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ access_token: accessToken }).toString(),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: { message: string };
+      };
+      if (!body.success) {
+        this.logger.warn(
+          `WABA ${wabaId} webhook subscription failed: ${body.error?.message ?? JSON.stringify(body)}`,
+        );
+      } else {
+        this.logger.log(`WABA ${wabaId} subscribed to webhook`);
+      }
+    } catch (err) {
+      this.logger.warn(`WABA ${wabaId} webhook subscription error:`, err);
+    }
+  }
 
   private async processPayload(payload: MetaWebhookPayload): Promise<void> {
     for (const entry of payload.entry ?? []) {
