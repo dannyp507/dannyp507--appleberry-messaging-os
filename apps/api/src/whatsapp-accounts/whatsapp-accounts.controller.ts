@@ -72,6 +72,18 @@ export class WhatsappAccountsController {
     return this.accounts.create(workspace.id, dto);
   }
 
+  @Post(':id/cloud-credentials')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  saveCloudCredentials(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { cloudPhoneNumberId: string; cloudAccessToken: string; cloudWabaId?: string; phone?: string },
+  ) {
+    return this.accounts.saveCloudCredentials(workspace.id, id, body);
+  }
+
   @Get(':id/meta-oauth-url')
   @UseGuards(RolesGuard, PermissionsGuard)
   @Roles('owner', 'admin')

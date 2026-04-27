@@ -52,6 +52,9 @@ export default function WhatsAppAccountsPage() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [providerType, setProviderType] = useState("BAILEYS");
+  const [cloudPhoneId, setCloudPhoneId] = useState("");
+  const [cloudToken, setCloudToken] = useState("");
+  const [cloudWabaId, setCloudWabaId] = useState("");
 
   // Pairing/QR flow state
   const [pairingAccountId, setPairingAccountId] = useState<string | null>(null);
@@ -84,23 +87,29 @@ export default function WhatsAppAccountsPage() {
     rules.filter((r) => r.whatsappAccountId === accountId || r.whatsappAccountId === null).length;
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars: { useManual: boolean; phoneId: string; token: string; wabaId: string }) => {
       const { data } = await api.post<WhatsAppAccount>("/whatsapp/accounts", {
         name,
         providerType,
       });
-      return data;
+      return { account: data, ...vars };
     },
-    onSuccess: (account) => {
+    onSuccess: ({ account, useManual, phoneId, token, wabaId }) => {
       void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
       setOpen(false);
       setName("");
       setProviderType("BAILEYS");
+      setCloudPhoneId("");
+      setCloudToken("");
+      setCloudWabaId("");
       if (account.providerType === "BAILEYS") {
         openLinkModal(account.id);
       } else if (account.providerType === "CLOUD") {
-        // Immediately redirect to Meta OAuth so the user doesn't have to find the button on the card
-        metaConnectMutation.mutate(account.id);
+        if (useManual && phoneId.trim() && token.trim()) {
+          cloudCredentialsMutation.mutate({ id: account.id, phoneId, token, wabaId });
+        } else {
+          metaConnectMutation.mutate(account.id);
+        }
       } else {
         toast.success("Account added");
       }
@@ -160,6 +169,21 @@ export default function WhatsAppAccountsPage() {
       router.replace("/whatsapp-accounts");
     }
   }, [searchParams, queryClient, router]);
+
+  const cloudCredentialsMutation = useMutation({
+    mutationFn: async ({ id, phoneId, token, wabaId }: { id: string; phoneId: string; token: string; wabaId: string }) => {
+      await api.post(`/whatsapp/accounts/${id}/cloud-credentials`, {
+        cloudPhoneNumberId: phoneId.trim(),
+        cloudAccessToken: token.trim(),
+        ...(wabaId.trim() ? { cloudWabaId: wabaId.trim() } : {}),
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
+      toast.success("Cloud API account connected!");
+    },
+    onError: () => toast.error("Could not save credentials — check the Phone Number ID and Access Token."),
+  });
 
   const metaConnectMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -269,23 +293,102 @@ export default function WhatsAppAccountsPage() {
                         After saving, scan the QR code to link your WhatsApp number.
                       </p>
                     )}
-                    {providerType === "CLOUD" && (
-                      <p className="text-xs text-[#6B7280]">
-                        You&apos;ll be redirected to Meta to authorise your WhatsApp Business Account.
-                        Your phone number and access token are set up automatically — no manual configuration needed.
-                      </p>
-                    )}
                   </div>
+
+                  {providerType === "CLOUD" && (
+                    <>
+                      {/* Primary: Meta OAuth */}
+                      <Button
+                        type="button"
+                        className="w-full rounded-xl bg-[#1877F2] hover:bg-[#1565D8] text-white"
+                        disabled={createMutation.isPending || metaConnectMutation.isPending || name.length < 2}
+                        onClick={() => createMutation.mutate({ useManual: false, phoneId: "", token: "", wabaId: "" })}
+                      >
+                        {(createMutation.isPending || metaConnectMutation.isPending) && <Loader2 className="mr-2 size-4 animate-spin" />}
+                        Connect with Meta (Recommended)
+                      </Button>
+                      <p className="text-xs text-[#6B7280] text-center -mt-1">
+                        Your phone number and access token are set up automatically.
+                      </p>
+
+                      {/* Divider */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-[#E5E7EB]" />
+                        <span className="text-xs text-[#9CA3AF]">or enter credentials manually</span>
+                        <div className="flex-1 h-px bg-[#E5E7EB]" />
+                      </div>
+
+                      {/* Manual: Phone Number ID + Access Token + WABA ID */}
+                      <div className="grid gap-3">
+                        <div className="grid gap-1.5">
+                          <Label className="text-[#6B7280]">
+                            Phone Number ID <span className="text-destructive">*</span>
+                          </Label>
+                          <Input
+                            className="rounded-xl bg-white border-[#E5E7EB] text-[#111827] font-mono text-sm placeholder:text-[#9CA3AF]"
+                            placeholder="e.g. 1143836705476116"
+                            value={cloudPhoneId}
+                            onChange={(e) => setCloudPhoneId(e.target.value)}
+                          />
+                          <p className="text-[11px] text-[#9CA3AF]">
+                            Found in Meta Business Manager → WhatsApp → API Setup
+                          </p>
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-[#6B7280]">
+                            Access Token <span className="text-destructive">*</span>
+                          </Label>
+                          <Input
+                            className="rounded-xl bg-white border-[#E5E7EB] text-[#111827] font-mono text-sm placeholder:text-[#9CA3AF]"
+                            placeholder="EAAxxxxxxx…"
+                            value={cloudToken}
+                            onChange={(e) => setCloudToken(e.target.value)}
+                          />
+                          <p className="text-[11px] text-[#9CA3AF]">
+                            Permanent system user token (not the temp token)
+                          </p>
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-[#6B7280]">WABA ID <span className="text-[#9CA3AF] font-normal">(optional)</span></Label>
+                          <Input
+                            className="rounded-xl bg-white border-[#E5E7EB] text-[#111827] font-mono text-sm placeholder:text-[#9CA3AF]"
+                            placeholder="e.g. 992318829922327"
+                            value={cloudWabaId}
+                            onChange={(e) => setCloudWabaId(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <DialogFooter>
-                  <Button
-                    className="rounded-xl"
-                    disabled={createMutation.isPending || metaConnectMutation.isPending || name.length < 2}
-                    onClick={() => createMutation.mutate()}
-                  >
-                    {(createMutation.isPending || metaConnectMutation.isPending) && <Loader2 className="mr-2 size-4 animate-spin" />}
-                    {providerType === "BAILEYS" ? "Save & link phone" : providerType === "CLOUD" ? "Save & connect via Meta" : "Save"}
-                  </Button>
+                  {providerType === "CLOUD" ? (
+                    <Button
+                      className="rounded-xl"
+                      disabled={
+                        createMutation.isPending ||
+                        cloudCredentialsMutation.isPending ||
+                        name.length < 2 ||
+                        !cloudPhoneId.trim() ||
+                        !cloudToken.trim()
+                      }
+                      onClick={() => createMutation.mutate({ useManual: true, phoneId: cloudPhoneId, token: cloudToken, wabaId: cloudWabaId })}
+                    >
+                      {(createMutation.isPending || cloudCredentialsMutation.isPending) && (
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                      )}
+                      Connect Cloud API
+                    </Button>
+                  ) : (
+                    <Button
+                      className="rounded-xl"
+                      disabled={createMutation.isPending || name.length < 2}
+                      onClick={() => createMutation.mutate({ useManual: false, phoneId: "", token: "", wabaId: "" })}
+                    >
+                      {createMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                      {providerType === "BAILEYS" ? "Save & link phone" : "Save"}
+                    </Button>
+                  )}
                 </DialogFooter>
               </DialogContent>
             </Dialog>

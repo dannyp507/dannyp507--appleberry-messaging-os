@@ -104,6 +104,26 @@ export class WhatsappAccountsService {
     return { disconnected: true };
   }
 
+  async saveCloudCredentials(
+    workspaceId: string,
+    accountId: string,
+    data: { cloudPhoneNumberId: string; cloudAccessToken: string; cloudWabaId?: string; phone?: string },
+  ) {
+    const account = await this.findOne(workspaceId, accountId);
+    if (account.providerType !== 'CLOUD') {
+      throw new BadRequestException('Only CLOUD accounts support manual credential configuration');
+    }
+    return this.prisma.whatsAppAccount.update({
+      where: { id: accountId },
+      data: {
+        cloudPhoneNumberId: data.cloudPhoneNumberId,
+        cloudAccessToken: data.cloudAccessToken,
+        cloudWabaId: data.cloudWabaId ?? null,
+        phone: data.phone ?? null,
+      },
+    });
+  }
+
   archive(workspaceId: string, id: string) {
     return this.prisma.whatsAppAccount.updateMany({
       where: { id, workspaceId },
