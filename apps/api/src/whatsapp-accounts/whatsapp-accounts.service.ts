@@ -104,6 +104,136 @@ export class WhatsappAccountsService {
     return { disconnected: true };
   }
 
+  /**
+   * Embedded Signup JS SDK flow.
+   * Accepts the code returned by FB.login() (redirect_uri is always the
+   * Facebook login-success stub for JS SDK exchanges), creates a new CLOUD
+   * account, and stores the long-lived token + WABA + phone number ID.
+   */
+  async metaEmbeddedSignup(workspaceId: string, name: string, code: string) {
+    await this.billing.assertCanCreateWhatsAppAccount(workspaceId);
+
+    const appId =
+      this.config.get<string>('META_APP_ID') ??
+      this.config.get<string>('FACEBOOK_APP_ID') ??
+      '';
+    const appSecret =
+      this.config.get<string>('META_APP_SECRET') ??
+      this.config.get<string>('FACEBOOK_APP_SECRET') ??
+      '';
+
+    if (!appId || !appSecret) {
+      throw new BadRequestException(
+        'Meta app not configured — set META_APP_ID and META_APP_SECRET env vars',
+      );
+    }
+
+    // JS SDK code exchange uses Facebook's own redirect_uri stub
+    const tokenRes = await fetch(
+      `${GRAPH_BASE}/oauth/access_token?` +
+        new URLSearchParams({
+          client_id: appId,
+          client_secret: appSecret,
+          redirect_uri: 'https://www.facebook.com/connect/login_success.html',
+          code,
+        }),
+    );
+    const tokenData = (await tokenRes.json()) as {
+      access_token?: string;
+      error?: { message: string };
+    };
+    if (!tokenData.access_token) {
+      throw new BadRequestException(
+        `Meta token exchange failed: ${tokenData.error?.message ?? 'unknown error'}`,
+      );
+    }
+
+    // Extend to long-lived token (~60 days)
+    const longRes = await fetch(
+      `${GRAPH_BASE}/oauth/access_token?` +
+        new URLSearchParams({
+          grant_type: 'fb_exchange_token',
+          client_id: appId,
+          client_secret: appSecret,
+          fb_exchange_token: tokenData.access_token,
+        }),
+    );
+    const longData = (await longRes.json()) as { access_token?: string };
+    const longToken = longData.access_token ?? tokenData.access_token;
+
+    // Get WABAs the user authorised
+    const wabaRes = await fetch(
+      `${GRAPH_BASE}/me/whatsapp_business_accounts?fields=id,name&access_token=${longToken}`,
+    );
+    const wabaData = (await wabaRes.json()) as {
+      data?: Array<{ id: string; name: string }>;
+      error?: { message: string };
+    };
+    if (!wabaData.data?.length) {
+      throw new BadRequestException(
+        'No WhatsApp Business Account found on your Meta account',
+      );
+    }
+    const waba = wabaData.data[0];
+
+    // Get phone numbers for that WABA
+    const phoneRes = await fetch(
+      `${GRAPH_BASE}/${waba.id}/phone_numbers?fields=id,display_phone_number,verified_name&access_token=${longToken}`,
+    );
+    const phoneData = (await phoneRes.json()) as {
+      data?: Array<{ id: string; display_phone_number: string; verified_name: string }>;
+      error?: { message: string };
+    };
+    if (!phoneData.data?.length) {
+      throw new BadRequestException(
+        'No phone number found on your WhatsApp Business Account',
+      );
+    }
+    const phone = phoneData.data[0];
+
+    // Create account and save all credentials in one step
+    const account = await this.prisma.whatsAppAccount.create({
+      data: {
+        workspaceId,
+        name,
+        phone: phone.display_phone_number,
+        providerType: 'CLOUD',
+        cloudPhoneNumberId: phone.id,
+        cloudAccessToken: longToken,
+        cloudWabaId: waba.id,
+      },
+    });
+
+    // Subscribe WABA to this app's webhook (best-effort)
+    await this.subscribeWabaToWebhook(waba.id, longToken);
+
+    this.logger.log(
+      `Embedded Signup complete: account=${account.id} waba=${waba.id} phoneId=${phone.id}`,
+    );
+    return account;
+  }
+
+  private async subscribeWabaToWebhook(wabaId: string, accessToken: string): Promise<void> {
+    try {
+      const res = await fetch(`${GRAPH_BASE}/${wabaId}/subscribed_apps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ access_token: accessToken }).toString(),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: { message: string };
+      };
+      if (!body.success) {
+        this.logger.warn(
+          `WABA ${wabaId} webhook subscription failed: ${body.error?.message ?? JSON.stringify(body)}`,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(`WABA ${wabaId} webhook subscription error:`, err);
+    }
+  }
+
   async saveCloudCredentials(
     workspaceId: string,
     accountId: string,

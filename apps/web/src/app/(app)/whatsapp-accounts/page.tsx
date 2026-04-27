@@ -39,7 +39,7 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -55,6 +55,8 @@ export default function WhatsAppAccountsPage() {
   const [cloudPhoneId, setCloudPhoneId] = useState("");
   const [cloudToken, setCloudToken] = useState("");
   const [cloudWabaId, setCloudWabaId] = useState("");
+  const [fbReady, setFbReady] = useState(false);
+  const fbLoadedRef = useRef(false);
 
   // Pairing/QR flow state
   const [pairingAccountId, setPairingAccountId] = useState<string | null>(null);
@@ -62,6 +64,29 @@ export default function WhatsAppAccountsPage() {
   const [pairingPhone, setPairingPhone] = useState("");
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingStatus, setPairingStatus] = useState<string>("PENDING_QR");
+
+  // Load Meta JS SDK once so FB.login() can be called directly from a click handler
+  useEffect(() => {
+    if (fbLoadedRef.current || typeof window === "undefined") return;
+    const appId = process.env.NEXT_PUBLIC_META_APP_ID;
+    if (!appId) return;
+    fbLoadedRef.current = true;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fbAsyncInit = function () {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).FB.init({ appId, autoLogAppEvents: true, xfbml: false, version: "v21.0" });
+      setFbReady(true);
+    };
+
+    if (!document.getElementById("facebook-jssdk")) {
+      const s = document.createElement("script");
+      s.id = "facebook-jssdk";
+      s.src = "https://connect.facebook.net/en_US/sdk.js";
+      s.async = true;
+      document.body.appendChild(s);
+    }
+  }, []);
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: qk.whatsappAccounts,
@@ -85,6 +110,53 @@ export default function WhatsAppAccountsPage() {
     rules.filter((r) => (r.whatsappAccountId === accountId || r.whatsappAccountId === null) && r.active).length;
   const accountTotalItems = (accountId: string) =>
     rules.filter((r) => r.whatsappAccountId === accountId || r.whatsappAccountId === null).length;
+
+  // Embedded Signup: create account + exchange code in one backend call
+  const embeddedSignupMutation = useMutation({
+    mutationFn: async ({ code }: { code: string }) => {
+      const { data } = await api.post<WhatsAppAccount>("/whatsapp/accounts/meta-embedded-signup", {
+        name,
+        code,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
+      setOpen(false);
+      setName("");
+      setProviderType("BAILEYS");
+      toast.success("WhatsApp Cloud API connected automatically!");
+    },
+    onError: () => toast.error("Meta connection failed. Try the manual credentials option below."),
+  });
+
+  // Called from the "Connect with Meta" button — must run in the same user-gesture
+  // context so the browser doesn't block the FB.login() popup.
+  const handleConnectWithMeta = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const FB = (window as any).FB;
+    if (fbReady && FB) {
+      FB.login(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (response: any) => {
+          const code = response?.authResponse?.code;
+          if (code) {
+            embeddedSignupMutation.mutate({ code });
+          } else {
+            toast.error("Meta login was cancelled or failed.");
+          }
+        },
+        {
+          response_type: "code",
+          override_default_response_type: true,
+          extras: { feature: "whatsapp_embedded_signup", sessionInfoVersion: 3 },
+        },
+      );
+    } else {
+      // Fallback: page-redirect OAuth (requires META_APP_ID on the server)
+      createMutation.mutate({ useManual: false, phoneId: "", token: "", wabaId: "" });
+    }
+  }, [fbReady, embeddedSignupMutation, createMutation]);
 
   const createMutation = useMutation({
     mutationFn: async (vars: { useManual: boolean; phoneId: string; token: string; wabaId: string }) => {
@@ -297,14 +369,21 @@ export default function WhatsAppAccountsPage() {
 
                   {providerType === "CLOUD" && (
                     <>
-                      {/* Primary: Meta OAuth */}
+                      {/* Primary: Meta Embedded Signup */}
                       <Button
                         type="button"
                         className="w-full rounded-xl bg-[#1877F2] hover:bg-[#1565D8] text-white"
-                        disabled={createMutation.isPending || metaConnectMutation.isPending || name.length < 2}
-                        onClick={() => createMutation.mutate({ useManual: false, phoneId: "", token: "", wabaId: "" })}
+                        disabled={
+                          embeddedSignupMutation.isPending ||
+                          createMutation.isPending ||
+                          metaConnectMutation.isPending ||
+                          name.length < 2
+                        }
+                        onClick={handleConnectWithMeta}
                       >
-                        {(createMutation.isPending || metaConnectMutation.isPending) && <Loader2 className="mr-2 size-4 animate-spin" />}
+                        {(embeddedSignupMutation.isPending || createMutation.isPending || metaConnectMutation.isPending) && (
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                        )}
                         Connect with Meta (Recommended)
                       </Button>
                       <p className="text-xs text-[#6B7280] text-center -mt-1">

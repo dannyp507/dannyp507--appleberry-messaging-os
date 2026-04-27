@@ -72,6 +72,17 @@ export class WhatsappAccountsController {
     return this.accounts.create(workspace.id, dto);
   }
 
+  @Post('meta-embedded-signup')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  metaEmbeddedSignup(
+    @CurrentWorkspace() workspace: Workspace,
+    @Body() body: { name: string; code: string },
+  ) {
+    return this.accounts.metaEmbeddedSignup(workspace.id, body.name, body.code);
+  }
+
   @Post(':id/cloud-credentials')
   @UseGuards(RolesGuard, PermissionsGuard)
   @Roles('owner', 'admin')
