@@ -269,16 +269,22 @@ export default function WhatsAppAccountsPage() {
                         After saving, scan the QR code to link your WhatsApp number.
                       </p>
                     )}
+                    {providerType === "CLOUD" && (
+                      <p className="text-xs text-[#6B7280]">
+                        You&apos;ll be redirected to Meta to authorise your WhatsApp Business Account.
+                        Your phone number and access token are set up automatically — no manual configuration needed.
+                      </p>
+                    )}
                   </div>
                 </div>
                 <DialogFooter>
                   <Button
                     className="rounded-xl"
-                    disabled={createMutation.isPending || name.length < 2}
+                    disabled={createMutation.isPending || metaConnectMutation.isPending || name.length < 2}
                     onClick={() => createMutation.mutate()}
                   >
-                    {createMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                    {providerType === "BAILEYS" ? "Save & link phone" : "Save"}
+                    {(createMutation.isPending || metaConnectMutation.isPending) && <Loader2 className="mr-2 size-4 animate-spin" />}
+                    {providerType === "BAILEYS" ? "Save & link phone" : providerType === "CLOUD" ? "Save & connect via Meta" : "Save"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -412,7 +418,11 @@ export default function WhatsAppAccountsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {accounts.map((a) => {
             const sessionStatus = a.session?.status ?? "DISCONNECTED";
-            const isConnected = sessionStatus === "CONNECTED";
+            // Cloud accounts are "connected" once OAuth has linked a phone number
+            const isConnected =
+              a.providerType === "CLOUD"
+                ? !!a.cloudPhoneNumberId
+                : sessionStatus === "CONNECTED";
             return (
               <div
                 key={a.id}
@@ -566,6 +576,19 @@ export default function WhatsAppAccountsPage() {
                         ? <Loader2 className="mr-1 size-3.5 animate-spin" />
                         : <ExternalLink className="mr-1 size-3.5" />}
                       Connect via Meta
+                    </Button>
+                  )}
+                  {a.providerType === "CLOUD" && !!a.cloudPhoneNumberId && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-xl text-xs text-[#6B7280] hover:bg-[#F3F4F6]"
+                      disabled={metaConnectMutation.isPending && metaConnectMutation.variables === a.id}
+                      onClick={() => metaConnectMutation.mutate(a.id)}
+                    >
+                      {metaConnectMutation.isPending && metaConnectMutation.variables === a.id
+                        ? <Loader2 className="size-3.5 animate-spin" />
+                        : <ExternalLink className="size-3.5" />}
                     </Button>
                   )}
                 </div>
