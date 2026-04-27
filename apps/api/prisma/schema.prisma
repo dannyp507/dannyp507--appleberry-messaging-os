@@ -493,6 +493,10 @@ model WhatsAppAccount {
   lastSyncAt        DateTime?
   credentials       Json?
   tags              String[]             @default([])
+  // Meta WhatsApp Cloud API — per-account credentials (populated via Embedded Signup)
+  cloudPhoneNumberId String?
+  cloudAccessToken   String?             @db.Text
+  cloudWabaId        String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
@@ -504,6 +508,7 @@ model WhatsAppAccount {
   autoresponderRules AutoresponderRule[]
 
   @@index([workspaceId])
+  @@unique([cloudPhoneNumberId])
 }
 
 model WhatsAppSession {
