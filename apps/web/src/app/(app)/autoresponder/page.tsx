@@ -451,7 +451,7 @@ export default function ChatbotItemsPage() {
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
     queryKey: qk.whatsappAccounts,
     queryFn: async () => {
-      const { data } = await api.get<WhatsAppAccount[]>("/whatsapp-accounts");
+      const { data } = await api.get<WhatsAppAccount[]>("/whatsapp/accounts");
       return data;
     },
   });

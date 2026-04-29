@@ -38,7 +38,7 @@ function FormModal({
 
   const { data: accounts = [] } = useQuery<WhatsAppAccount[]>({
     queryKey: ["whatsapp-accounts"],
-    queryFn: async () => { const { data } = await api.get("/whatsapp-accounts"); return data; },
+    queryFn: async () => { const { data } = await api.get<WhatsAppAccount[]>("/whatsapp/accounts"); return data; },
   });
   const { data: sequences = [] } = useQuery<DripSequenceSummary[]>({
     queryKey: ["sequences"],
