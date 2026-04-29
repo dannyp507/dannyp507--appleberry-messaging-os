@@ -9,6 +9,8 @@ export const CAMPAIGN_ORCHESTRATE_QUEUE = 'campaign-orchestrate';
 
 export const INCOMING_MESSAGES_QUEUE = 'incoming-messages';
 
+export const DRIP_SEQUENCES_QUEUE = 'drip-sequences';
+
 export type IncomingMessageJob = {
   whatsappAccountId: string;
   from: string;       // phone digits or full JID (kept for contact lookup)
@@ -46,4 +48,8 @@ export type CampaignOrchestrateJob = {
   campaignId: string;
   minDelayMs: number;
   maxDelayMs: number;
+};
+
+export type DripSequenceJob = {
+  enrollmentId: string;
 };

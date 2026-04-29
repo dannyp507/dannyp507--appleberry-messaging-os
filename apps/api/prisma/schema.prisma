@@ -185,6 +185,19 @@ enum SubscriberStatus {
   UNSUBSCRIBED
 }
 
+enum DripSequenceStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum DripEnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  PAUSED
+}
+
 enum ApiKeyScope {
   READ
   WRITE
@@ -312,6 +325,8 @@ model Workspace {
   leadCaptureConfig    LeadCaptureConfig?
   calendarConfig       CalendarConfig?
   contactSubscriptions ContactSubscription[]
+  dripSequences        DripSequence[]
+  dripEnrollments      DripEnrollment[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -515,6 +530,7 @@ model WhatsAppAccount {
   session               WhatsAppSession?
   autoresponderRules    AutoresponderRule[]
   contactSubscriptions  ContactSubscription[]
+  dripEnrollments       DripEnrollment[]
 
   @@index([workspaceId])
 }
@@ -709,14 +725,82 @@ model ContactSubscription {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  whatsappAccount WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact          Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  whatsappAccount  WhatsAppAccount  @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+  dripEnrollments  DripEnrollment[]
 
   @@unique([contactId, whatsappAccountId])
   @@index([workspaceId, whatsappAccountId])
   @@index([workspaceId, status])
   @@index([contactId])
+}
+
+// ─── Drip Sequences ───────────────────────────────────────────────────────────
+
+model DripSequence {
+  id          String             @id @default(uuid()) @db.Uuid
+  workspaceId String             @db.Uuid
+  name        String
+  description String?
+  status      DripSequenceStatus @default(ACTIVE)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  steps       DripStep[]
+  enrollments DripEnrollment[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+}
+
+/// One message step inside a drip sequence.
+model DripStep {
+  id         String   @id @default(uuid()) @db.Uuid
+  sequenceId String   @db.Uuid
+  sortOrder  Int      @default(1)
+  /// Delay from the previous step (or from enrollment for step 1)
+  delayDays  Int      @default(0)
+  delayHours Int      @default(0)
+  /// Plain text body (used when templateId is null)
+  message    String?  @db.Text
+  /// Optional template — when set, message is the caption override
+  templateId String?  @db.Uuid
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sequence DripSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  template Template?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([sequenceId, sortOrder])
+}
+
+/// Tracks a single subscriber's journey through a sequence.
+model DripEnrollment {
+  id                    String               @id @default(uuid()) @db.Uuid
+  workspaceId           String               @db.Uuid
+  contactSubscriptionId String               @db.Uuid
+  sequenceId            String               @db.Uuid
+  whatsappAccountId     String               @db.Uuid
+  status                DripEnrollmentStatus @default(ACTIVE)
+  /// sortOrder of the next step to send (1-based)
+  nextStepOrder         Int                  @default(1)
+  nextSendAt            DateTime?
+  enrolledAt            DateTime             @default(now())
+  completedAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  workspace           Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contactSubscription ContactSubscription @relation(fields: [contactSubscriptionId], references: [id], onDelete: Cascade)
+  sequence            DripSequence        @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  whatsappAccount     WhatsAppAccount     @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+
+  /// One enrollment per subscriber per sequence
+  @@unique([contactSubscriptionId, sequenceId])
+  @@index([workspaceId, status])
+  @@index([status, nextSendAt])
 }
 
 // ─── Templates ────────────────────────────��───────────────────────────────────
@@ -740,8 +824,9 @@ model Template {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  campaigns Campaign[]
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaigns  Campaign[]
+  dripSteps  DripStep[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])

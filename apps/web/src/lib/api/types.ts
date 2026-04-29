@@ -266,6 +266,59 @@ export interface ContactSubscription {
   };
 }
 
+// ─── Drip Sequences ───────────────────────────────────────────────────────────
+
+export type DripSequenceStatus = "ACTIVE" | "PAUSED" | "ARCHIVED";
+export type DripEnrollmentStatus = "ACTIVE" | "COMPLETED" | "CANCELLED" | "PAUSED";
+
+export interface DripStep {
+  id: string;
+  sequenceId: string;
+  sortOrder: number;
+  delayDays: number;
+  delayHours: number;
+  message: string | null;
+  templateId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DripSequenceSummary {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  status: DripSequenceStatus;
+  createdAt: string;
+  updatedAt: string;
+  _count: { steps: number; enrollments: number };
+}
+
+export interface DripSequenceDetail extends DripSequenceSummary {
+  steps: DripStep[];
+}
+
+export interface DripEnrollment {
+  id: string;
+  workspaceId: string;
+  contactSubscriptionId: string;
+  sequenceId: string;
+  whatsappAccountId: string;
+  status: DripEnrollmentStatus;
+  nextStepOrder: number;
+  nextSendAt: string | null;
+  enrolledAt: string;
+  completedAt: string | null;
+  contactSubscription: {
+    contact: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      phone: string;
+    };
+  };
+}
+
 export interface DashboardAnalytics {
   totalMessages: number;
   sent: number;

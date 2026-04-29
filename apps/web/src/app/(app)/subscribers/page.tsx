@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Download,
+  ListOrdered,
   MessageSquare,
   Search,
   Tag,
@@ -14,8 +15,9 @@ import {
 } from "lucide-react";
 import { api, apiBaseURL, getApiErrorMessage } from "@/lib/api/client";
 import { useAuthStore } from "@/stores/auth-store";
-import type { ContactSubscription, WhatsAppAccount } from "@/lib/api/types";
+import type { ContactSubscription, DripSequenceSummary, WhatsAppAccount } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,7 @@ export default function SubscribersPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [enrollTarget, setEnrollTarget] = useState<ContactSubscription | null>(null);
 
   const TAKE = 50;
 
@@ -391,6 +394,7 @@ export default function SubscribersPage() {
                       })
                     }
                     isPending={toggleStatus.isPending}
+                    onEnroll={() => setEnrollTarget(sub)}
                   />
                 ))
               )}
@@ -398,6 +402,14 @@ export default function SubscribersPage() {
           </table>
         </div>
       </div>
+
+      {/* Enroll modal */}
+      {enrollTarget && (
+        <EnrollModal
+          sub={enrollTarget}
+          onClose={() => setEnrollTarget(null)}
+        />
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -451,16 +463,126 @@ export default function SubscribersPage() {
   );
 }
 
+// ─── Enroll in Sequence Modal ─────────────────────────────────────────────────
+
+function EnrollModal({
+  sub,
+  onClose,
+}: {
+  sub: ContactSubscription;
+  onClose: () => void;
+}) {
+  const [sequenceId, setSequenceId] = useState("");
+
+  const { data: sequences = [], isLoading: seqLoading } = useQuery<DripSequenceSummary[]>({
+    queryKey: ["sequences"],
+    queryFn: async () => {
+      const { data } = await api.get<DripSequenceSummary[]>("/sequences");
+      return data;
+    },
+  });
+
+  const activeSequences = sequences.filter((s) => s.status === "ACTIVE");
+
+  const enrollMutation = useMutation({
+    mutationFn: async () => {
+      await api.post(`/sequences/${sequenceId}/enroll`, {
+        subscriptionIds: [sub.id],
+        whatsappAccountId: sub.whatsappAccountId,
+      });
+    },
+    onSuccess: () => {
+      toast.success(`Enrolled ${sub.contact.firstName} in sequence`);
+      onClose();
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err)),
+  });
+
+  const fullName = [sub.contact.firstName, sub.contact.lastName].filter(Boolean).join(" ");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Enroll in Sequence</h2>
+            <p className="mt-0.5 text-sm text-zinc-400">
+              Enroll <span className="font-medium text-zinc-200">{fullName}</span> in an automated drip sequence
+            </p>
+          </div>
+          <button onClick={onClose} className="mt-0.5 rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300">
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          {/* Sequence picker */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-zinc-400">Sequence *</label>
+            {seqLoading ? (
+              <div className="h-10 animate-pulse rounded-lg bg-zinc-800" />
+            ) : activeSequences.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-zinc-700 px-3 py-3 text-center text-xs text-zinc-500">
+                No active sequences. <a href="/sequences" className="text-violet-400 hover:underline">Create one first.</a>
+              </div>
+            ) : (
+              <select
+                value={sequenceId}
+                onChange={(e) => setSequenceId(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-zinc-200 focus:border-violet-500 focus:outline-none"
+              >
+                <option value="">Pick a sequence…</option>
+                {activeSequences.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s._count.steps} step{s._count.steps !== 1 ? "s" : ""})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Account info */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-zinc-400">WhatsApp Account</label>
+            <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-2.5 text-sm text-zinc-300">
+              {sub.whatsappAccount.name}
+              {sub.whatsappAccount.phone && (
+                <span className="ml-1.5 text-zinc-500">({sub.whatsappAccount.phone})</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200">
+            Cancel
+          </button>
+          <button
+            disabled={!sequenceId || enrollMutation.isPending}
+            onClick={() => enrollMutation.mutate()}
+            className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+          >
+            <ListOrdered className="size-3.5" />
+            {enrollMutation.isPending ? "Enrolling…" : "Enroll"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Subscriber Row ───────────────────────────────────────────────────────────
 
 function SubscriberRow({
   sub,
   onToggleStatus,
   isPending,
+  onEnroll,
 }: {
   sub: ContactSubscription;
   onToggleStatus: () => void;
   isPending: boolean;
+  onEnroll: () => void;
 }) {
   const fullName = [sub.contact.firstName, sub.contact.lastName]
     .filter(Boolean)
@@ -571,6 +693,16 @@ function SubscriberRow({
             <MessageSquare className="size-3.5" />
             Chat
           </a>
+
+          {/* Enroll in sequence */}
+          <button
+            onClick={onEnroll}
+            title="Enroll in drip sequence"
+            className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-violet-500/10 hover:text-violet-400"
+          >
+            <ListOrdered className="size-3.5" />
+            Enroll
+          </button>
         </div>
       </td>
     </tr>

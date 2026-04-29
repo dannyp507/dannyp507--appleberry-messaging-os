@@ -6,9 +6,11 @@ import { CampaignOrchestrateProcessor } from './campaign-orchestrate.processor';
 import { ContactsImportProcessor } from './contacts-import.processor';
 import { IncomingMessageProcessor } from './incoming-message.processor';
 import { MessageSendProcessor } from './message-send.processor';
+// DripSequenceProcessor is registered inside SequencesModule to avoid circular deps
 import {
   CAMPAIGN_ORCHESTRATE_QUEUE,
   CONTACTS_IMPORT_QUEUE,
+  DRIP_SEQUENCES_QUEUE,
   INCOMING_MESSAGES_QUEUE,
   MESSAGES_SEND_QUEUE,
 } from './queue.constants';
@@ -59,6 +61,15 @@ import {
         attempts: 5,
         backoff: { type: 'exponential', delay: 1500 },
         removeOnComplete: 2000,
+        removeOnFail: false,
+      },
+    }),
+    BullModule.registerQueue({
+      name: DRIP_SEQUENCES_QUEUE,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: 500,
         removeOnFail: false,
       },
     }),

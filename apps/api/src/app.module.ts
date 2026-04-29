@@ -34,6 +34,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { SupportModule } from './support/support.module';
 import { WhatsAppCloudModule } from './whatsapp-cloud/whatsapp-cloud.module';
 import { SubscribersModule } from './subscribers/subscribers.module';
+import { SequencesModule } from './sequences/sequences.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -77,6 +78,7 @@ import { AppController } from './app.controller';
     SupportModule,
     WhatsAppCloudModule,
     SubscribersModule,
+    SequencesModule,
   ],
   providers: [
     {
