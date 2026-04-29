@@ -6,6 +6,7 @@ import { qk } from "@/lib/query-keys";
 import type { ChatbotFlowSummary, DripSequenceSummary, KeywordTrigger, Template } from "@/lib/api/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import Link from "next/link";
 import { GitBranch, ListOrdered, FileText, MessageSquare, Plus, X, Trash2, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -232,7 +233,7 @@ function NewTriggerModal({ onClose, onCreated }: { onClose: () => void; onCreate
               {activeSequences.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-zinc-700 px-3 py-3 text-center text-xs text-zinc-500">
                   No active sequences found.{" "}
-                  <a href="/sequences" className="text-violet-400 hover:underline">Create and activate one first.</a>
+                  <Link href="/sequences" className="text-violet-400 hover:underline">Create and activate one first.</Link>
                 </div>
               ) : (
                 <select
