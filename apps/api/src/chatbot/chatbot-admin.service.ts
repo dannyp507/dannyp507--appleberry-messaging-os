@@ -148,6 +148,23 @@ export class ChatbotAdminService {
     return { updated };
   }
 
+  async updateNode(
+    workspaceId: string,
+    flowId: string,
+    nodeId: string,
+    dto: { content?: Record<string, unknown> },
+  ) {
+    const flow = await this.prisma.chatbotFlow.findFirst({ where: { id: flowId, workspaceId } });
+    if (!flow) throw new NotFoundException('Flow not found');
+    const node = await this.prisma.chatbotNode.findFirst({ where: { id: nodeId, flowId } });
+    if (!node) throw new NotFoundException('Node not found');
+    const updated = await this.prisma.chatbotNode.update({
+      where: { id: nodeId },
+      data: { ...(dto.content !== undefined ? { content: dto.content as Prisma.InputJsonValue } : {}) },
+    });
+    return updated;
+  }
+
   async removeNode(workspaceId: string, flowId: string, nodeId: string) {
     const flow = await this.prisma.chatbotFlow.findFirst({
       where: { id: flowId, workspaceId },

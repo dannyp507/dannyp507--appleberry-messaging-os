@@ -52,15 +52,19 @@ import { useRef, useState } from "react";
 
 const NODE_TYPES: { value: ChatbotNodeType; label: string; desc: string }[] = [
   { value: "TEXT",           label: "💬 Text Message",        desc: "Send a plain message. Use {{variable}} to insert captured data." },
+  { value: "MEDIA",          label: "🖼️ Media Message",       desc: "Send an image, video, audio clip, or document. Optionally add a caption." },
   { value: "BUTTONS",        label: "🔘 Button Menu",         desc: "Show up to 3 tappable buttons (Cloud API) or numbered list (Baileys). Waits for the customer to choose." },
   { value: "LIST",           label: "📋 List Picker",         desc: "Show a scrollable list of options. Great for menus with many items (Cloud API only; falls back to numbered text)." },
   { value: "QUESTION",       label: "❓ Question",             desc: "Ask a question and wait for the customer's reply. Saves answer as a variable." },
   { value: "CONDITION",      label: "🔀 Condition",            desc: "Branch the flow based on a variable's value." },
   { value: "AI_REPLY",       label: "✨ AI Reply",             desc: "Generate a dynamic reply using Gemini or OpenAI with a custom system prompt." },
+  { value: "TAG_CONTACT",    label: "🏷️ Tag Contact",         desc: "Apply a tag to the contact. Creates the tag if it doesn't exist." },
+  { value: "HUMAN_HANDOFF",  label: "👤 Human Handoff",       desc: "Send a message then transfer the conversation to a human agent. Marks the inbox thread as OPEN." },
+  { value: "END",            label: "🔴 End Flow",            desc: "Terminate the conversation flow. Optionally send a goodbye message." },
   { value: "SAVE_TO_SHEET",  label: "📊 Save to Google Sheet", desc: "Append a row to your connected Google Sheet with contact data and captured variables." },
   { value: "CHECK_CALENDAR", label: "📅 Check Availability",  desc: "Check if a date/time is available on your Google Calendar." },
   { value: "CREATE_BOOKING", label: "🗓️ Create Booking",      desc: "Create a Google Calendar event with the customer's details." },
-  { value: "WEBHOOK",        label: "🏷️ Tag Contact",         desc: "Apply a tag to the contact for segmentation." },
+  { value: "WEBHOOK",        label: "🔗 Webhook",             desc: "Legacy tag-contact action. Use 'Tag Contact' node for new flows." },
 ];
 
 // ─── Smart node config form ───────────────────────────────────────────────────
@@ -236,6 +240,56 @@ function NodeConfigForm({
         </div>
       );
 
+    case "MEDIA":
+      return (
+        <div className="space-y-2">
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Media type</Label>
+            <select
+              value={config.mediaType ?? "image"}
+              onChange={(e) => onChange("mediaType", e.target.value)}
+              className="rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="image">🖼️ Image</option>
+              <option value="video">🎬 Video</option>
+              <option value="audio">🎵 Audio</option>
+              <option value="document">📎 Document / File</option>
+            </select>
+          </div>
+          {field("url", "Media URL (publicly accessible)", "https://example.com/image.jpg")}
+          {field("caption", "Caption (optional)", "Here's our menu! Use {{name}} to personalise.", true)}
+          <p className="text-[10px] text-muted-foreground">The URL must be publicly accessible. For images use .jpg/.png, for video .mp4.</p>
+        </div>
+      );
+
+    case "TAG_CONTACT":
+      return (
+        <div className="space-y-2">
+          {field("tagName", "Tag name to apply", "booked")}
+          <p className="text-[10px] text-muted-foreground">Creates the tag if it doesn&apos;t exist and adds it to the contact. Flow continues to the next node.</p>
+        </div>
+      );
+
+    case "HUMAN_HANDOFF":
+      return (
+        <div className="space-y-2">
+          {field("message", "Message to send before handoff", "👤 Connecting you with a team member. Please hold on!", true)}
+          <p className="text-[10px] text-muted-foreground">
+            The chatbot will stop and the inbox thread will be marked <strong>Open</strong> so your team can take over. Leave message blank to skip it.
+          </p>
+        </div>
+      );
+
+    case "END":
+      return (
+        <div className="space-y-2">
+          {field("message", "Goodbye message (optional)", "Thanks for chatting! Have a great day 👋", true)}
+          <p className="text-[10px] text-muted-foreground">
+            Ends the conversation flow. If a message is provided it will be sent before the flow closes. Leave blank to end silently.
+          </p>
+        </div>
+      );
+
     case "WEBHOOK":
       return (
         <div className="space-y-2">
@@ -309,8 +363,16 @@ function buildContent(nodeType: ChatbotNodeType, config: Record<string, string>)
         : [];
       return { prompt: config.prompt ?? "", buttonText: config.buttonText || "See Options", sections };
     }
+    case "MEDIA":
+      return { url: config.url ?? "", caption: config.caption ?? "", mediaType: config.mediaType ?? "image" };
+    case "TAG_CONTACT":
+      return { type: "TAG", tagName: config.tagName ?? "" };
     case "WEBHOOK":
       return { type: "TAG", tagName: config.tagName ?? "" };
+    case "HUMAN_HANDOFF":
+      return { message: config.message ?? "" };
+    case "END":
+      return { message: config.message ?? "" };
     default:
       return {};
   }
@@ -326,6 +388,8 @@ export default function ChatbotPage() {
 
   const [nodeType, setNodeType] = useState<ChatbotNodeType>("TEXT");
   const [nodeConfig, setNodeConfig] = useState<Record<string, string>>({});
+  // selectedNodeId: when user clicks a node on canvas, pre-populate the config form
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [importName, setImportName] = useState("");
@@ -423,6 +487,34 @@ export default function ChatbotPage() {
     },
     onError: (e) => toast.error("Could not set entry", getApiErrorMessage(e)),
   });
+
+  // When user clicks a node on canvas — pre-populate the add-node form for editing
+  const handleNodeSelect = (nodeId: string) => {
+    if (!detail) return;
+    const node = detail.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    setSelectedNodeId(nodeId);
+    setNodeType(node.type as ChatbotNodeType);
+    // Flatten content back to config form state
+    const c = (node.content ?? {}) as Record<string, unknown>;
+    const flat: Record<string, string> = {};
+    for (const [k, v] of Object.entries(c)) {
+      if (typeof v === "string") flat[k] = v;
+      else if (typeof v === "number") flat[k] = String(v);
+      // buttons array
+      else if (k === "buttons" && Array.isArray(v)) {
+        (v as { label: string }[]).forEach((b, i) => { if (b.label) flat[`btn${i + 1}`] = b.label; });
+      }
+      // LIST sections → rows
+      else if (k === "sections" && Array.isArray(v)) {
+        const rows = (v as { rows?: { title: string; description?: string }[] }[])[0]?.rows ?? [];
+        rows.forEach((r, i) => { flat[`row${i + 1}title`] = r.title; if (r.description) flat[`row${i + 1}desc`] = r.description; });
+      }
+    }
+    setNodeConfig(flat);
+    // Scroll the form into view
+    document.getElementById("node-config-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
 
   // ── Flow templates ──────────────────────────────────────────────────────────
   const FLOW_TEMPLATES = [
@@ -616,7 +708,7 @@ export default function ChatbotPage() {
             </Card>
           ) : (
             <>
-              <FlowCanvas flowId={detail.id} detail={detail} />
+              <FlowCanvas flowId={detail.id} detail={detail} onNodeSelect={handleNodeSelect} />
 
               <Card>
                 <CardHeader>
@@ -661,15 +753,27 @@ export default function ChatbotPage() {
                     )}
                   </div>
 
-                  {/* Add node */}
-                  <div className="space-y-3 border-t pt-4">
-                    <h3 className="text-sm font-semibold">Add node</h3>
+                  {/* Add / Edit node */}
+                  <div id="node-config-panel" className="space-y-3 border-t pt-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">
+                        {selectedNodeId ? "✏️ Edit node" : "Add node"}
+                      </h3>
+                      {selectedNodeId && (
+                        <button
+                          className="text-[10px] text-muted-foreground hover:text-foreground"
+                          onClick={() => { setSelectedNodeId(null); setNodeConfig({}); }}
+                        >
+                          + New node
+                        </button>
+                      )}
+                    </div>
 
                     <div className="space-y-1.5">
                       <Label className="text-xs">Node type</Label>
                       <Select
                         value={nodeType}
-                        onValueChange={(v) => { setNodeType(v as ChatbotNodeType); setNodeConfig({}); }}
+                        onValueChange={(v) => { setNodeType(v as ChatbotNodeType); setNodeConfig({}); setSelectedNodeId(null); }}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -691,15 +795,37 @@ export default function ChatbotPage() {
                       <NodeConfigForm nodeType={nodeType} config={nodeConfig} onChange={updateConfig} />
                     </div>
 
-                    <Button
-                      size="sm"
-                      type="button"
-                      className="w-full"
-                      onClick={() => addNodeMutation.mutate()}
-                      disabled={addNodeMutation.isPending}
-                    >
-                      {addNodeMutation.isPending ? "Adding…" : "Add node to canvas"}
-                    </Button>
+                    {selectedNodeId ? (
+                      <Button
+                        size="sm"
+                        type="button"
+                        className="w-full"
+                        onClick={async () => {
+                          try {
+                            await api.patch(`/chatbot/flows/${selectedId}/nodes/${selectedNodeId}`, {
+                              content: buildContent(nodeType, nodeConfig),
+                            });
+                            if (selectedId) void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(selectedId) });
+                            void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
+                            setSelectedNodeId(null);
+                            setNodeConfig({});
+                            toast.success("Node updated");
+                          } catch (e) { toast.error("Could not update node", getApiErrorMessage(e)); }
+                        }}
+                      >
+                        Save changes
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        type="button"
+                        className="w-full"
+                        onClick={() => addNodeMutation.mutate()}
+                        disabled={addNodeMutation.isPending}
+                      >
+                        {addNodeMutation.isPending ? "Adding…" : "Add node to canvas"}
+                      </Button>
+                    )}
                   </div>
 
                   {/* Node list */}

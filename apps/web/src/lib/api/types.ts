@@ -197,6 +197,7 @@ export interface InboxMessage {
 export type ChatbotFlowStatus = "DRAFT" | "ACTIVE";
 export type ChatbotNodeType =
   | "TEXT"
+  | "MEDIA"
   | "BUTTONS"
   | "LIST"
   | "QUESTION"
@@ -206,7 +207,10 @@ export type ChatbotNodeType =
   | "SAVE_TO_SHEET"
   | "CHECK_CALENDAR"
   | "CREATE_BOOKING"
-  | "WEBHOOK";
+  | "WEBHOOK"
+  | "TAG_CONTACT"
+  | "HUMAN_HANDOFF"
+  | "END";
 
 export interface ChatbotFlowSummary {
   id: string;

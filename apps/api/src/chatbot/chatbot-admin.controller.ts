@@ -66,6 +66,16 @@ export class ChatbotAdminController {
     return this.admin.updateGeometry(workspace.id, id, dto);
   }
 
+  @Patch(':id/nodes/:nodeId')
+  updateNode(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('nodeId', ParseUUIDPipe) nodeId: string,
+    @Body() body: { content?: Record<string, unknown> },
+  ) {
+    return this.admin.updateNode(workspace.id, id, nodeId, body);
+  }
+
   @Delete(':id/nodes/:nodeId')
   deleteNode(
     @CurrentWorkspace() workspace: Workspace,

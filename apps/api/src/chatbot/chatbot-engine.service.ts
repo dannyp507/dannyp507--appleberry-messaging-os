@@ -629,6 +629,85 @@ export class ChatbotEngineService {
           continue;
         }
 
+        // ── Media message (image / video / audio / document) ─────────────────
+        case ChatbotNodeType.MEDIA: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const vars = this.readVars(run);
+          const url     = typeof content.url     === 'string' ? content.url.trim()     : '';
+          const caption = typeof content.caption === 'string' ? this.interpolate(content.caption, vars) : '';
+          if (url) {
+            await this.messages.enqueueOutboundText({
+              workspaceId:       run.workspaceId,
+              whatsappAccountId: accountId,
+              to:                run.contact.phone,
+              message:           caption,
+              contactId:         run.contactId,
+              inboxThreadId:     sendCtx.inboxThreadId ?? null,
+              mediaUrl:          url,
+            });
+          }
+          const mediaNext = await this.pickNextLinear(node.id);
+          if (!mediaNext) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: mediaNext } });
+          continue;
+        }
+
+        // ── End flow ──────────────────────────────────────────────────────────
+        case ChatbotNodeType.END: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const vars = this.readVars(run);
+          const endMsg = typeof content.message === 'string' ? this.interpolate(content.message.trim(), vars) : '';
+          if (endMsg) {
+            await this.messages.enqueueOutboundText({
+              workspaceId:       run.workspaceId,
+              whatsappAccountId: accountId,
+              to:                run.contact.phone,
+              message:           endMsg,
+              contactId:         run.contactId,
+              inboxThreadId:     sendCtx.inboxThreadId ?? null,
+            });
+          }
+          await this.completeRun(runId);
+          return;
+        }
+
+        // ── Human handoff ─────────────────────────────────────────────────────
+        case ChatbotNodeType.HUMAN_HANDOFF: {
+          const content = (node.content ?? {}) as JsonRecord;
+          const vars = this.readVars(run);
+          const handoffMsg = typeof content.message === 'string'
+            ? this.interpolate(content.message.trim(), vars)
+            : '👤 Connecting you with a team member. Please hold on!';
+          if (handoffMsg) {
+            await this.messages.enqueueOutboundText({
+              workspaceId:       run.workspaceId,
+              whatsappAccountId: accountId,
+              to:                run.contact.phone,
+              message:           handoffMsg,
+              contactId:         run.contactId,
+              inboxThreadId:     sendCtx.inboxThreadId ?? null,
+            });
+          }
+          // Mark inbox thread as OPEN so agents can see it
+          if (sendCtx.inboxThreadId) {
+            await this.prisma.inboxThread.updateMany({
+              where: { id: sendCtx.inboxThreadId },
+              data: { status: 'OPEN' },
+            });
+          }
+          await this.completeRun(runId);
+          return;
+        }
+
+        // ── Tag contact ───────────────────────────────────────────────────────
+        case ChatbotNodeType.TAG_CONTACT: {
+          await this.executeTagAction(run.workspaceId, run.contactId, node.content);
+          const tagNext = await this.pickNextLinear(node.id);
+          if (!tagNext) { await this.completeRun(runId); return; }
+          await this.prisma.chatbotRun.update({ where: { id: runId }, data: { currentNodeId: tagNext } });
+          continue;
+        }
+
         default:
           // Unknown node type — skip to next linear node
           this.logger.warn(`Unknown node type: ${node.type as string} — skipping`);
