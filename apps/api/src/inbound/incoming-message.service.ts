@@ -14,6 +14,7 @@ import { TemplateRenderService } from '../messaging/template-render.service';
 import { MessagesService } from '../messages/messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscribersService } from '../subscribers/subscribers.service';
+import { SequencesService } from '../sequences/sequences.service';
 import type { IncomingMessageJob } from '../queue/queue.constants';
 import { normalizePhoneE164 } from '../contacts/phone.util';
 
@@ -28,6 +29,7 @@ export class IncomingMessageService {
     private readonly messages: MessagesService,
     private readonly ai: AiService,
     private readonly subscribers: SubscribersService,
+    private readonly sequences: SequencesService,
   ) {}
 
   /** Replace Planify X / common template variables in a response string */
@@ -283,6 +285,31 @@ export class IncomingMessageService {
           contactId: contact.id,
           inboxThreadId: thread.id,
         });
+        return;
+      }
+      if (t.actionType === KeywordActionType.ENROLL_SEQUENCE && t.targetId) {
+        // Find (or create) the subscription for this contact + account
+        const subscription = await this.prisma.contactSubscription.findUnique({
+          where: {
+            contactId_whatsappAccountId: {
+              contactId: contact.id,
+              whatsappAccountId: account.id,
+            },
+          },
+        });
+        if (!subscription) continue;
+        try {
+          await this.sequences.enroll(workspaceId, t.targetId, {
+            subscriptionIds: [subscription.id],
+            whatsappAccountId: account.id,
+          });
+          this.logger.log(
+            `Keyword "${t.keyword}" enrolled contact ${contact.id} in sequence ${t.targetId}`,
+          );
+        } catch (err: unknown) {
+          // Already enrolled or sequence inactive — don't crash the inbound flow
+          this.logger.warn(`Sequence enroll skipped: ${(err as Error)?.message}`);
+        }
         return;
       }
     }

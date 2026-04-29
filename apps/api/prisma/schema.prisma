@@ -123,6 +123,7 @@ enum KeywordActionType {
   ASSIGN_AGENT
   TAG_CONTACT
   ADD_TO_GROUP
+  ENROLL_SEQUENCE
 }
 
 enum AutoresponderMatchType {
