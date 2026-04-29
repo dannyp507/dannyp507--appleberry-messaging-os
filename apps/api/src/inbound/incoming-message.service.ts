@@ -13,6 +13,7 @@ import { ChatbotEngineService } from '../chatbot/chatbot-engine.service';
 import { TemplateRenderService } from '../messaging/template-render.service';
 import { MessagesService } from '../messages/messages.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SubscribersService } from '../subscribers/subscribers.service';
 import type { IncomingMessageJob } from '../queue/queue.constants';
 import { normalizePhoneE164 } from '../contacts/phone.util';
 
@@ -26,6 +27,7 @@ export class IncomingMessageService {
     private readonly templates: TemplateRenderService,
     private readonly messages: MessagesService,
     private readonly ai: AiService,
+    private readonly subscribers: SubscribersService,
   ) {}
 
   /** Replace Planify X / common template variables in a response string */
@@ -85,6 +87,13 @@ export class IncomingMessageService {
         data: { firstName: senderName },
       });
     }
+
+    // Auto-register as subscriber for this WhatsApp account (fire-and-forget)
+    this.subscribers
+      .upsertFromInbound(workspaceId, contact.id, account.id)
+      .catch((err) =>
+        this.logger.warn(`subscriber upsert failed: ${err?.message}`),
+      );
 
     let thread = await this.prisma.inboxThread.findFirst({
       where: { workspaceId, contactId: contact.id, whatsappAccountId: account.id },
@@ -237,7 +246,12 @@ export class IncomingMessageService {
       where: {
         workspaceId,
         active: true,
-        NOT: { channel: 'MESSENGER' },
+        // NULL-safe: include triggers with no channel (all channels) or any non-MESSENGER channel.
+        // NOT: { channel: 'MESSENGER' } would incorrectly exclude NULL-channel rows.
+        OR: [
+          { channel: null },
+          { channel: { not: 'MESSENGER' } },
+        ],
       },
       orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     });

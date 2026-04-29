@@ -19,4 +19,8 @@ export const qk = {
   analyticsDashboard: ["analytics", "dashboard"] as const,
   autoresponderRules: ["autoresponder-rules"] as const,
   keywordTriggers: ["keyword-triggers"] as const,
+  googleIntegrationStatus: ["google-integration-status"] as const,
+  googleSpreadsheets: ["google-spreadsheets"] as const,
+  googleSheetTabs: (spreadsheetId: string) => ["google-sheet-tabs", spreadsheetId] as const,
+  googleCalendars: ["google-calendars"] as const,
 };

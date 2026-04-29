@@ -178,8 +178,10 @@ function AccountSection({
     ? account.name + (account.phone ? ` · ${account.phone}` : "")
     : "Workspace-wide (all numbers)";
 
+  // Cloud accounts have no session row — fall back to sessionStatus on the account itself
+  const effectiveStatus = account?.session?.status ?? account?.sessionStatus ?? "DISCONNECTED";
   const statusDot =
-    account?.session?.status === "CONNECTED"
+    effectiveStatus === "CONNECTED"
       ? "bg-emerald-500"
       : account
       ? "bg-zinc-300 dark:bg-zinc-600"

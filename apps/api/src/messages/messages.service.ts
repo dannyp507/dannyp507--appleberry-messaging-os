@@ -7,6 +7,7 @@ import {
   WhatsAppProviderType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { WaInteractive } from '../whatsapp-cloud/whatsapp-cloud.types';
 import {
   MESSAGES_SEND_QUEUE,
   type SendMessageJob,
@@ -133,6 +134,70 @@ export class MessagesService {
     await this.sendQueue.add('send-text', job, {
       jobId: `msg-${log.id}`,
       attempts: 5,
+      backoff: { type: 'exponential', delay: 2000 },
+    });
+
+    return { messageLogId: log.id, status: MessageLogStatus.PENDING, queued: true };
+  }
+
+  /**
+   * Enqueue a Cloud API interactive message (reply buttons or list picker).
+   * Falls back to plain text on non-Cloud accounts.
+   */
+  async enqueueOutboundInteractive(params: {
+    workspaceId: string;
+    whatsappAccountId: string | null | undefined;
+    to: string;
+    interactive: WaInteractive;
+    contactId?: string | null;
+    inboxThreadId?: string | null;
+  }) {
+    if (!params.whatsappAccountId) {
+      throw new NotFoundException(
+        'enqueueOutboundInteractive requires a whatsappAccountId',
+      );
+    }
+    const account = await this.prisma.whatsAppAccount.findFirst({
+      where: { id: params.whatsappAccountId, workspaceId: params.workspaceId },
+    });
+    if (!account) throw new NotFoundException('WhatsApp account not found');
+
+    // Use the body text as the inbox message preview
+    const preview = params.interactive.body.text.slice(0, 200);
+
+    const log = await this.prisma.messageLog.create({
+      data: {
+        workspaceId: params.workspaceId,
+        whatsappAccountId: account.id,
+        contactId: params.contactId ?? null,
+        message: preview,
+        status: MessageLogStatus.PENDING,
+        provider: account.providerType === WhatsAppProviderType.CLOUD ? 'CLOUD' : 'MOCK',
+      },
+    });
+
+    if (params.inboxThreadId) {
+      await this.prisma.inboxMessage.create({
+        data: {
+          threadId: params.inboxThreadId,
+          direction: InboxMessageDirection.OUTBOUND,
+          message: preview,
+        },
+      });
+    }
+
+    const job: SendMessageJob = {
+      messageLogId: log.id,
+      to: params.to,
+      message: preview,
+      workspaceId: params.workspaceId,
+      accountId: account.id,
+      interactive: params.interactive,
+    };
+
+    await this.sendQueue.add('send-interactive', job, {
+      jobId: `msg-${log.id}`,
+      attempts: 3,
       backoff: { type: 'exponential', delay: 2000 },
     });
 

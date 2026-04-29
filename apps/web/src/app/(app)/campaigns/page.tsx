@@ -4,24 +4,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { TablePageSkeleton } from "@/components/shell/page-skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -31,17 +15,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api, getApiErrorMessage } from "@/lib/api/client";
-import type {
-  Campaign,
-  CampaignStatus,
-  ContactGroup,
-  Template,
-  WhatsAppAccount,
-} from "@/lib/api/types";
+import type { Campaign, CampaignStatus } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
 import { qk } from "@/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Megaphone } from "lucide-react";
+import { Loader2, Megaphone, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -67,11 +45,6 @@ function campaignProgress(c: Campaign): number {
 
 export default function CampaignsPage() {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [templateId, setTemplateId] = useState("");
-  const [groupId, setGroupId] = useState("");
-  const [waId, setWaId] = useState("__auto__");
 
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: qk.campaigns,
@@ -81,50 +54,15 @@ export default function CampaignsPage() {
     },
   });
 
-  const { data: templates = [] } = useQuery({
-    queryKey: qk.templates,
-    queryFn: async () => {
-      const { data } = await api.get<Template[]>("/templates");
-      return data;
-    },
-  });
-
-  const { data: groups = [] } = useQuery({
-    queryKey: qk.contactGroups,
-    queryFn: async () => {
-      const { data } = await api.get<ContactGroup[]>("/contact-groups");
-      return data;
-    },
-  });
-
-  const { data: accounts = [] } = useQuery({
-    queryKey: qk.whatsappAccounts,
-    queryFn: async () => {
-      const { data } = await api.get<WhatsAppAccount[]>("/whatsapp/accounts");
-      return data;
-    },
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      await api.post("/campaigns", {
-        name,
-        templateId,
-        contactGroupId: groupId,
-        whatsappAccountId:
-          waId && waId !== "__auto__" ? waId : undefined,
-      });
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/campaigns/${id}`);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.campaigns });
-      setOpen(false);
-      setName("");
-      setTemplateId("");
-      setGroupId("");
-      setWaId("__auto__");
-      toast.success("Campaign created");
+      toast.success("Campaign deleted");
     },
-    onError: (e) => toast.error("Could not create campaign", getApiErrorMessage(e)),
+    onError: (e) => toast.error("Could not delete campaign", getApiErrorMessage(e)),
   });
 
   const startMutation = useMutation({
@@ -185,101 +123,15 @@ export default function CampaignsPage() {
         title="Campaigns"
         description="Templates, audiences, and live delivery progress."
         action={
-          <>
+          <Link href="/campaigns/new">
             <Button
               type="button"
               className="rounded-xl shadow-sm transition-shadow duration-200 hover:shadow-md"
-              onClick={() => setOpen(true)}
             >
+              <Plus className="mr-2 size-4" />
               New campaign
             </Button>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogContent className="rounded-xl sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-xl">Create campaign</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-2">
-                  <div className="grid gap-2">
-                    <Label>Name</Label>
-                    <Input
-                      className="rounded-xl"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Template</Label>
-                    <Select
-                      value={templateId}
-                      onValueChange={(v) => setTemplateId(v ?? "")}
-                    >
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="Select template" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        {templates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Contact group</Label>
-                    <Select
-                      value={groupId}
-                      onValueChange={(v) => setGroupId(v ?? "")}
-                    >
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="Select group" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        {groups.map((g) => (
-                          <SelectItem key={g.id} value={g.id}>
-                            {g.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>WhatsApp account (optional)</Label>
-                    <Select
-                      value={waId}
-                      onValueChange={(v) => setWaId(v ?? "__auto__")}
-                    >
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="Default / first available" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="__auto__">Let backend choose</SelectItem>
-                        {accounts.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {a.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    className="rounded-xl"
-                    disabled={
-                      createMutation.isPending || !name || !templateId || !groupId
-                    }
-                    onClick={() => createMutation.mutate()}
-                  >
-                    {createMutation.isPending ? (
-                      <Loader2 className="mr-2 size-4 animate-spin" />
-                    ) : null}
-                    Create
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </>
+          </Link>
         }
       />
 
@@ -289,13 +141,12 @@ export default function CampaignsPage() {
           title="No campaigns yet"
           description="Pair a template with a contact group and start reaching customers."
           action={
-            <Button
-              className="rounded-xl"
-              type="button"
-              onClick={() => setOpen(true)}
-            >
-              Create your first campaign
-            </Button>
+            <Link href="/campaigns/new">
+              <Button className="rounded-xl" type="button">
+                <Plus className="mr-2 size-4" />
+                Create your first campaign
+              </Button>
+            </Link>
           }
         />
       ) : (
@@ -387,6 +238,19 @@ export default function CampaignsPage() {
                             ) : (
                               "Pause"
                             )}
+                          </Button>
+                        )}
+                        {(c.status === "DRAFT" || c.status === "COMPLETED") && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="rounded-xl text-destructive hover:text-destructive"
+                            onClick={() => deleteMutation.mutate(c.id)}
+                            disabled={deleteMutation.isPending && deleteMutation.variables === c.id}
+                          >
+                            {deleteMutation.isPending && deleteMutation.variables === c.id
+                              ? <Loader2 className="size-4 animate-spin" />
+                              : <Trash2 className="size-4" />}
                           </Button>
                         )}
                       </div>

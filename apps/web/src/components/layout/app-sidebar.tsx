@@ -18,6 +18,7 @@ import {
   GitBranch,
   Tag,
   Bot,
+  UserCheck,
   Smartphone,
   Share2,
   Send,
@@ -34,11 +35,12 @@ import {
 // ─── Nav definitions ──────────────────────────────────────────────────────────
 
 const mainNav = [
-  { href: "/",            label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/inbox",       label: "Inbox",      icon: Inbox           },
-  { href: "/contacts",    label: "Contacts",   icon: Users           },
-  { href: "/campaigns",   label: "Campaigns",  icon: Megaphone       },
-  { href: "/templates",   label: "Templates",  icon: FileText        },
+  { href: "/",             label: "Dashboard",   icon: LayoutDashboard },
+  { href: "/inbox",        label: "Inbox",       icon: Inbox           },
+  { href: "/contacts",     label: "Contacts",    icon: Users           },
+  { href: "/subscribers",  label: "Subscribers", icon: UserCheck       },
+  { href: "/campaigns",    label: "Campaigns",   icon: Megaphone       },
+  { href: "/templates",    label: "Templates",   icon: FileText        },
 ] satisfies NavEntry[];
 
 const automationNav = [

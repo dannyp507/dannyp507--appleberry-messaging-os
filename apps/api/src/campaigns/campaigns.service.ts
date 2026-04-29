@@ -13,6 +13,7 @@ import {
   type CampaignOrchestrateJob,
 } from '../queue/queue.constants';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
+import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { StartCampaignDto } from './dto/start-campaign.dto';
 
 @Injectable()
@@ -67,8 +68,45 @@ export class CampaignsService {
         contactGroupId: dto.contactGroupId,
         whatsappAccountId: dto.whatsappAccountId ?? null,
         status: CampaignStatus.DRAFT,
+        minDelayMs: dto.minDelayMs ?? 1000,
+        maxDelayMs: dto.maxDelayMs ?? 5000,
+        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
+        sendWindowStart: dto.sendWindowStart ?? null,
+        sendWindowEnd: dto.sendWindowEnd ?? null,
       },
     });
+  }
+
+  async update(workspaceId: string, id: string, dto: UpdateCampaignDto) {
+    const campaign = await this.prisma.campaign.findFirst({ where: { id, workspaceId } });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (campaign.status !== CampaignStatus.DRAFT) {
+      throw new BadRequestException('Only DRAFT campaigns can be updated');
+    }
+    return this.prisma.campaign.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.templateId !== undefined && { templateId: dto.templateId }),
+        ...(dto.contactGroupId !== undefined && { contactGroupId: dto.contactGroupId }),
+        ...(dto.whatsappAccountId !== undefined && { whatsappAccountId: dto.whatsappAccountId }),
+        ...(dto.minDelayMs !== undefined && { minDelayMs: dto.minDelayMs }),
+        ...(dto.maxDelayMs !== undefined && { maxDelayMs: dto.maxDelayMs }),
+        ...(dto.scheduledAt !== undefined && { scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null }),
+        ...(dto.sendWindowStart !== undefined && { sendWindowStart: dto.sendWindowStart }),
+        ...(dto.sendWindowEnd !== undefined && { sendWindowEnd: dto.sendWindowEnd }),
+      },
+    });
+  }
+
+  async remove(workspaceId: string, id: string) {
+    const campaign = await this.prisma.campaign.findFirst({ where: { id, workspaceId } });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (campaign.status === CampaignStatus.RUNNING) {
+      throw new BadRequestException('Cannot delete a running campaign — pause it first');
+    }
+    await this.prisma.campaign.delete({ where: { id } });
+    return { deleted: true };
   }
 
   async start(workspaceId: string, id: string, dto: StartCampaignDto) {
@@ -89,8 +127,8 @@ export class CampaignsService {
 
     await this.billing.recordCampaignRun(workspaceId);
 
-    const minDelayMs = dto.minDelayMs ?? 1000;
-    const maxDelayMs = dto.maxDelayMs ?? 3000;
+    const minDelayMs = dto.minDelayMs ?? campaign.minDelayMs ?? 1000;
+    const maxDelayMs = dto.maxDelayMs ?? campaign.maxDelayMs ?? 5000;
 
     await this.prisma.campaign.update({
       where: { id },

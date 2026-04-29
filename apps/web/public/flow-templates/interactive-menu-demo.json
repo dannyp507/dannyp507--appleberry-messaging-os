@@ -1,0 +1,133 @@
+{
+  "_format": "appleberry-flow-v2",
+  "name": "Interactive Button Menu Demo",
+  "_meta": {
+    "description": "A full demo showcasing BUTTONS and LIST nodes. Customers are greeted, shown a button menu (Support / Sales / Other), then routed to the right reply. Includes an AI fallback for anything else.",
+    "steps": 10
+  },
+  "entryKey": "welcome",
+  "nodes": [
+    {
+      "key": "welcome",
+      "label": "Welcome",
+      "type": "TEXT",
+      "content": {
+        "text": "👋 Hi {{name}}, welcome to *[Your Business]*!\n\nI'm your virtual assistant — here to help you quickly."
+      },
+      "position": { "x": 80, "y": 60 }
+    },
+    {
+      "key": "main_menu",
+      "label": "Main Menu (Buttons)",
+      "type": "BUTTONS",
+      "content": {
+        "prompt": "How can we help you today? Tap a button below 👇",
+        "buttons": [
+          { "id": "btn_support", "label": "Support" },
+          { "id": "btn_sales",   "label": "Sales"   },
+          { "id": "btn_other",   "label": "Other"   }
+        ]
+      },
+      "position": { "x": 80, "y": 240 }
+    },
+    {
+      "key": "route_choice",
+      "label": "Route by Choice",
+      "type": "CONDITION",
+      "content": {
+        "variableKey": "lastInput"
+      },
+      "position": { "x": 80, "y": 420 }
+    },
+    {
+      "key": "support_reply",
+      "label": "Support Reply",
+      "type": "TEXT",
+      "content": {
+        "text": "🛠️ *Support*\n\nNo problem! Our support team is ready.\n\nPlease describe your issue and we'll get back to you within 2 hours.\n\nOr call us: *+27 XX XXX XXXX*"
+      },
+      "position": { "x": -200, "y": 620 }
+    },
+    {
+      "key": "sales_list",
+      "label": "Sales — Product List",
+      "type": "LIST",
+      "content": {
+        "prompt": "🛒 *Sales & Products*\n\nHere's what we offer — select one to learn more:",
+        "buttonText": "See Products",
+        "sections": [
+          {
+            "title": "Our Products",
+            "rows": [
+              { "id": "row_1", "title": "Starter Package",  "description": "Perfect for small teams" },
+              { "id": "row_2", "title": "Growth Package",   "description": "For scaling businesses" },
+              { "id": "row_3", "title": "Enterprise Plan",  "description": "Custom pricing & SLA" },
+              { "id": "row_4", "title": "Get a Quote",      "description": "Tell us your needs" }
+            ]
+          }
+        ]
+      },
+      "position": { "x": 80, "y": 620 }
+    },
+    {
+      "key": "route_product",
+      "label": "Route by Product",
+      "type": "CONDITION",
+      "content": {
+        "variableKey": "lastInput"
+      },
+      "position": { "x": 80, "y": 820 }
+    },
+    {
+      "key": "product_reply",
+      "label": "Product Info (AI)",
+      "type": "AI_REPLY",
+      "content": {
+        "systemPrompt": "You are a friendly sales assistant for [Your Business]. The customer selected a product from our list. Give a brief, enthusiastic 2-3 sentence overview of that product and invite them to book a call or ask questions. Keep it under 200 characters."
+      },
+      "position": { "x": 80, "y": 1000 }
+    },
+    {
+      "key": "ask_name",
+      "label": "Ask Name",
+      "type": "QUESTION",
+      "content": {
+        "prompt": "👤 Sure! What's your name so I can personalise this for you?",
+        "variableKey": "name"
+      },
+      "position": { "x": 360, "y": 620 }
+    },
+    {
+      "key": "other_reply",
+      "label": "Other — AI Reply",
+      "type": "AI_REPLY",
+      "content": {
+        "systemPrompt": "You are a helpful assistant for [Your Business]. Answer the customer's question politely and concisely. If you don't know the answer, tell them a human agent will follow up. Keep replies under 250 characters."
+      },
+      "position": { "x": 360, "y": 820 }
+    },
+    {
+      "key": "close",
+      "label": "Sign-off",
+      "type": "TEXT",
+      "content": {
+        "text": "✅ Thanks {{name}}! Is there anything else I can help you with?\n\nType *MENU* anytime to see the options again."
+      },
+      "position": { "x": 80, "y": 1200 }
+    }
+  ],
+  "edges": [
+    { "from": "welcome",       "to": "main_menu"    },
+    { "from": "main_menu",     "to": "route_choice" },
+    { "from": "route_choice",  "to": "support_reply", "condition": "btn_support" },
+    { "from": "route_choice",  "to": "sales_list",    "condition": "btn_sales"   },
+    { "from": "route_choice",  "to": "ask_name",      "condition": "btn_other"   },
+    { "from": "route_choice",  "to": "other_reply"                               },
+    { "from": "sales_list",    "to": "route_product" },
+    { "from": "route_product", "to": "product_reply" },
+    { "from": "product_reply", "to": "close"         },
+    { "from": "ask_name",      "to": "other_reply"   },
+    { "from": "other_reply",   "to": "close"         },
+    { "from": "support_reply", "to": "close"         }
+  ]
+}

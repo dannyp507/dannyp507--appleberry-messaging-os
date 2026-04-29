@@ -32,6 +32,8 @@ import { WorkspaceAiSettingsModule } from './workspace-ai-settings/workspace-ai-
 import { NotificationsModule } from './notifications/notifications.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { SupportModule } from './support/support.module';
+import { WhatsAppCloudModule } from './whatsapp-cloud/whatsapp-cloud.module';
+import { SubscribersModule } from './subscribers/subscribers.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -73,6 +75,8 @@ import { AppController } from './app.controller';
     NotificationsModule,
     IntegrationsModule,
     SupportModule,
+    WhatsAppCloudModule,
+    SubscribersModule,
   ],
   providers: [
     {

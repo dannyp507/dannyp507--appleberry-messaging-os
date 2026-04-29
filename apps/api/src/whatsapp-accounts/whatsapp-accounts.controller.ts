@@ -71,4 +71,93 @@ export class WhatsappAccountsController {
   ) {
     return this.accounts.create(workspace.id, dto);
   }
+
+  /**
+   * Connect a WhatsApp Cloud API account.
+   * Verifies the credentials with Meta before saving.
+   *
+   * POST /whatsapp/accounts/cloud-connect          → creates a new account
+   * POST /whatsapp/accounts/:id/cloud-connect      → updates an existing account
+   */
+  @Post('cloud-connect')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  cloudConnectNew(
+    @CurrentWorkspace() workspace: Workspace,
+    @Body()
+    body: {
+      name?: string;
+      phoneNumberId: string;
+      accessToken: string;
+      wabaId?: string;
+      verifyToken?: string;
+    },
+  ) {
+    return this.accounts.connectCloud(workspace.id, body);
+  }
+
+  @Post(':id/cloud-connect')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  cloudConnectExisting(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body()
+    body: {
+      phoneNumberId: string;
+      accessToken: string;
+      wabaId?: string;
+      verifyToken?: string;
+    },
+  ) {
+    return this.accounts.connectCloud(workspace.id, { ...body, accountId: id });
+  }
+
+  /**
+   * Complete WhatsApp Embedded Signup (Facebook Login for Business).
+   *
+   * Accepts EITHER:
+   *   - code          : OAuth code from FB.login → backend exchanges it automatically
+   *   - accessToken   : manually supplied permanent token (fallback)
+   *
+   * POST /whatsapp/accounts/embedded-signup        → creates a new account
+   * POST /whatsapp/accounts/:id/embedded-signup    → updates an existing account
+   */
+  @Post('embedded-signup')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  embeddedSignupNew(
+    @CurrentWorkspace() workspace: Workspace,
+    @Body()
+    body: {
+      code?: string;
+      accessToken?: string;
+      phoneNumberId: string;
+      wabaId?: string;
+      name?: string;
+    },
+  ) {
+    return this.accounts.embeddedSignup(workspace.id, body);
+  }
+
+  @Post(':id/embedded-signup')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  embeddedSignupExisting(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body()
+    body: {
+      code?: string;
+      accessToken?: string;
+      phoneNumberId: string;
+      wabaId?: string;
+    },
+  ) {
+    return this.accounts.embeddedSignup(workspace.id, { ...body, accountId: id });
+  }
 }

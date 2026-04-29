@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -16,6 +18,7 @@ import { WorkspaceContextGuard } from '../common/guards/workspace-context.guard'
 import type { Workspace } from '@prisma/client';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { StartCampaignDto } from './dto/start-campaign.dto';
 
 @Controller('campaigns')
@@ -36,6 +39,23 @@ export class CampaignsController {
     @Body() dto: CreateCampaignDto,
   ) {
     return this.campaigns.create(workspace.id, dto);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCampaignDto,
+  ) {
+    return this.campaigns.update(workspace.id, id, dto);
+  }
+
+  @Delete(':id')
+  remove(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.campaigns.remove(workspace.id, id);
   }
 
   @Post(':id/start')

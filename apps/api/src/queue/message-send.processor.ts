@@ -47,6 +47,7 @@ export class MessageSendProcessor extends WorkerHost {
       campaignRecipientId,
       campaignId,
       mediaUrl,
+      interactive,
     } = job.data;
 
     const log = await this.prisma.messageLog.findUnique({
@@ -117,7 +118,15 @@ export class MessageSendProcessor extends WorkerHost {
         throw err;
       }
 
-      if (mediaUrl) {
+      if (interactive) {
+        // Interactive message (buttons / list) — Cloud API only; fall back to text on others
+        if (provider.sendInteractive) {
+          await provider.sendInteractive(to, interactive, accountId);
+        } else {
+          // Non-Cloud provider: send body text as plain message
+          await provider.sendText(to, interactive.body.text ?? message, accountId);
+        }
+      } else if (mediaUrl) {
         const uploadsBase = this.config.get<string>('UPLOADS_BASE_DIR') ?? '/app/uploads';
         const relPath = mediaUrl.replace(/^\/uploads/, '');
         const absPath = path.join(uploadsBase, relPath);

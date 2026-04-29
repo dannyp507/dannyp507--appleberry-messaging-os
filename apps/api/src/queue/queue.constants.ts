@@ -1,3 +1,5 @@
+import type { WaInteractive } from '../whatsapp-cloud/whatsapp-cloud.types';
+
 /** BullMQ disallows ":" in queue names; logical name remains "messages:send". */
 export const MESSAGES_SEND_QUEUE = 'messages-send';
 
@@ -28,6 +30,9 @@ export type SendMessageJob = {
    *  When set the processor sends a media message (image/video/document/audio)
    *  instead of plain text; `message` becomes the caption. */
   mediaUrl?: string;
+  /** When set, sends a WhatsApp Cloud API interactive message (buttons / list).
+   *  Only works with Cloud API accounts — Baileys/Mock fall back to plain text. */
+  interactive?: WaInteractive;
 };
 
 export type ContactsImportJob = {

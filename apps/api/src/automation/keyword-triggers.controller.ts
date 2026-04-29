@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -36,6 +37,15 @@ export class KeywordTriggersController {
     @Body() dto: CreateKeywordTriggerDto,
   ) {
     return this.automation.createKeywordTrigger(workspace.id, dto);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { active?: boolean },
+  ) {
+    return this.automation.updateKeywordTrigger(workspace.id, id, body);
   }
 
   @Delete(':id')

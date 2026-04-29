@@ -96,6 +96,9 @@ enum ChatbotNodeType {
   ADD_TO_GROUP
   START_FLOW
   END
+  SAVE_TO_SHEET
+  CHECK_CALENDAR
+  CREATE_BOOKING
 }
 
 enum ChatbotRunStatus {
@@ -175,6 +178,11 @@ enum ContactLeadStage {
   PROPOSAL
   CONVERTED
   LOST
+}
+
+enum SubscriberStatus {
+  SUBSCRIBED
+  UNSUBSCRIBED
 }
 
 enum ApiKeyScope {
@@ -300,6 +308,10 @@ model Workspace {
   billingEvents        BillingEvent[]
   customFieldDefs      ContactCustomFieldDef[]
   aiSettings           WorkspaceAiSettings?
+  googleIntegration    GoogleIntegration?
+  leadCaptureConfig    LeadCaptureConfig?
+  calendarConfig       CalendarConfig?
+  contactSubscriptions ContactSubscription[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -496,12 +508,13 @@ model WhatsAppAccount {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  workspace          Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  messageLogs        MessageLog[]
-  campaigns          Campaign[]
-  inboxThreads       InboxThread[]
-  session            WhatsAppSession?
-  autoresponderRules AutoresponderRule[]
+  workspace             Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messageLogs           MessageLog[]
+  campaigns             Campaign[]
+  inboxThreads          InboxThread[]
+  session               WhatsAppSession?
+  autoresponderRules    AutoresponderRule[]
+  contactSubscriptions  ContactSubscription[]
 
   @@index([workspaceId])
 }
@@ -615,6 +628,7 @@ model Contact {
   messageLogs        MessageLog[]
   chatbotRuns        ChatbotRun[]
   inboxThreads       InboxThread[]
+  subscriptions      ContactSubscription[]
 
   @@unique([workspaceId, phone])
   @@index([workspaceId])
@@ -682,6 +696,29 @@ model ContactGroupMember {
   @@index([groupId])
 }
 
+/// Tracks subscription status per contact per WhatsApp account.
+/// Auto-created on first inbound message; updated when contact opts out.
+model ContactSubscription {
+  id                String           @id @default(uuid()) @db.Uuid
+  workspaceId       String           @db.Uuid
+  contactId         String           @db.Uuid
+  whatsappAccountId String           @db.Uuid
+  status            SubscriberStatus @default(SUBSCRIBED)
+  subscribedAt      DateTime         @default(now())
+  unsubscribedAt    DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  whatsappAccount WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, whatsappAccountId])
+  @@index([workspaceId, whatsappAccountId])
+  @@index([workspaceId, status])
+  @@index([contactId])
+}
+
 // ─── Templates ────────────────────────────��───────────────────────────────────
 
 model Template {
@@ -727,6 +764,8 @@ model Campaign {
   rotateAccounts       Boolean        @default(false)
   dailyCap             Int?
   throttleMs           Int            @default(1000)
+  minDelayMs           Int            @default(1000)
+  maxDelayMs           Int            @default(5000)
   deduplicateContacts  Boolean        @default(true)
   testMode             Boolean        @default(false)
   sendWindowStart      String?
@@ -1231,6 +1270,62 @@ model Export {
   updatedAt   DateTime     @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// ─── Google Integrations ──────────────────────────────────────────────────────
+
+/// Stores OAuth2 tokens for a workspace's connected Google account
+model GoogleIntegration {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspaceId  String    @unique @db.Uuid
+  email        String
+  accessToken  String
+  refreshToken String
+  expiry       DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+/// Configures which Google Sheet to write leads into and which fields to capture
+model LeadCaptureConfig {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @unique @db.Uuid
+  /// Google Sheets spreadsheet ID
+  sheetId      String
+  sheetName    String   @default("Leads")
+  /// Ordered list of field keys: ["firstName","lastName","phone","email","service","notes"]
+  fields       Json     @default("[\"firstName\",\"lastName\",\"phone\",\"email\",\"source\",\"notes\"]")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, map: "LeadCaptureConfig_workspace_fkey")
+
+  @@index([workspaceId])
+}
+
+/// Configures which Google Calendar to use for booking checks
+model CalendarConfig {
+  id                String   @id @default(uuid()) @db.Uuid
+  workspaceId       String   @unique @db.Uuid
+  /// Google Calendar ID — usually "primary" or a specific calendar ID
+  calendarId        String   @default("primary")
+  businessEmail     String
+  /// Appointment slot duration in minutes
+  slotDuration      Int      @default(60)
+  /// How many days ahead to allow bookings
+  bookingWindowDays Int      @default(14)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, map: "CalendarConfig_workspace_fkey")
 
   @@index([workspaceId])
 }

@@ -40,6 +40,30 @@ export interface ExternalFlowJson {
   templates: unknown[];
 }
 
+// ── Native Appleberry flow JSON (v2) — supports all node types ────────────────
+
+interface NativeFlowNode {
+  key: string;                     // unique key within this file (used for edges)
+  label?: string;                  // display name for the node
+  type: string;                    // ChatbotNodeType string
+  content: Record<string, unknown>;
+  position?: { x: number; y: number };
+}
+
+interface NativeFlowEdge {
+  from: string;                    // key of source node
+  to: string;                      // key of target node
+  condition?: string;              // condition value (for CONDITION node outgoing edges)
+}
+
+interface NativeFlowJson {
+  _format: 'appleberry-flow-v2';
+  name?: string;
+  entryKey?: string;
+  nodes: NativeFlowNode[];
+  edges: NativeFlowEdge[];
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 @Injectable()
@@ -54,12 +78,17 @@ export class ChatbotFlowIoService {
   async importFlow(
     workspaceId: string,
     name: string,
-    payload: ExternalFlowJson,
+    payload: ExternalFlowJson | NativeFlowJson | Record<string, unknown>,
   ) {
-    const chatbots = payload?.chatbots;
+    // Detect native Appleberry v2 format
+    if ((payload as NativeFlowJson)._format === 'appleberry-flow-v2') {
+      return this.importNativeFlow(workspaceId, name, payload as NativeFlowJson);
+    }
+
+    const chatbots = (payload as ExternalFlowJson)?.chatbots;
     if (!Array.isArray(chatbots) || chatbots.length === 0) {
       throw new BadRequestException(
-        'Invalid file: no chatbot nodes found. Expected { chatbots: [...] }',
+        'Invalid file: no chatbot nodes found. Expected { chatbots: [...] } or { _format: "appleberry-flow-v2", nodes: [...] }',
       );
     }
 
@@ -174,6 +203,90 @@ export class ChatbotFlowIoService {
       await this.prisma.chatbotFlow.update({
         where: { id: flow.id },
         data: { entryNodeId },
+      });
+    }
+
+    return this.prisma.chatbotFlow.findFirst({
+      where: { id: flow.id },
+      include: {
+        nodes: true,
+        edges: true,
+        _count: { select: { nodes: true, edges: true } },
+      },
+    });
+  }
+
+  // ── IMPORT NATIVE (appleberry-flow-v2) ───────────────────────────────────
+
+  private async importNativeFlow(
+    workspaceId: string,
+    name: string,
+    payload: NativeFlowJson,
+  ) {
+    const nodes = payload.nodes;
+    if (!Array.isArray(nodes) || nodes.length === 0) {
+      throw new BadRequestException('Native flow has no nodes');
+    }
+
+    await this.billing.assertCanCreateChatbotFlow(workspaceId);
+
+    const flowName = name?.trim().length >= 2 ? name.trim() : (payload.name ?? 'Imported Flow');
+    const flow = await this.prisma.chatbotFlow.create({
+      data: { workspaceId, name: flowName, status: ChatbotFlowStatus.DRAFT },
+    });
+
+    // First pass: create all nodes, build key → db id map
+    const keyToId = new Map<string, string>();
+
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const nodeType = Object.values(ChatbotNodeType).includes(n.type as ChatbotNodeType)
+        ? (n.type as ChatbotNodeType)
+        : ChatbotNodeType.TEXT;
+
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      const pos = n.position ?? { x: 60 + col * 280, y: 60 + row * 180 };
+
+      const created = await this.prisma.chatbotNode.create({
+        data: {
+          flowId: flow.id,
+          type: nodeType,
+          content: n.content as Prisma.InputJsonValue,
+          position: pos as Prisma.InputJsonValue,
+          label: n.label ?? undefined,
+        },
+      });
+      keyToId.set(n.key, created.id);
+    }
+
+    // Second pass: create edges
+    for (const e of payload.edges ?? []) {
+      const fromId = keyToId.get(e.from);
+      const toId   = keyToId.get(e.to);
+      if (!fromId || !toId) continue;
+      await this.prisma.chatbotEdge
+        .create({
+          data: {
+            flowId: flow.id,
+            fromNodeId: fromId,
+            toNodeId: toId,
+            // condition is { equals: "value" } JSON — engine checks e.condition?.equals
+            ...(e.condition ? { condition: { equals: e.condition } as Prisma.InputJsonValue } : {}),
+          },
+        })
+        .catch(() => {/* skip duplicates */});
+    }
+
+    // Set entry node
+    const entryId = payload.entryKey
+      ? keyToId.get(payload.entryKey)
+      : keyToId.get(nodes[0]?.key ?? '');
+
+    if (entryId) {
+      await this.prisma.chatbotFlow.update({
+        where: { id: flow.id },
+        data: { entryNodeId: entryId },
       });
     }
 

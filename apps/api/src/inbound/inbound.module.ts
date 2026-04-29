@@ -5,6 +5,7 @@ import { CommonModule } from '../common/common.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { MessagesModule } from '../messages/messages.module';
 import { QueueModule } from '../queue/queue.module';
+import { SubscribersModule } from '../subscribers/subscribers.module';
 import { IncomingMessageService } from './incoming-message.service';
 import { WebhookSecretGuard } from './guards/webhook-secret.guard';
 import { WebhooksController } from './webhooks.controller';
@@ -15,6 +16,7 @@ import { WebhooksController } from './webhooks.controller';
     AiModule,
     MessagingModule,
     MessagesModule,
+    SubscribersModule,
     forwardRef(() => ChatbotModule),
     forwardRef(() => QueueModule),
   ],
