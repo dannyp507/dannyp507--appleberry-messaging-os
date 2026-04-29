@@ -242,6 +242,41 @@ export class SequencesService {
     });
   }
 
+  /** Cancel all ACTIVE enrollments for a contact subscription (e.g. on STOP keyword). */
+  async cancelSubscriptionEnrollments(
+    workspaceId: string,
+    subscriptionId: string,
+  ): Promise<number> {
+    const active = await this.prisma.dripEnrollment.findMany({
+      where: {
+        workspaceId,
+        contactSubscriptionId: subscriptionId,
+        status: DripEnrollmentStatus.ACTIVE,
+      },
+      select: { id: true },
+    });
+
+    for (const { id } of active) {
+      try {
+        const job = await this.dripQueue.getJob(`drip-${id}`);
+        if (job) await job.remove();
+      } catch {
+        // ignore missing jobs
+      }
+    }
+
+    if (active.length > 0) {
+      await this.prisma.dripEnrollment.updateMany({
+        where: {
+          id: { in: active.map((e) => e.id) },
+        },
+        data: { status: DripEnrollmentStatus.CANCELLED },
+      });
+    }
+
+    return active.length;
+  }
+
   async listEnrollments(workspaceId: string, sequenceId: string) {
     await this._assertOwns(workspaceId, sequenceId);
     return this.prisma.dripEnrollment.findMany({

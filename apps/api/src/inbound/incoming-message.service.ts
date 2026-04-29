@@ -90,13 +90,15 @@ export class IncomingMessageService {
       });
     }
 
-    // Auto-register as subscriber for this WhatsApp account (fire-and-forget)
-    this.subscribers
+    // Auto-register as subscriber for this WhatsApp account (awaited so
+    // the subscription row exists before the opt-in/out check below)
+    await this.subscribers
       .upsertFromInbound(workspaceId, contact.id, account.id)
       .catch((err) =>
         this.logger.warn(`subscriber upsert failed: ${err?.message}`),
       );
 
+    // Find or create inbox thread + record inbound message (always, before any routing)
     let thread = await this.prisma.inboxThread.findFirst({
       where: { workspaceId, contactId: contact.id, whatsappAccountId: account.id },
     });
@@ -123,6 +125,20 @@ export class IncomingMessageService {
         message: job.text,
       },
     });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 0: Reserved opt-out / opt-in keywords — handled before everything else
+    // ─────────────────────────────────────────────────────────────────────────
+    const optHandled = await this.handleOptInOut(
+      workspaceId,
+      contact.id,
+      account,
+      thread,
+      replyTo,
+      senderName,
+      job.text,
+    );
+    if (optHandled) return;
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Autoresponder rules (chatbot items) — checked FIRST so that
@@ -414,6 +430,87 @@ export class IncomingMessageService {
         inboxThreadId: thread.id,
       });
     }
+  }
+
+  /**
+   * Intercepts STOP / UNSUBSCRIBE (opt-out) and START / SUBSCRIBE (opt-in)
+   * keywords before any other logic. Returns true if the message was handled
+   * so the caller can bail out early.
+   */
+  private async handleOptInOut(
+    workspaceId: string,
+    contactId: string,
+    account: { id: string },
+    thread: { id: string },
+    replyTo: string,
+    senderName: string,
+    text: string,
+  ): Promise<boolean> {
+    const msg = text.trim().toLowerCase();
+
+    const OPT_OUT = new Set(['stop', 'unsubscribe', 'cancel', 'end', 'quit']);
+    const OPT_IN  = new Set(['start', 'subscribe', 'yes', 'unstop', 'begin']);
+
+    const isOptOut = OPT_OUT.has(msg);
+    const isOptIn  = OPT_IN.has(msg);
+
+    if (!isOptOut && !isOptIn) return false;
+
+    const sub = await this.prisma.contactSubscription.findUnique({
+      where: {
+        contactId_whatsappAccountId: {
+          contactId,
+          whatsappAccountId: account.id,
+        },
+      },
+    });
+    if (!sub) return false;
+
+    if (isOptOut) {
+      await this.prisma.contactSubscription.update({
+        where: { id: sub.id },
+        data: { status: 'UNSUBSCRIBED', unsubscribedAt: new Date() },
+      });
+
+      const cancelled = await this.sequences.cancelSubscriptionEnrollments(
+        workspaceId,
+        sub.id,
+      );
+
+      await this.messages.enqueueOutboundText({
+        workspaceId,
+        whatsappAccountId: account.id,
+        to: replyTo,
+        message:
+          'You have been unsubscribed and will no longer receive automated messages from us. Reply START to re-subscribe at any time.',
+        contactId,
+        inboxThreadId: thread.id,
+      });
+
+      this.logger.log(
+        `Contact ${contactId} opted out (${cancelled} sequence enrolment(s) cancelled)`,
+      );
+      return true;
+    }
+
+    // isOptIn
+    await this.prisma.contactSubscription.update({
+      where: { id: sub.id },
+      data: { status: 'SUBSCRIBED', unsubscribedAt: null },
+    });
+
+    const greeting = this.substituteVars('Hi {{name}}!', senderName);
+    await this.messages.enqueueOutboundText({
+      workspaceId,
+      whatsappAccountId: account.id,
+      to: replyTo,
+      message: `${greeting} You are now re-subscribed and will receive messages from us again. Reply STOP at any time to unsubscribe.`,
+      contactId,
+      inboxThreadId: thread.id,
+    });
+
+    this.logger.log(`Contact ${contactId} opted in`);
+    return true;
   }
 
   private keywordMatches(
