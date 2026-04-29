@@ -13,6 +13,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { api, apiBaseURL, getApiErrorMessage } from "@/lib/api/client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { ContactSubscription, DripSequenceSummary, WhatsAppAccount } from "@/lib/api/types";
@@ -523,7 +524,7 @@ function EnrollModal({
               <div className="h-10 animate-pulse rounded-lg bg-zinc-800" />
             ) : activeSequences.length === 0 ? (
               <div className="rounded-lg border border-dashed border-zinc-700 px-3 py-3 text-center text-xs text-zinc-500">
-                No active sequences. <a href="/sequences" className="text-violet-400 hover:underline">Create one first.</a>
+                No active sequences. <Link href="/sequences" className="text-violet-400 hover:underline">Create one first.</Link>
               </div>
             ) : (
               <select

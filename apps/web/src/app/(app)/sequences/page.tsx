@@ -5,11 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
   Activity,
-  Archive,
   ChevronRight,
   Clock,
   ListOrdered,
-  PauseCircle,
   Plus,
   Trash2,
   Users,

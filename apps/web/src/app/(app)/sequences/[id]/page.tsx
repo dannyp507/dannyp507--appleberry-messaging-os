@@ -183,7 +183,7 @@ function StepModal({
               className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-zinc-200 placeholder-zinc-500 focus:border-violet-500 focus:outline-none"
             />
             <p className="mt-1 text-xs text-zinc-600">
-              Use <code className="rounded bg-zinc-800 px-1 text-violet-400">{"{{name}}"}</code> to personalise with the subscriber's first name
+              Use <code className="rounded bg-zinc-800 px-1 text-violet-400">{"{{name}}"}</code> to personalise with the subscriber&apos;s first name
             </p>
           </div>
         </div>
