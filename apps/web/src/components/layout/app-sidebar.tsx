@@ -31,6 +31,7 @@ import {
   HelpCircle,
   Menu,
   ChevronRight,
+  FileInput,
 } from "lucide-react";
 
 // ─── Nav definitions ──────────────────────────────────────────────────────────
@@ -45,10 +46,11 @@ const mainNav = [
 ] satisfies NavEntry[];
 
 const automationNav = [
-  { href: "/chatbot",           label: "Chatbot Flows",     icon: GitBranch   },
-  { href: "/sequences",         label: "Sequences",         icon: ListOrdered },
-  { href: "/keyword-triggers",  label: "Keyword Triggers",  icon: Tag         },
-  { href: "/autoresponder",     label: "Autoresponders",    icon: Bot         },
+  { href: "/chatbot",            label: "Chatbot Flows",     icon: GitBranch   },
+  { href: "/sequences",          label: "Sequences",         icon: ListOrdered },
+  { href: "/subscribe-forms",    label: "Subscribe Forms",   icon: FileInput   },
+  { href: "/keyword-triggers",   label: "Keyword Triggers",  icon: Tag         },
+  { href: "/autoresponder",      label: "Autoresponders",    icon: Bot         },
 ] satisfies NavEntry[];
 
 const channelsNav = [

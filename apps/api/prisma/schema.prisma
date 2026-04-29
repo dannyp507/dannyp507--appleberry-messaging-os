@@ -328,6 +328,7 @@ model Workspace {
   contactSubscriptions ContactSubscription[]
   dripSequences        DripSequence[]
   dripEnrollments      DripEnrollment[]
+  subscribeForms       SubscribeForm[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -532,6 +533,7 @@ model WhatsAppAccount {
   autoresponderRules    AutoresponderRule[]
   contactSubscriptions  ContactSubscription[]
   dripEnrollments       DripEnrollment[]
+  subscribeForms        SubscribeForm[]
 
   @@index([workspaceId])
 }
@@ -748,9 +750,10 @@ model DripSequence {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  steps       DripStep[]
-  enrollments DripEnrollment[]
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  steps          DripStep[]
+  enrollments    DripEnrollment[]
+  subscribeForms SubscribeForm[]
 
   @@index([workspaceId])
   @@index([workspaceId, status])
@@ -1412,6 +1415,32 @@ model CalendarConfig {
   updatedAt         DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, map: "CalendarConfig_workspace_fkey")
+
+  @@index([workspaceId])
+}
+
+// ─── Opt-in / Subscribe Forms ─────────────────────────────────────────────────
+
+/// A public-facing opt-in page that lets contacts subscribe via web form.
+model SubscribeForm {
+  id                String   @id @default(uuid()) @db.Uuid
+  workspaceId       String   @db.Uuid
+  whatsappAccountId String   @db.Uuid
+  sequenceId        String?  @db.Uuid
+
+  slug              String   @unique
+  name              String
+  description       String?
+  welcomeMessage    String?
+  active            Boolean  @default(true)
+  submissionsCount  Int      @default(0)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  whatsappAccount WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id])
+  sequence        DripSequence?   @relation(fields: [sequenceId], references: [id])
 
   @@index([workspaceId])
 }

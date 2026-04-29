@@ -319,6 +319,33 @@ export interface DripEnrollment {
   };
 }
 
+// ─── Subscribe Forms ──────────────────────────────────────────────────────────
+
+export interface SubscribeForm {
+  id: string;
+  workspaceId: string;
+  whatsappAccountId: string;
+  sequenceId: string | null;
+  slug: string;
+  name: string;
+  description: string | null;
+  welcomeMessage: string | null;
+  active: boolean;
+  submissionsCount: number;
+  createdAt: string;
+  updatedAt: string;
+  whatsappAccount: { id: string; name: string; phone: string | null };
+  sequence: { id: string; name: string } | null;
+}
+
+export interface SubscribeFormPublicConfig {
+  id: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  workspace: { name: string; logoUrl: string | null };
+}
+
 export interface DashboardAnalytics {
   totalMessages: number;
   sent: number;
