@@ -3,6 +3,8 @@
 import "@xyflow/react/dist/style.css";
 
 import { ChatbotFlowNode } from "@/components/chatbot/chatbot-flow-node";
+import { NodeConfigForm } from "@/components/chatbot/node-config-form";
+import { buildContent, flattenContent } from "@/components/chatbot/node-config";
 import { api, getApiErrorMessage } from "@/lib/api/client";
 import type { ChatbotFlowDetail, ChatbotNodeType } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
@@ -21,8 +23,10 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useOnViewportChange,
   useReactFlow,
 } from "@xyflow/react";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -42,7 +46,7 @@ const PICKER_ITEMS: { type: ChatbotNodeType; emoji: string; label: string; desc:
   { type: "END",            emoji: "🔴", label: "End Flow",      desc: "Terminate this conversation",   color: "hover:bg-red-50 dark:hover:bg-red-950/40"        },
 ];
 
-// ─── Picker overlay (portal-rendered) ────────────────────────────────────────
+// ─── Node type picker overlay (portal-rendered) ───────────────────────────────
 
 function NodePicker({
   x, y,
@@ -64,7 +68,6 @@ function NodePicker({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [onClose]);
 
-  // Clamp to viewport
   const left = Math.min(x, window.innerWidth - 280);
   const top  = Math.min(y, window.innerHeight - 420);
 
@@ -94,6 +97,174 @@ function NodePicker({
             </div>
           </button>
         ))}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─── Inline node edit panel (portal-rendered) ────────────────────────────────
+
+const PANEL_W = 308;
+
+function NodeEditPanel({
+  node,
+  flowId,
+  entryNodeId,
+  x,
+  y,
+  onClose,
+  onUpdated,
+  onDeleted,
+}: {
+  node: ChatbotFlowDetail["nodes"][0];
+  flowId: string;
+  entryNodeId: string | null;
+  x: number;
+  y: number;
+  onClose: () => void;
+  onUpdated: () => void;
+  onDeleted: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const nodeType = node.type as ChatbotNodeType;
+
+  const [config, setConfig] = useState<Record<string, string>>(() =>
+    flattenContent(nodeType, (node.content ?? {}) as Record<string, unknown>),
+  );
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Reset form only when switching to a different node
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setConfig(flattenContent(node.type as ChatbotNodeType, (node.content ?? {}) as Record<string, unknown>));
+  }, [node.id]);
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const updateConfig = useCallback(
+    (key: string, value: string) => setConfig((prev) => ({ ...prev, [key]: value })),
+    [],
+  );
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`/chatbot/flows/${flowId}/nodes/${node.id}`, {
+        content: buildContent(nodeType, config),
+      });
+      void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
+      void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
+      toast.success("Node updated");
+      onUpdated();
+    } catch (e) {
+      toast.error("Could not update node", getApiErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/chatbot/flows/${flowId}/nodes/${node.id}`);
+      void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
+      void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
+      toast.success("Node deleted");
+      onDeleted();
+    } catch (e) {
+      toast.error("Could not delete node", getApiErrorMessage(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleSetEntry = async () => {
+    try {
+      await api.patch(`/chatbot/flows/${flowId}/entry`, { entryNodeId: node.id });
+      void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
+      void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
+      toast.success("Set as entry node");
+      onUpdated();
+    } catch (e) {
+      toast.error("Could not set entry", getApiErrorMessage(e));
+    }
+  };
+
+  const info = PICKER_ITEMS.find((p) => p.type === nodeType);
+  const isEntry = entryNodeId === node.id;
+
+  // Clamp to viewport
+  const left = Math.min(x, window.innerWidth - PANEL_W - 8);
+  const top  = Math.max(8, Math.min(y, window.innerHeight - 400));
+
+  return createPortal(
+    <div
+      className="fixed z-[9998] flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl"
+      style={{ left, top, width: PANEL_W, maxHeight: "min(520px, calc(100vh - 24px))" }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-base leading-none">{info?.emoji ?? "🔧"}</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-none">
+              {info?.label ?? nodeType}
+            </p>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 font-mono">
+              {node.id.slice(0, 8)}
+              {isEntry && (
+                <span className="ml-1.5 text-emerald-600 dark:text-emerald-400 font-sans font-medium not-italic">· Entry ⚡</span>
+              )}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-lg p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+
+      {/* Scrollable form body */}
+      <div className="overflow-y-auto flex-1 px-4 py-3">
+        <NodeConfigForm nodeType={nodeType} config={config} onChange={updateConfig} />
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
+        <div className="flex items-center gap-1.5">
+          {!isEntry && (
+            <button
+              onClick={() => void handleSetEntry()}
+              className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              Set entry
+            </button>
+          )}
+          <button
+            onClick={() => void handleDelete()}
+            disabled={deleting}
+            className="rounded-lg border border-red-200 dark:border-red-900/40 px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+        <button
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
       </div>
     </div>,
     document.body,
@@ -175,24 +346,65 @@ function toEdges(detail: ChatbotFlowDetail): Edge[] {
 function FlowCanvasInner({
   flowId,
   detail,
-  onNodeSelect,
 }: {
   flowId: string;
   detail: ChatbotFlowDetail;
-  onNodeSelect?: (nodeId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const rf = useReactFlow();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Picker state: shown after dragging from a handle to empty space, or clicking "+"
+  // ── Picker state ──────────────────────────────────────────────────────────
   const [picker, setPicker] = useState<{
     screenX: number; screenY: number;
     flowX: number; flowY: number;
     sourceNodeId: string;
   } | null>(null);
 
-  // ── Callbacks passed into node data ──────────────────────────────────────
+  // ── Inline edit panel state ────────────────────────────────────────────────
+  const [selectedEditNodeId, setSelectedEditNodeId] = useState<string | null>(null);
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
+  const selectedEditNodeIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync so the viewport-change callback can read the latest value
+  useEffect(() => { selectedEditNodeIdRef.current = selectedEditNodeId; }, [selectedEditNodeId]);
+
+  // ── Compute panel screen position from flow position ──────────────────────
+  const computePanelPos = useCallback((nodeId: string): { x: number; y: number } | null => {
+    const rfNode = rf.getNode(nodeId);
+    if (!rfNode) return null;
+    const w = rfNode.measured?.width ?? 180;
+    const rightEdge = rf.flowToScreenPosition({ x: rfNode.position.x + w, y: rfNode.position.y });
+    const GAP = 12;
+    let x = rightEdge.x + GAP;
+    // If panel would overflow right, place on the left
+    if (x + PANEL_W > window.innerWidth - 8) {
+      const leftEdge = rf.flowToScreenPosition({ x: rfNode.position.x, y: rfNode.position.y });
+      x = Math.max(8, leftEdge.x - PANEL_W - GAP);
+    }
+    let y = rightEdge.y;
+    if (y + 440 > window.innerHeight - 8) y = Math.max(8, window.innerHeight - 448);
+    return { x, y };
+  }, [rf]);
+
+  // Reposition panel when canvas pans or zooms
+  useOnViewportChange({
+    onChange: useCallback(() => {
+      const nodeId = selectedEditNodeIdRef.current;
+      if (!nodeId) return;
+      setPanelPos(computePanelPos(nodeId));
+    }, [computePanelPos]),
+  });
+
+  // Close panel if the selected node is deleted externally
+  useEffect(() => {
+    if (selectedEditNodeId && !detail.nodes.find((n) => n.id === selectedEditNodeId)) {
+      setSelectedEditNodeId(null);
+      setPanelPos(null);
+    }
+  }, [detail.nodes, selectedEditNodeId]);
+
+  // ── Node callbacks ────────────────────────────────────────────────────────
   const handleAddNext = useCallback((sourceNodeId: string) => {
     const sourceNode = rf.getNode(sourceNodeId);
     if (!sourceNode) return;
@@ -210,8 +422,15 @@ function FlowCanvasInner({
   }, [rf]);
 
   const handleNodeSelect = useCallback((nodeId: string) => {
-    onNodeSelect?.(nodeId);
-  }, [onNodeSelect]);
+    const pos = computePanelPos(nodeId);
+    setSelectedEditNodeId(nodeId);
+    setPanelPos(pos);
+  }, [computePanelPos]);
+
+  const closePanelOnPaneClick = useCallback(() => {
+    setSelectedEditNodeId(null);
+    setPanelPos(null);
+  }, []);
 
   const callbacks = useMemo(
     () => ({ onAddNext: handleAddNext, onSelect: handleNodeSelect }),
@@ -256,7 +475,6 @@ function FlowCanvasInner({
         animated: true, style: { strokeWidth: 2 },
       }, eds));
       void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
-      void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
     } catch (e) { toast.error("Could not connect nodes", getApiErrorMessage(e)); }
   }, [flowId, queryClient, setEdges]);
 
@@ -279,7 +497,7 @@ function FlowCanvasInner({
     }
   }, [rf]);
 
-  // ── Create node from picker selection ────────────────────────────────────
+  // ── Create node from picker selection ─────────────────────────────────────
   const handlePickerSelect = useCallback(async (type: ChatbotNodeType) => {
     if (!picker) return;
     try {
@@ -288,7 +506,6 @@ function FlowCanvasInner({
         content: defaultContent(type),
         position: { x: picker.flowX - 90, y: picker.flowY },
       });
-      // Connect source → new node
       const { data: newEdge } = await api.post<{ id: string; fromNodeId: string; toNodeId: string }>(
         `/chatbot/flows/${flowId}/edges`,
         { fromNodeId: picker.sourceNodeId, toNodeId: newNode.id },
@@ -298,14 +515,27 @@ function FlowCanvasInner({
         animated: true, style: { strokeWidth: 2 },
       }, eds));
       void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
-      void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
-      // Select the new node so the user can configure it
-      onNodeSelect?.(newNode.id);
       toast.success(`${defaultLabel(type)} node added`);
+      // Open the edit panel on the new node (after detail refetches, computed on next render)
+      setSelectedEditNodeId(newNode.id);
     } catch (e) {
       toast.error("Could not add node", getApiErrorMessage(e));
     }
-  }, [picker, flowId, queryClient, setEdges, onNodeSelect]);
+  }, [picker, flowId, queryClient, setEdges]);
+
+  // After a new node is created via picker, compute its panel position once detail refreshes
+  useEffect(() => {
+    if (!selectedEditNodeId) return;
+    const pos = computePanelPos(selectedEditNodeId);
+    if (pos) setPanelPos(pos);
+    // Retry after a tick in case measured size isn't available yet
+    const t = setTimeout(() => {
+      const p = computePanelPos(selectedEditNodeId);
+      if (p) setPanelPos(p);
+    }, 120);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEditNodeId, detail.nodes]);
 
   // ── Delete handlers ───────────────────────────────────────────────────────
   const onEdgesDelete = useCallback(async (deleted: Edge[]) => {
@@ -314,7 +544,6 @@ function FlowCanvasInner({
       catch (err) { toast.error("Could not remove edge", getApiErrorMessage(err)); }
     }
     void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
-    void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
   }, [flowId, queryClient]);
 
   const onNodesDelete = useCallback(async (deleted: Node[]) => {
@@ -323,8 +552,12 @@ function FlowCanvasInner({
       catch (err) { toast.error("Could not remove node", getApiErrorMessage(err)); }
     }
     void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
-    void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
   }, [flowId, queryClient]);
+
+  // Resolve edit node from current detail
+  const editNode = selectedEditNodeId
+    ? detail.nodes.find((n) => n.id === selectedEditNodeId) ?? null
+    : null;
 
   return (
     <>
@@ -340,6 +573,7 @@ function FlowCanvasInner({
           onNodeDragStop={scheduleSave}
           onNodesDelete={(ns) => void onNodesDelete(ns)}
           onEdgesDelete={(es) => void onEdgesDelete(es)}
+          onPaneClick={closePanelOnPaneClick}
           defaultEdgeOptions={defaultEdgeOptions}
           snapToGrid
           snapGrid={[16, 16]}
@@ -366,18 +600,41 @@ function FlowCanvasInner({
           onClose={() => setPicker(null)}
         />
       )}
+
+      {editNode && panelPos && (
+        <NodeEditPanel
+          node={editNode}
+          flowId={flowId}
+          entryNodeId={detail.entryNodeId}
+          x={panelPos.x}
+          y={panelPos.y}
+          onClose={() => { setSelectedEditNodeId(null); setPanelPos(null); }}
+          onUpdated={() => {
+            void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
+            void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
+          }}
+          onDeleted={() => {
+            setSelectedEditNodeId(null);
+            setPanelPos(null);
+            void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(flowId) });
+            void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
+          }}
+        />
+      )}
     </>
   );
 }
 
-export function FlowCanvas(props: {
+export function FlowCanvas({
+  flowId,
+  detail,
+}: {
   flowId: string;
   detail: ChatbotFlowDetail;
-  onNodeSelect?: (nodeId: string) => void;
 }) {
   return (
     <ReactFlowProvider>
-      <FlowCanvasInner {...props} />
+      <FlowCanvasInner flowId={flowId} detail={detail} />
     </ReactFlowProvider>
   );
 }

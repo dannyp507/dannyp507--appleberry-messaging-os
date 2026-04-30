@@ -537,8 +537,8 @@ export class ChatbotEngineService {
               vars[resultVar] = 'available';
               vars['availableDate'] = dateStr;
               vars['availableHour'] = String(hour);
-            } else if (result.nextSlot) {
-              const ns = result.nextSlot as { date: string; hour: number };
+            } else if ((result as unknown as { nextSlot?: unknown }).nextSlot) {
+              const ns = (result as unknown as { nextSlot: { date: string; hour: number } }).nextSlot;
               availabilityMsg = `That slot is taken. The next available slot is ${ns.date} at ${ns.hour}:00. Would you like to book that instead?`;
               vars[resultVar] = 'next_slot';
               vars['availableDate'] = ns.date;

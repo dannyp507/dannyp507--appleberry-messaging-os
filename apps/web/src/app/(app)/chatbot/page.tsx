@@ -1,6 +1,8 @@
 "use client";
 
 import { FlowCanvas } from "@/components/chatbot/flow-canvas";
+import { NodeConfigForm } from "@/components/chatbot/node-config-form";
+import { buildContent } from "@/components/chatbot/node-config";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { Download, Upload, Sparkles, Copy, Check } from "lucide-react";
 import { api, getApiErrorMessage } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
@@ -51,332 +52,21 @@ import { useRef, useState } from "react";
 // ─── Node type definitions ────────────────────────────────────────────────────
 
 const NODE_TYPES: { value: ChatbotNodeType; label: string; desc: string }[] = [
-  { value: "TEXT",           label: "💬 Text Message",        desc: "Send a plain message. Use {{variable}} to insert captured data." },
-  { value: "MEDIA",          label: "🖼️ Media Message",       desc: "Send an image, video, audio clip, or document. Optionally add a caption." },
-  { value: "BUTTONS",        label: "🔘 Button Menu",         desc: "Show up to 3 tappable buttons (Cloud API) or numbered list (Baileys). Waits for the customer to choose." },
-  { value: "LIST",           label: "📋 List Picker",         desc: "Show a scrollable list of options. Great for menus with many items (Cloud API only; falls back to numbered text)." },
-  { value: "QUESTION",       label: "❓ Question",             desc: "Ask a question and wait for the customer's reply. Saves answer as a variable." },
-  { value: "CONDITION",      label: "🔀 Condition",            desc: "Branch the flow based on a variable's value." },
-  { value: "AI_REPLY",       label: "✨ AI Reply",             desc: "Generate a dynamic reply using Gemini or OpenAI with a custom system prompt." },
-  { value: "TAG_CONTACT",    label: "🏷️ Tag Contact",         desc: "Apply a tag to the contact. Creates the tag if it doesn't exist." },
-  { value: "HUMAN_HANDOFF",  label: "👤 Human Handoff",       desc: "Send a message then transfer the conversation to a human agent. Marks the inbox thread as OPEN." },
-  { value: "END",            label: "🔴 End Flow",            desc: "Terminate the conversation flow. Optionally send a goodbye message." },
+  { value: "TEXT",           label: "💬 Text Message",         desc: "Send a plain message. Use {{variable}} to insert captured data." },
+  { value: "MEDIA",          label: "🖼️ Media Message",        desc: "Send an image, video, audio clip, or document. Optionally add a caption." },
+  { value: "BUTTONS",        label: "🔘 Button Menu",          desc: "Show up to 3 tappable buttons. Waits for the customer to choose." },
+  { value: "LIST",           label: "📋 List Picker",          desc: "Show a scrollable list of options (Cloud API only; falls back to numbered text)." },
+  { value: "QUESTION",       label: "❓ Question",              desc: "Ask a question and wait for the reply. Saves answer as a variable." },
+  { value: "CONDITION",      label: "🔀 Condition",             desc: "Branch the flow based on a variable's value." },
+  { value: "AI_REPLY",       label: "✨ AI Reply",              desc: "Generate a dynamic reply using Gemini or OpenAI with a custom system prompt." },
+  { value: "TAG_CONTACT",    label: "🏷️ Tag Contact",          desc: "Apply a tag to the contact. Creates the tag if it doesn't exist." },
+  { value: "HUMAN_HANDOFF",  label: "👤 Human Handoff",        desc: "Send a message then transfer the conversation to a human agent." },
+  { value: "END",            label: "🔴 End Flow",             desc: "Terminate the conversation flow. Optionally send a goodbye message." },
   { value: "SAVE_TO_SHEET",  label: "📊 Save to Google Sheet", desc: "Append a row to your connected Google Sheet with contact data and captured variables." },
-  { value: "CHECK_CALENDAR", label: "📅 Check Availability",  desc: "Check if a date/time is available on your Google Calendar." },
-  { value: "CREATE_BOOKING", label: "🗓️ Create Booking",      desc: "Create a Google Calendar event with the customer's details." },
-  { value: "WEBHOOK",        label: "🔗 Webhook",             desc: "Legacy tag-contact action. Use 'Tag Contact' node for new flows." },
+  { value: "CHECK_CALENDAR", label: "📅 Check Availability",   desc: "Check if a date/time is available on your Google Calendar." },
+  { value: "CREATE_BOOKING", label: "🗓️ Create Booking",       desc: "Create a Google Calendar event with the customer's details." },
+  { value: "WEBHOOK",        label: "🔗 Webhook",              desc: "Legacy tag-contact action. Use 'Tag Contact' node for new flows." },
 ];
-
-// ─── Smart node config form ───────────────────────────────────────────────────
-
-function NodeConfigForm({
-  nodeType,
-  config,
-  onChange,
-}: {
-  nodeType: ChatbotNodeType;
-  config: Record<string, string>;
-  onChange: (key: string, value: string) => void;
-}) {
-  const field = (key: string, label: string, placeholder: string, textarea = false) => (
-    <div className="grid gap-1.5" key={key}>
-      <Label className="text-xs">{label}</Label>
-      {textarea ? (
-        <Textarea
-          rows={3}
-          className="text-xs resize-none"
-          value={config[key] ?? ""}
-          onChange={(e) => onChange(key, e.target.value)}
-          placeholder={placeholder}
-        />
-      ) : (
-        <Input
-          className="text-xs h-8"
-          value={config[key] ?? ""}
-          onChange={(e) => onChange(key, e.target.value)}
-          placeholder={placeholder}
-        />
-      )}
-    </div>
-  );
-
-  switch (nodeType) {
-    case "TEXT":
-      return (
-        <div className="space-y-2">
-          {field("text", "Message text", "Hello {{name}}, how can we help today?", true)}
-          <p className="text-[10px] text-muted-foreground">Use {"{{variable}}"} to insert captured answers.</p>
-        </div>
-      );
-
-    case "BUTTONS": {
-      const b1 = config.btn1?.trim() ?? "";
-      const b2 = config.btn2?.trim() ?? "";
-      const b3 = config.btn3?.trim() ?? "";
-      const toId = (l: string) => l ? `btn_${l.toLowerCase().replace(/\s+/g, "_")}` : "";
-      const ids = [b1, b2, b3].map(toId).filter(Boolean);
-      return (
-        <div className="space-y-2">
-          {field("prompt", "Message / question", "How can we help you today?")}
-          {field("btn1", "Button 1 (required, max 20 chars)", "Support")}
-          {field("btn2", "Button 2 (optional)", "Sales")}
-          {field("btn3", "Button 3 (optional)", "Other")}
-          {ids.length > 0 && (
-            <div className="rounded-md bg-muted/60 border px-2.5 py-2 space-y-0.5">
-              <p className="text-[10px] font-semibold text-muted-foreground">Button IDs (use these in your CONDITION node):</p>
-              {ids.map((id) => (
-                <p key={id} className="text-[10px] font-mono text-primary">{id}</p>
-              ))}
-            </div>
-          )}
-          <p className="text-[10px] text-muted-foreground">
-            After this, add a <strong>CONDITION</strong> node checking <code>lastInput</code> and connect one edge per button ID.
-            On non-Cloud accounts the buttons are sent as a numbered text list.
-          </p>
-        </div>
-      );
-    }
-
-    case "LIST": {
-      const rows = [1,2,3,4,5,6,7,8,9,10].map((i) => ({
-        title: config[`row${i}title`]?.trim() ?? "",
-        desc:  config[`row${i}desc`]?.trim() ?? "",
-      }));
-      const filledIds = rows.map((r, i) => r.title ? `row_${i+1}` : "").filter(Boolean);
-      return (
-        <div className="space-y-2">
-          {field("prompt", "Message prompt", "Please select an option:")}
-          {field("buttonText", "Button label", "See Options")}
-          {field("sectionTitle", "Section heading (optional)", "Options")}
-          <p className="text-[10px] font-semibold text-muted-foreground pt-1">Rows (fill as many as you need, up to 10):</p>
-          {[1,2,3,4,5,6,7,8,9,10].map((i) => (
-            <div key={i} className="grid grid-cols-2 gap-1">
-              {field(`row${i}title`, `Row ${i} title`, `Option ${i}`)}
-              {field(`row${i}desc`,  `Row ${i} subtitle`, "")}
-            </div>
-          ))}
-          {filledIds.length > 0 && (
-            <div className="rounded-md bg-muted/60 border px-2.5 py-2 space-y-0.5">
-              <p className="text-[10px] font-semibold text-muted-foreground">Row IDs (use in CONDITION after this node):</p>
-              {filledIds.map((id) => (
-                <p key={id} className="text-[10px] font-mono text-primary">{id}</p>
-              ))}
-            </div>
-          )}
-          <p className="text-[10px] text-muted-foreground">
-            Cloud API accounts show a real WhatsApp list picker.
-            Add a <strong>CONDITION</strong> node after this checking <code>lastInput</code>.
-          </p>
-        </div>
-      );
-    }
-
-    case "QUESTION":
-      return (
-        <div className="space-y-2">
-          {field("prompt", "Question to ask", "What is your name?")}
-          {field("variableKey", "Save answer as variable", "name")}
-          <p className="text-[10px] text-muted-foreground">The reply will be saved as {"{{variableKey}}"} for later nodes.</p>
-        </div>
-      );
-
-    case "CONDITION":
-      return (
-        <div className="space-y-2">
-          {field("variableKey", "Variable to check", "lastInput")}
-          <p className="text-[10px] text-muted-foreground">Connect multiple outgoing edges — set condition value on each edge from the canvas. Leave blank for the fallback branch.</p>
-        </div>
-      );
-
-    case "AI_REPLY":
-      return (
-        <div className="space-y-2">
-          {field("systemPrompt", "AI system prompt", "You are a helpful assistant for [Business Name]. Answer questions politely and keep replies under 200 characters.", true)}
-          <p className="text-[10px] text-muted-foreground">Uses your configured AI provider (Gemini or OpenAI). The customer&apos;s last message is sent as the user prompt.</p>
-        </div>
-      );
-
-    case "SAVE_TO_SHEET": {
-      return (
-        <div className="space-y-2">
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Automatically saves: <strong>firstName, lastName, phone, email, timestamp</strong> from the contact record.
-            Add extra fields below as <code>sheetColumn = {"{{variable}}"}</code>.
-          </p>
-          {field("fields.service", "Extra field: service", "{{service}}")}
-          {field("fields.notes",   "Extra field: notes",   "{{notes}}")}
-          <p className="text-[10px] text-muted-foreground">Leave extra fields blank to skip them. Make sure Google Sheets is connected in Settings → Integrations.</p>
-        </div>
-      );
-    }
-
-    case "CHECK_CALENDAR":
-      return (
-        <div className="space-y-2">
-          {field("dateVariable", "Variable holding the date (YYYY-MM-DD)", "date")}
-          {field("hourVariable", "Variable holding the hour (0–23)", "hour")}
-          {field("resultVariable", "Save result to variable", "availability")}
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            After this node: <code>{"{{availabilityMessage}}"}</code> contains a human-readable reply,
-            <code>{"{{availableDate}}"}</code> and <code>{"{{availableHour}}"}</code> hold the confirmed slot.
-            Connect a TEXT node after this to send <code>{"{{availabilityMessage}}"}</code> to the customer.
-          </p>
-        </div>
-      );
-
-    case "CREATE_BOOKING":
-      return (
-        <div className="space-y-2">
-          {field("nameVariable",    "Customer name variable",    "name")}
-          {field("emailVariable",   "Customer email variable",   "email")}
-          {field("serviceVariable", "Service/reason variable",   "service")}
-          {field("dateVariable",    "Date variable (YYYY-MM-DD)", "availableDate")}
-          {field("hourVariable",    "Hour variable (0–23)",       "availableHour")}
-          {field("resultVariable",  "Save booking link to",       "bookingLink")}
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Sends a Google Calendar invite. <code>{"{{bookingConfirmation}}"}</code> is set automatically
-            and can be sent via a following TEXT node. Make sure Google Calendar is connected in Settings → Integrations.
-          </p>
-        </div>
-      );
-
-    case "MEDIA":
-      return (
-        <div className="space-y-2">
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Media type</Label>
-            <select
-              value={config.mediaType ?? "image"}
-              onChange={(e) => onChange("mediaType", e.target.value)}
-              className="rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="image">🖼️ Image</option>
-              <option value="video">🎬 Video</option>
-              <option value="audio">🎵 Audio</option>
-              <option value="document">📎 Document / File</option>
-            </select>
-          </div>
-          {field("url", "Media URL (publicly accessible)", "https://example.com/image.jpg")}
-          {field("caption", "Caption (optional)", "Here's our menu! Use {{name}} to personalise.", true)}
-          <p className="text-[10px] text-muted-foreground">The URL must be publicly accessible. For images use .jpg/.png, for video .mp4.</p>
-        </div>
-      );
-
-    case "TAG_CONTACT":
-      return (
-        <div className="space-y-2">
-          {field("tagName", "Tag name to apply", "booked")}
-          <p className="text-[10px] text-muted-foreground">Creates the tag if it doesn&apos;t exist and adds it to the contact. Flow continues to the next node.</p>
-        </div>
-      );
-
-    case "HUMAN_HANDOFF":
-      return (
-        <div className="space-y-2">
-          {field("message", "Message to send before handoff", "👤 Connecting you with a team member. Please hold on!", true)}
-          <p className="text-[10px] text-muted-foreground">
-            The chatbot will stop and the inbox thread will be marked <strong>Open</strong> so your team can take over. Leave message blank to skip it.
-          </p>
-        </div>
-      );
-
-    case "END":
-      return (
-        <div className="space-y-2">
-          {field("message", "Goodbye message (optional)", "Thanks for chatting! Have a great day 👋", true)}
-          <p className="text-[10px] text-muted-foreground">
-            Ends the conversation flow. If a message is provided it will be sent before the flow closes. Leave blank to end silently.
-          </p>
-        </div>
-      );
-
-    case "WEBHOOK":
-      return (
-        <div className="space-y-2">
-          {field("tagName", "Tag name to apply", "booked")}
-          <p className="text-[10px] text-muted-foreground">Creates the tag if it doesn&apos;t exist and adds it to the contact.</p>
-        </div>
-      );
-
-    default:
-      return (
-        <p className="text-xs text-muted-foreground">No configuration needed for this node type.</p>
-      );
-  }
-}
-
-// ─── Build content JSON from flat config form state ───────────────────────────
-
-function buildContent(nodeType: ChatbotNodeType, config: Record<string, string>): Record<string, unknown> {
-  switch (nodeType) {
-    case "TEXT":
-      return { text: config.text ?? "" };
-    case "QUESTION":
-      return { prompt: config.prompt ?? "", variableKey: config.variableKey ?? "answer" };
-    case "CONDITION":
-      return { variableKey: config.variableKey ?? "lastInput" };
-    case "AI_REPLY":
-      return { systemPrompt: config.systemPrompt ?? "" };
-    case "SAVE_TO_SHEET": {
-      const fields: Record<string, string> = {};
-      for (const [k, v] of Object.entries(config)) {
-        if (k.startsWith("fields.") && v.trim()) {
-          fields[k.replace("fields.", "")] = v.trim();
-        }
-      }
-      return { fields };
-    }
-    case "CHECK_CALENDAR":
-      return {
-        dateVariable:   config.dateVariable   || "date",
-        hourVariable:   config.hourVariable   || "hour",
-        resultVariable: config.resultVariable || "availability",
-      };
-    case "CREATE_BOOKING":
-      return {
-        nameVariable:    config.nameVariable    || "name",
-        emailVariable:   config.emailVariable   || "email",
-        serviceVariable: config.serviceVariable || "service",
-        dateVariable:    config.dateVariable    || "availableDate",
-        hourVariable:    config.hourVariable    || "availableHour",
-        resultVariable:  config.resultVariable  || "bookingLink",
-      };
-    case "BUTTONS": {
-      const buttons: { id: string; label: string }[] = [];
-      for (let i = 1; i <= 3; i++) {
-        const label = config[`btn${i}`]?.trim();
-        if (label) buttons.push({ id: `btn_${label.toLowerCase().replace(/\s+/g, "_")}`, label });
-      }
-      return { prompt: config.prompt ?? "", buttons };
-    }
-    case "LIST": {
-      const rows: { id: string; title: string; description?: string }[] = [];
-      for (let i = 1; i <= 10; i++) {
-        const title = config[`row${i}title`]?.trim();
-        if (title) {
-          const desc = config[`row${i}desc`]?.trim();
-          rows.push({ id: `row_${i}`, title, ...(desc ? { description: desc } : {}) });
-        }
-      }
-      const sections = rows.length > 0
-        ? [{ ...(config.sectionTitle ? { title: config.sectionTitle } : {}), rows }]
-        : [];
-      return { prompt: config.prompt ?? "", buttonText: config.buttonText || "See Options", sections };
-    }
-    case "MEDIA":
-      return { url: config.url ?? "", caption: config.caption ?? "", mediaType: config.mediaType ?? "image" };
-    case "TAG_CONTACT":
-      return { type: "TAG", tagName: config.tagName ?? "" };
-    case "WEBHOOK":
-      return { type: "TAG", tagName: config.tagName ?? "" };
-    case "HUMAN_HANDOFF":
-      return { message: config.message ?? "" };
-    case "END":
-      return { message: config.message ?? "" };
-    default:
-      return {};
-  }
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -388,8 +78,6 @@ export default function ChatbotPage() {
 
   const [nodeType, setNodeType] = useState<ChatbotNodeType>("TEXT");
   const [nodeConfig, setNodeConfig] = useState<Record<string, string>>({});
-  // selectedNodeId: when user clicks a node on canvas, pre-populate the config form
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [importName, setImportName] = useState("");
@@ -488,34 +176,6 @@ export default function ChatbotPage() {
     onError: (e) => toast.error("Could not set entry", getApiErrorMessage(e)),
   });
 
-  // When user clicks a node on canvas — pre-populate the add-node form for editing
-  const handleNodeSelect = (nodeId: string) => {
-    if (!detail) return;
-    const node = detail.nodes.find((n) => n.id === nodeId);
-    if (!node) return;
-    setSelectedNodeId(nodeId);
-    setNodeType(node.type as ChatbotNodeType);
-    // Flatten content back to config form state
-    const c = (node.content ?? {}) as Record<string, unknown>;
-    const flat: Record<string, string> = {};
-    for (const [k, v] of Object.entries(c)) {
-      if (typeof v === "string") flat[k] = v;
-      else if (typeof v === "number") flat[k] = String(v);
-      // buttons array
-      else if (k === "buttons" && Array.isArray(v)) {
-        (v as { label: string }[]).forEach((b, i) => { if (b.label) flat[`btn${i + 1}`] = b.label; });
-      }
-      // LIST sections → rows
-      else if (k === "sections" && Array.isArray(v)) {
-        const rows = (v as { rows?: { title: string; description?: string }[] }[])[0]?.rows ?? [];
-        rows.forEach((r, i) => { flat[`row${i + 1}title`] = r.title; if (r.description) flat[`row${i + 1}desc`] = r.description; });
-      }
-    }
-    setNodeConfig(flat);
-    // Scroll the form into view
-    document.getElementById("node-config-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  };
-
   // ── Flow templates ──────────────────────────────────────────────────────────
   const FLOW_TEMPLATES = [
     {
@@ -577,7 +237,7 @@ export default function ChatbotPage() {
     <div className="mx-auto max-w-[1400px] space-y-6 p-6">
       <PageHeader
         title="Chatbot Flows"
-        description="Visual builder: drag nodes, connect handles, Backspace to delete."
+        description="Visual builder: drag nodes, connect handles, click a node to edit it inline."
         action={
           <>
             <Button type="button" onClick={() => setCreateOpen(true)}>New flow</Button>
@@ -708,12 +368,12 @@ export default function ChatbotPage() {
             </Card>
           ) : (
             <>
-              <FlowCanvas flowId={detail.id} detail={detail} onNodeSelect={handleNodeSelect} />
+              <FlowCanvas flowId={detail.id} detail={detail} />
 
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">{detail.name}</CardTitle>
-                  <CardDescription>Manage status, entry node, and add nodes to the flow.</CardDescription>
+                  <CardDescription>Click any node on the canvas to edit it inline. Use the form below to add new nodes.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
 
@@ -753,27 +413,15 @@ export default function ChatbotPage() {
                     )}
                   </div>
 
-                  {/* Add / Edit node */}
-                  <div id="node-config-panel" className="space-y-3 border-t pt-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold">
-                        {selectedNodeId ? "✏️ Edit node" : "Add node"}
-                      </h3>
-                      {selectedNodeId && (
-                        <button
-                          className="text-[10px] text-muted-foreground hover:text-foreground"
-                          onClick={() => { setSelectedNodeId(null); setNodeConfig({}); }}
-                        >
-                          + New node
-                        </button>
-                      )}
-                    </div>
+                  {/* Add node */}
+                  <div className="space-y-3 border-t pt-4">
+                    <h3 className="text-sm font-semibold">Add node</h3>
 
                     <div className="space-y-1.5">
                       <Label className="text-xs">Node type</Label>
                       <Select
                         value={nodeType}
-                        onValueChange={(v) => { setNodeType(v as ChatbotNodeType); setNodeConfig({}); setSelectedNodeId(null); }}
+                        onValueChange={(v) => { setNodeType(v as ChatbotNodeType); setNodeConfig({}); }}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -795,37 +443,15 @@ export default function ChatbotPage() {
                       <NodeConfigForm nodeType={nodeType} config={nodeConfig} onChange={updateConfig} />
                     </div>
 
-                    {selectedNodeId ? (
-                      <Button
-                        size="sm"
-                        type="button"
-                        className="w-full"
-                        onClick={async () => {
-                          try {
-                            await api.patch(`/chatbot/flows/${selectedId}/nodes/${selectedNodeId}`, {
-                              content: buildContent(nodeType, nodeConfig),
-                            });
-                            if (selectedId) void queryClient.invalidateQueries({ queryKey: qk.chatbotFlow(selectedId) });
-                            void queryClient.invalidateQueries({ queryKey: qk.chatbotFlows });
-                            setSelectedNodeId(null);
-                            setNodeConfig({});
-                            toast.success("Node updated");
-                          } catch (e) { toast.error("Could not update node", getApiErrorMessage(e)); }
-                        }}
-                      >
-                        Save changes
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        type="button"
-                        className="w-full"
-                        onClick={() => addNodeMutation.mutate()}
-                        disabled={addNodeMutation.isPending}
-                      >
-                        {addNodeMutation.isPending ? "Adding…" : "Add node to canvas"}
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      type="button"
+                      className="w-full"
+                      onClick={() => addNodeMutation.mutate()}
+                      disabled={addNodeMutation.isPending}
+                    >
+                      {addNodeMutation.isPending ? "Adding…" : "Add node to canvas"}
+                    </Button>
                   </div>
 
                   {/* Node list */}
