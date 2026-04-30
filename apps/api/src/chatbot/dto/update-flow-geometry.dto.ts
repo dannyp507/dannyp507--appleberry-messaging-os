@@ -1,8 +1,9 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsNotEmpty,
   IsNumber,
-  IsUUID,
+  IsString,
   ValidateNested,
 } from 'class-validator';
 
@@ -15,7 +16,8 @@ class PositionDto {
 }
 
 class NodePositionDto {
-  @IsUUID('4')
+  @IsString()
+  @IsNotEmpty()
   id!: string;
 
   @ValidateNested()
