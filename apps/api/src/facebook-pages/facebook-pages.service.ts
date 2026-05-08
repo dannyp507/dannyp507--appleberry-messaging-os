@@ -62,9 +62,6 @@ export class FacebookPagesService {
       redirect_uri: this.redirectUri,
       response_type: 'code',
       state,
-      // auth_type=rerequest forces Facebook to show the full page-selection dialog
-      // even when the user has previously authorized this app, so they can add/remove pages.
-      auth_type: 'rerequest',
     });
 
     // If a Facebook Login for Business config_id is set, use it instead of
