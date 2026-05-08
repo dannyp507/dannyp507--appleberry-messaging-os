@@ -131,14 +131,16 @@ export class FacebookPagesService {
         const pageJson = (await pageRes.json()) as {
           data?: FbPageEntry[];
           paging?: { cursors?: { after?: string }; next?: string };
-          error?: { message: string };
+          error?: { message: string; code?: number };
         };
         if (pageJson.error) {
-          this.logger.error('Error fetching /me/accounts', pageJson.error.message);
+          this.logger.error(`/me/accounts error [${pageJson.error.code}]: ${pageJson.error.message}`);
           break;
         }
-        if (pageJson.data?.length) {
-          for (const p of pageJson.data) pageMap.set(p.id, p);
+        const count = pageJson.data?.length ?? 0;
+        this.logger.log(`/me/accounts returned ${count} page(s) this page`);
+        if (count) {
+          for (const p of pageJson.data!) pageMap.set(p.id, p);
         }
         nextUrl = pageJson.paging?.next ?? null;
       }
