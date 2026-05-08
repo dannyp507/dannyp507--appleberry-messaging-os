@@ -62,6 +62,9 @@ export class FacebookPagesService {
       redirect_uri: this.redirectUri,
       response_type: 'code',
       state,
+      // auth_type=rerequest forces Facebook to show the full page-selection dialog
+      // even when the user has previously authorized this app, so they can add/remove pages.
+      auth_type: 'rerequest',
     });
 
     // If a Facebook Login for Business config_id is set, use it instead of
@@ -116,9 +119,13 @@ export class FacebookPagesService {
       const longData = (await longRes.json()) as FbTokenResponse;
       const longToken = longData.access_token ?? shortToken;
 
-      // Step 3: Get ALL pages the user manages — follow pagination cursors so
-      // accounts with many pages don't get silently truncated.
-      const allPages: FbPageEntry[] = [];
+      // Step 3: Get ALL pages the user manages.
+      // Source A — personal pages via /me/accounts (follow pagination cursors).
+      // Source B — Business Manager pages via /me/businesses → /{businessId}/owned_pages.
+      // Both sources are merged and de-duplicated by page ID.
+      const pageMap = new Map<string, FbPageEntry>();
+
+      // Source A: personal pages
       let nextUrl: string | null =
         `${GRAPH_BASE}/me/accounts?fields=id,name,category,access_token&limit=200&access_token=${longToken}`;
 
@@ -130,13 +137,57 @@ export class FacebookPagesService {
           error?: { message: string };
         };
         if (pageJson.error) {
-          this.logger.error('Error fetching pages', pageJson.error.message);
+          this.logger.error('Error fetching /me/accounts', pageJson.error.message);
           break;
         }
-        if (pageJson.data?.length) allPages.push(...pageJson.data);
-        // Follow the `next` cursor if present; otherwise stop
+        if (pageJson.data?.length) {
+          for (const p of pageJson.data) pageMap.set(p.id, p);
+        }
         nextUrl = pageJson.paging?.next ?? null;
       }
+
+      // Source B: Business Manager pages
+      try {
+        const bizRes = await fetch(
+          `${GRAPH_BASE}/me/businesses?fields=id,name&limit=100&access_token=${longToken}`,
+        );
+        const bizJson = (await bizRes.json()) as {
+          data?: { id: string; name: string }[];
+          error?: { message: string };
+        };
+        if (bizJson.error) {
+          this.logger.warn('Could not fetch /me/businesses: ' + bizJson.error.message);
+        } else if (bizJson.data?.length) {
+          this.logger.log(`Found ${bizJson.data.length} Business Manager account(s)`);
+          for (const biz of bizJson.data) {
+            let bizNextUrl: string | null =
+              `${GRAPH_BASE}/${biz.id}/owned_pages?fields=id,name,category,access_token&limit=200&access_token=${longToken}`;
+            while (bizNextUrl) {
+              const bizPageRes = await fetch(bizNextUrl);
+              const bizPageJson = (await bizPageRes.json()) as {
+                data?: FbPageEntry[];
+                paging?: { next?: string };
+                error?: { message: string };
+              };
+              if (bizPageJson.error) {
+                this.logger.warn(
+                  `Could not fetch owned_pages for business ${biz.id}: ${bizPageJson.error.message}`,
+                );
+                break;
+              }
+              if (bizPageJson.data?.length) {
+                for (const p of bizPageJson.data) pageMap.set(p.id, p);
+              }
+              bizNextUrl = bizPageJson.paging?.next ?? null;
+            }
+          }
+        }
+      } catch (bizErr) {
+        // Non-fatal — still proceed with personal pages if Business Manager lookup fails
+        this.logger.warn('Business Manager page lookup failed', bizErr);
+      }
+
+      const allPages = Array.from(pageMap.values());
 
       if (!allPages.length) {
         this.logger.warn(`No pages found for workspace ${workspaceId}`);
