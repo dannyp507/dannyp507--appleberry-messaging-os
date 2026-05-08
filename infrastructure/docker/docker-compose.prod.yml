@@ -72,6 +72,8 @@ services:
       INBOUND_WEBHOOK_SECRET: ${INBOUND_WEBHOOK_SECRET:-}
       JWT_ACCESS_SEC: ${JWT_ACCESS_SEC:-900}
       JWT_REFRESH_SEC: ${JWT_REFRESH_SEC:-604800}
+      API_URL: ${API_URL:-}
+      FRONTEND_URL: ${FRONTEND_URL:-}
     expose:
       - "3001"
     healthcheck:
