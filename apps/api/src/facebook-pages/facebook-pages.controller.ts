@@ -1,9 +1,14 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
+  Post,
+  Query,
   Redirect,
   UseGuards,
 } from '@nestjs/common';
@@ -38,6 +43,33 @@ export class FacebookPagesController {
   async getAuthUrl(@CurrentWorkspace() workspace: Workspace) {
     const url = await this.service.buildAuthUrl(workspace.id);
     return { url };
+  }
+
+  /**
+   * GET /facebook/pages/pending?token=xxx
+   * Returns the list of pages available for selection after OAuth.
+   * Token expires in 10 minutes.
+   */
+  @Get('pending')
+  async getPendingPages(@Query('token') token: string) {
+    if (!token) throw new BadRequestException('token required');
+    const result = await this.service.getPendingPages(token);
+    if (!result) throw new NotFoundException('Selection token expired or not found');
+    return result;
+  }
+
+  /**
+   * POST /facebook/pages/confirm
+   * Body: { token: string, pageIds: string[] }
+   * Saves only the selected pages and subscribes them to webhooks.
+   */
+  @Post('confirm')
+  async confirmPages(@Body() body: { token: string; pageIds: string[] }) {
+    if (!body?.token) throw new BadRequestException('token required');
+    if (!Array.isArray(body.pageIds) || body.pageIds.length === 0) {
+      throw new BadRequestException('pageIds array required');
+    }
+    return this.service.confirmPages(body.token, body.pageIds);
   }
 
   @Delete(':id')
