@@ -187,9 +187,37 @@ export class FacebookPagesService {
         this.logger.warn('Business Manager page lookup failed', bizErr);
       }
 
-      // Only keep pages that have a valid access_token — pages returned by
-      // Business Manager APIs may not carry a token if the user lacks the
-      // business_management permission to access them.
+      // For pages that came back without an access_token (common for Business Manager
+      // pages), try to resolve the token individually. The user-level token can fetch
+      // a page token via GET /{pageId}?fields=access_token as long as the user has an
+      // admin role on that page.
+      const tokenlessPages = Array.from(pageMap.values()).filter((p) => !p.access_token);
+      if (tokenlessPages.length) {
+        this.logger.log(`Attempting to resolve tokens for ${tokenlessPages.length} tokenless page(s)`);
+        await Promise.all(
+          tokenlessPages.map(async (page) => {
+            try {
+              const r = await fetch(
+                `${GRAPH_BASE}/${page.id}?fields=id,name,category,access_token&access_token=${longToken}`,
+              );
+              const j = (await r.json()) as FbPageEntry & { error?: { message: string } };
+              if (j.access_token) {
+                pageMap.set(page.id, { ...page, access_token: j.access_token });
+                this.logger.log(`Resolved token for page ${page.id} (${page.name})`);
+              } else {
+                this.logger.warn(
+                  `Could not resolve token for page ${page.id} (${page.name}): ${j.error?.message ?? 'no token in response'}`,
+                );
+              }
+            } catch {
+              this.logger.warn(`Token resolution failed for page ${page.id}`);
+            }
+          }),
+        );
+      }
+
+      // Only keep pages that have a valid access_token — pages we still can't
+      // get a token for cannot receive webhooks or send messages.
       const allPages = Array.from(pageMap.values()).filter((p) => !!p.access_token);
 
       if (!allPages.length) {
