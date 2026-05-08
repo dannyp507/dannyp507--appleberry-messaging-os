@@ -398,7 +398,7 @@ export default function ContactsPage() {
         {/* Import CSV group assignment (only show when a group is active or as an option) */}
         <Select
           value={importGroupId || "__none__"}
-          onValueChange={(v) => setImportGroupId(v === "__none__" ? "" : v)}
+          onValueChange={(v) => setImportGroupId(v === "__none__" ? "" : (v ?? ""))}
         >
           <SelectTrigger className="h-8 w-[180px] text-xs">
             <SelectValue placeholder="Import into group…" />
