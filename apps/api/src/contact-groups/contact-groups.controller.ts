@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -73,5 +73,22 @@ export class ContactGroupsController {
     @Body() dto: AddContactsToGroupDto,
   ) {
     return this.groups.addContacts(workspace.id, id, dto);
+  }
+
+  @Delete(':id/members')
+  removeContacts(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { contactIds: string[] },
+  ) {
+    return this.groups.removeContacts(workspace.id, id, body.contactIds ?? []);
+  }
+
+  @Delete(':id')
+  remove(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.groups.remove(workspace.id, id);
   }
 }

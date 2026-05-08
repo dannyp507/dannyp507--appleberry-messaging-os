@@ -29,6 +29,7 @@ export interface Contact {
   email: string | null;
   isValid: boolean;
   isDuplicate: boolean;
+  optOut: boolean;
   createdAt: string;
   tags?: { tag: { id: string; name: string } }[];
 }

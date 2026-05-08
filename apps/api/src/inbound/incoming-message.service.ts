@@ -467,10 +467,16 @@ export class IncomingMessageService {
     if (!sub) return false;
 
     if (isOptOut) {
-      await this.prisma.contactSubscription.update({
-        where: { id: sub.id },
-        data: { status: 'UNSUBSCRIBED', unsubscribedAt: new Date() },
-      });
+      await Promise.all([
+        this.prisma.contactSubscription.update({
+          where: { id: sub.id },
+          data: { status: 'UNSUBSCRIBED', unsubscribedAt: new Date() },
+        }),
+        this.prisma.contact.update({
+          where: { id: contactId },
+          data: { optOut: true },
+        }),
+      ]);
 
       const cancelled = await this.sequences.cancelSubscriptionEnrollments(
         workspaceId,
@@ -494,10 +500,16 @@ export class IncomingMessageService {
     }
 
     // isOptIn
-    await this.prisma.contactSubscription.update({
-      where: { id: sub.id },
-      data: { status: 'SUBSCRIBED', unsubscribedAt: null },
-    });
+    await Promise.all([
+      this.prisma.contactSubscription.update({
+        where: { id: sub.id },
+        data: { status: 'SUBSCRIBED', unsubscribedAt: null },
+      }),
+      this.prisma.contact.update({
+        where: { id: contactId },
+        data: { optOut: false },
+      }),
+    ]);
 
     const greeting = this.substituteVars('Hi {{name}}!', senderName);
     await this.messages.enqueueOutboundText({

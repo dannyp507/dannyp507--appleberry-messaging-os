@@ -2,7 +2,7 @@ export const qk = {
   workspaces: ["workspaces"] as const,
   campaigns: ["campaigns"] as const,
   campaignReport: (id: string) => ["campaign-report", id] as const,
-  contacts: (params: { search?: string; skip?: number; take?: number }) =>
+  contacts: (params: { search?: string; skip?: number; take?: number; groupId?: string; optedOut?: boolean }) =>
     ["contacts", params] as const,
   contactGroups: ["contact-groups"] as const,
   contactGroupMembers: (id: string, params?: { skip?: number; take?: number }) =>
