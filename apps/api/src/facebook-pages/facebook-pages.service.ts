@@ -187,7 +187,10 @@ export class FacebookPagesService {
         this.logger.warn('Business Manager page lookup failed', bizErr);
       }
 
-      const allPages = Array.from(pageMap.values());
+      // Only keep pages that have a valid access_token — pages returned by
+      // Business Manager APIs may not carry a token if the user lacks the
+      // business_management permission to access them.
+      const allPages = Array.from(pageMap.values()).filter((p) => !!p.access_token);
 
       if (!allPages.length) {
         this.logger.warn(`No pages found for workspace ${workspaceId}`);
@@ -237,15 +240,20 @@ export class FacebookPagesService {
     if (!raw) throw new Error('Selection token expired or invalid');
 
     const data = JSON.parse(raw) as { workspaceId: string; pages: FbPageEntry[] };
-    await this.redis.redis.del(`fb:pending:${token}`);
 
     const { workspaceId, pages } = data;
     const toConnect = selectedPageIds.length
       ? pages.filter((p) => selectedPageIds.includes(p.id))
       : pages; // fallback: connect all if none specified
 
+    // Delete the Redis token AFTER we've finished saving, so that a mid-loop
+    // Prisma error doesn't consume the token and prevent retries.
     let savedCount = 0;
     for (const page of toConnect) {
+      if (!page.access_token) {
+        this.logger.warn(`Skipping page ${page.id} (${page.name}): no access_token`);
+        continue;
+      }
       await this.prisma.facebookPage.upsert({
         where: { workspaceId_pageId: { workspaceId, pageId: page.id } },
         create: {
@@ -266,6 +274,10 @@ export class FacebookPagesService {
       await this.subscribePageToWebhook(page.id, page.access_token);
       savedCount++;
     }
+
+    // Token consumed — delete only after successful saves so retries work if
+    // an error occurred mid-loop.
+    await this.redis.redis.del(`fb:pending:${token}`);
 
     this.logger.log(`Confirmed ${savedCount} Facebook page(s) for workspace ${workspaceId}`);
     return { connected: savedCount };
