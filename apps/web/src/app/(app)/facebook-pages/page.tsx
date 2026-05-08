@@ -35,6 +35,7 @@ interface PendingPage {
   pageId: string;
   name: string;
   category: string | null;
+  fanCount: number | null;
 }
 
 export default function FacebookPagesPage() {
@@ -224,6 +225,11 @@ export default function FacebookPagesPage() {
                     <p className="truncate text-sm font-semibold text-[#111827]">{page.name}</p>
                     {page.category && (
                       <p className="truncate text-xs text-[#6B7280]">{page.category}</p>
+                    )}
+                    {page.fanCount !== null && page.fanCount !== undefined && (
+                      <p className="truncate text-xs text-[#9CA3AF]">
+                        {page.fanCount.toLocaleString()} followers
+                      </p>
                     )}
                   </div>
                   <p className="shrink-0 font-mono text-[10px] text-[#9CA3AF]">{page.pageId}</p>

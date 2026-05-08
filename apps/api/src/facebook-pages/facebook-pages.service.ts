@@ -18,6 +18,7 @@ interface FbPageEntry {
   name: string;
   category?: string;
   access_token: string;
+  fan_count?: number;
 }
 
 @Injectable()
@@ -124,7 +125,7 @@ export class FacebookPagesService {
 
       // Source A: personal pages
       let nextUrl: string | null =
-        `${GRAPH_BASE}/me/accounts?fields=id,name,category,access_token&limit=200&access_token=${longToken}`;
+        `${GRAPH_BASE}/me/accounts?fields=id,name,category,access_token,fan_count&limit=200&access_token=${longToken}`;
 
       while (nextUrl) {
         const pageRes = await fetch(nextUrl);
@@ -160,7 +161,7 @@ export class FacebookPagesService {
           this.logger.log(`Found ${bizJson.data.length} Business Manager account(s)`);
           for (const biz of bizJson.data) {
             let bizNextUrl: string | null =
-              `${GRAPH_BASE}/${biz.id}/owned_pages?fields=id,name,category,access_token&limit=200&access_token=${longToken}`;
+              `${GRAPH_BASE}/${biz.id}/owned_pages?fields=id,name,category,access_token,fan_count&limit=200&access_token=${longToken}`;
             while (bizNextUrl) {
               const bizPageRes = await fetch(bizNextUrl);
               const bizPageJson = (await bizPageRes.json()) as {
@@ -257,6 +258,7 @@ export class FacebookPagesService {
         pageId: p.id,
         name: p.name,
         category: p.category ?? null,
+        fanCount: p.fan_count ?? null,
       })),
     };
   }
