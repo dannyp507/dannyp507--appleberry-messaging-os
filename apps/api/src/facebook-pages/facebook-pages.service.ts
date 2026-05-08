@@ -116,54 +116,108 @@ export class FacebookPagesService {
       const longData = (await longRes.json()) as FbTokenResponse;
       const longToken = longData.access_token ?? shortToken;
 
-      // Step 3: Get pages the user manages (page tokens are already permanent)
-      const pagesRes = await fetch(
-        `${GRAPH_BASE}/me/accounts?fields=id,name,category,access_token&access_token=${longToken}`,
-      );
-      const pagesData = (await pagesRes.json()) as { data?: FbPageEntry[]; error?: { message: string } };
+      // Step 3: Get ALL pages the user manages — follow pagination cursors so
+      // accounts with many pages don't get silently truncated.
+      const allPages: FbPageEntry[] = [];
+      let nextUrl: string | null =
+        `${GRAPH_BASE}/me/accounts?fields=id,name,category,access_token&limit=200&access_token=${longToken}`;
 
-      if (!pagesData.data?.length) {
+      while (nextUrl) {
+        const pageRes = await fetch(nextUrl);
+        const pageJson = (await pageRes.json()) as {
+          data?: FbPageEntry[];
+          paging?: { cursors?: { after?: string }; next?: string };
+          error?: { message: string };
+        };
+        if (pageJson.error) {
+          this.logger.error('Error fetching pages', pageJson.error.message);
+          break;
+        }
+        if (pageJson.data?.length) allPages.push(...pageJson.data);
+        // Follow the `next` cursor if present; otherwise stop
+        nextUrl = pageJson.paging?.next ?? null;
+      }
+
+      if (!allPages.length) {
         this.logger.warn(`No pages found for workspace ${workspaceId}`);
         return `${this.frontendUrl}/facebook-pages?error=no_pages`;
       }
 
-      // Step 4: Upsert each page into the database
-      let savedCount = 0;
-      for (const page of pagesData.data) {
-        await this.prisma.facebookPage.upsert({
-          where: {
-            workspaceId_pageId: { workspaceId, pageId: page.id },
-          },
-          create: {
-            workspaceId,
-            pageId: page.id,
-            name: page.name,
-            category: page.category ?? null,
-            pageAccessToken: page.access_token,
-            isActive: true,
-          },
-          update: {
-            name: page.name,
-            category: page.category ?? null,
-            pageAccessToken: page.access_token,
-            isActive: true,
-          },
-        });
+      // Step 4: Store all pages in Redis and redirect to the page-picker UI
+      // so the user can choose which page(s) to connect.
+      const pendingToken = randomUUID();
+      await this.redis.redis.set(
+        `fb:pending:${pendingToken}`,
+        JSON.stringify({ workspaceId, pages: allPages }),
+        'EX',
+        600, // 10-minute window to complete selection
+      );
 
-        // Step 5: Subscribe the page to webhook events.
-        // This is required in addition to the app-level webhook URL — without it,
-        // Meta will NOT deliver events for this page even if the webhook URL is set.
-        await this.subscribePageToWebhook(page.id, page.access_token);
-
-        savedCount++;
-      }
-
-      this.logger.log(`Connected ${savedCount} Facebook page(s) for workspace ${workspaceId}`);
-      return `${this.frontendUrl}/facebook-pages?connected=${savedCount}`;
+      this.logger.log(
+        `Stored ${allPages.length} page(s) for workspace ${workspaceId} pending selection`,
+      );
+      return `${this.frontendUrl}/facebook-pages?pending=${pendingToken}`;
     } catch (err) {
       this.logger.error('Facebook OAuth callback error', err);
       return `${this.frontendUrl}/facebook-pages?error=unknown`;
     }
+  }
+
+  /** Return the pending page list for a given selection token (no auth needed
+   *  beyond knowing the token — it's single-use and expires in 10 min). */
+  async getPendingPages(token: string) {
+    const raw = await this.redis.redis.get(`fb:pending:${token}`);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as { workspaceId: string; pages: FbPageEntry[] };
+    // Return page list without access tokens (frontend doesn't need them)
+    return {
+      token,
+      pages: data.pages.map((p) => ({
+        pageId: p.id,
+        name: p.name,
+        category: p.category ?? null,
+      })),
+    };
+  }
+
+  /** Save the user-selected pages and subscribe them to webhooks. */
+  async confirmPages(token: string, selectedPageIds: string[]): Promise<{ connected: number }> {
+    const raw = await this.redis.redis.get(`fb:pending:${token}`);
+    if (!raw) throw new Error('Selection token expired or invalid');
+
+    const data = JSON.parse(raw) as { workspaceId: string; pages: FbPageEntry[] };
+    await this.redis.redis.del(`fb:pending:${token}`);
+
+    const { workspaceId, pages } = data;
+    const toConnect = selectedPageIds.length
+      ? pages.filter((p) => selectedPageIds.includes(p.id))
+      : pages; // fallback: connect all if none specified
+
+    let savedCount = 0;
+    for (const page of toConnect) {
+      await this.prisma.facebookPage.upsert({
+        where: { workspaceId_pageId: { workspaceId, pageId: page.id } },
+        create: {
+          workspaceId,
+          pageId: page.id,
+          name: page.name,
+          category: page.category ?? null,
+          pageAccessToken: page.access_token,
+          isActive: true,
+        },
+        update: {
+          name: page.name,
+          category: page.category ?? null,
+          pageAccessToken: page.access_token,
+          isActive: true,
+        },
+      });
+      await this.subscribePageToWebhook(page.id, page.access_token);
+      savedCount++;
+    }
+
+    this.logger.log(`Confirmed ${savedCount} Facebook page(s) for workspace ${workspaceId}`);
+    return { connected: savedCount };
   }
 
   list(workspaceId: string) {
