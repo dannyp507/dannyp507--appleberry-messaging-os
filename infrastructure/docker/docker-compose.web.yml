@@ -6,6 +6,8 @@ services:
       args:
         NEXT_PUBLIC_API_URL: https://appleberry-api.duckdns.org
         NEXT_PUBLIC_GOOGLE_AUTH_ENABLED: ${NEXT_PUBLIC_GOOGLE_AUTH_ENABLED:-0}
+        NEXT_PUBLIC_META_APP_ID: ${NEXT_PUBLIC_META_APP_ID:-}
+        NEXT_PUBLIC_META_SIGNUP_CONFIG_ID: ${NEXT_PUBLIC_META_SIGNUP_CONFIG_ID:-}
     container_name: appleberry-web
     ports:
       - "8090:3000"

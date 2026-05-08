@@ -8,10 +8,12 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
@@ -52,6 +54,33 @@ export class ContactsController {
     @Body() dto: CreateContactDto,
   ) {
     return this.contacts.create(workspace.id, dto);
+  }
+
+  @Get('export')
+  async exportCsv(
+    @CurrentWorkspace() workspace: Workspace,
+    @Query('groupId') groupId: string | undefined,
+    @Query('optedOut') optedOut: string | undefined,
+    @Res() res: Response,
+  ) {
+    const csv = await this.contacts.exportCsv(workspace.id, {
+      groupId,
+      optedOut: optedOut === 'true',
+    });
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="contacts.csv"');
+    res.send(csv);
+  }
+
+  @Delete('bulk')
+  bulkRemove(
+    @CurrentWorkspace() workspace: Workspace,
+    @Body() body: { ids: string[] },
+  ) {
+    if (!Array.isArray(body?.ids) || body.ids.length === 0) {
+      throw new BadRequestException('ids array required');
+    }
+    return this.contacts.bulkRemove(workspace.id, body.ids);
   }
 
   @Delete(':id')

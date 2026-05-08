@@ -82,6 +82,22 @@ export class ContactGroupsService {
     });
   }
 
+  async remove(workspaceId: string, id: string) {
+    const group = await this.prisma.contactGroup.findFirst({ where: { id, workspaceId } });
+    if (!group) throw new NotFoundException('Group not found');
+    await this.prisma.contactGroup.delete({ where: { id } });
+    return { id, deleted: true as const };
+  }
+
+  async removeContacts(workspaceId: string, groupId: string, contactIds: string[]) {
+    const group = await this.prisma.contactGroup.findFirst({ where: { id: groupId, workspaceId } });
+    if (!group) throw new NotFoundException('Group not found');
+    const { count } = await this.prisma.contactGroupMember.deleteMany({
+      where: { groupId, contactId: { in: contactIds } },
+    });
+    return { groupId, removed: count };
+  }
+
   async addContacts(
     workspaceId: string,
     groupId: string,

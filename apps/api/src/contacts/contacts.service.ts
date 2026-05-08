@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as Papa from 'papaparse';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
@@ -37,6 +38,10 @@ export class ContactsService {
             ],
           }
         : {}),
+      ...(query.groupId
+        ? { groupMembers: { some: { groupId: query.groupId } } }
+        : {}),
+      ...(query.optedOut === true ? { optOut: true } : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -120,6 +125,39 @@ export class ContactsService {
     }
     await this.prisma.contact.delete({ where: { id } });
     return { id, deleted: true as const };
+  }
+
+  async bulkRemove(workspaceId: string, ids: string[]) {
+    if (!ids.length) return { deleted: 0 };
+    const { count } = await this.prisma.contact.deleteMany({
+      where: { id: { in: ids }, workspaceId },
+    });
+    return { deleted: count };
+  }
+
+  async exportCsv(workspaceId: string, query: { groupId?: string; optedOut?: boolean }): Promise<string> {
+    const where = {
+      workspaceId,
+      ...(query.groupId ? { groupMembers: { some: { groupId: query.groupId } } } : {}),
+      ...(query.optedOut === true ? { optOut: true } : {}),
+    };
+    const contacts = await this.prisma.contact.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 100_000,
+      include: { tags: { include: { tag: true } } },
+    });
+    return Papa.unparse(
+      contacts.map((c) => ({
+        firstName: c.firstName,
+        lastName: c.lastName,
+        phone: c.phone,
+        email: c.email ?? '',
+        tags: c.tags.map((t) => t.tag.name).join('|'),
+        optOut: c.optOut,
+        createdAt: c.createdAt.toISOString(),
+      })),
+    );
   }
 
   async enqueueImport(
