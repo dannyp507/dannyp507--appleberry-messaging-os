@@ -3,6 +3,14 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
 import type { FacebookPage } from "@/lib/api/types";
@@ -20,19 +28,56 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+
+interface PendingPage {
+  pageId: string;
+  name: string;
+  category: string | null;
+}
 
 export default function FacebookPagesPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
-  // Handle post-OAuth redirect feedback
+  // Page picker state
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
+  const [pendingPages, setPendingPages] = useState<PendingPage[]>([]);
+  const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
+  const [loadingPending, setLoadingPending] = useState(false);
+
+  // Handle post-OAuth redirect feedback and ?pending=TOKEN
   useEffect(() => {
     const connected = searchParams.get("connected");
     const error = searchParams.get("error");
+    const pending = searchParams.get("pending");
+
+    if (pending) {
+      // Fetch pending pages and open picker
+      setLoadingPending(true);
+      api
+        .get<{ token: string; pages: PendingPage[] }>(`/facebook/pages/pending?token=${pending}`)
+        .then(({ data }) => {
+          setPendingToken(data.token);
+          setPendingPages(data.pages);
+          setSelectedPageIds(new Set(data.pages.map((p) => p.pageId)));
+          setPickerOpen(true);
+        })
+        .catch(() => {
+          toast.error("Page selection expired or invalid. Please reconnect.");
+        })
+        .finally(() => setLoadingPending(false));
+      // Clear the query param from URL without navigation
+      router.replace("/facebook-pages");
+      return;
+    }
+
     if (connected) {
       toast.success(`${connected} Facebook page${Number(connected) !== 1 ? "s" : ""} connected.`);
+      router.replace("/facebook-pages");
     } else if (error) {
       const messages: Record<string, string> = {
         invalid_state:        "OAuth session expired. Please try again.",
@@ -42,8 +87,48 @@ export default function FacebookPagesPage() {
         unknown:              "An unexpected error occurred. Please try again.",
       };
       toast.error(messages[error] ?? "Facebook connection failed.");
+      router.replace("/facebook-pages");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  const confirmMutation = useMutation({
+    mutationFn: async ({ token, pageIds }: { token: string; pageIds: string[] }) => {
+      const { data } = await api.post<{ connected: number }>("/facebook/pages/confirm", {
+        token,
+        pageIds,
+      });
+      return data;
+    },
+    onSuccess: (data) => {
+      setPickerOpen(false);
+      setPendingToken(null);
+      setPendingPages([]);
+      setSelectedPageIds(new Set());
+      void queryClient.invalidateQueries({ queryKey: qk.facebookPages });
+      toast.success(
+        `${data.connected} Facebook page${data.connected !== 1 ? "s" : ""} connected successfully.`,
+      );
+    },
+    onError: () => toast.error("Could not confirm page selection. Please try again."),
+  });
+
+  const handleConfirmPages = () => {
+    if (!pendingToken || selectedPageIds.size === 0) return;
+    confirmMutation.mutate({ token: pendingToken, pageIds: Array.from(selectedPageIds) });
+  };
+
+  const togglePage = (pageId: string) => {
+    setSelectedPageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) {
+        next.delete(pageId);
+      } else {
+        next.add(pageId);
+      }
+      return next;
+    });
+  };
 
   const { data: pages = [], isLoading } = useQuery({
     queryKey: qk.facebookPages,
@@ -82,10 +167,10 @@ export default function FacebookPagesPage() {
     <Button
       type="button"
       className="rounded-xl shadow-sm hover:shadow-md"
-      disabled={loadingAuthUrl || !authUrlData?.url}
+      disabled={loadingAuthUrl || loadingPending || !authUrlData?.url}
       onClick={handleConnect}
     >
-      {loadingAuthUrl ? (
+      {loadingAuthUrl || loadingPending ? (
         <Loader2 className="mr-1.5 size-4 animate-spin" />
       ) : (
         <Share2 className="mr-1.5 size-4" />
@@ -96,6 +181,82 @@ export default function FacebookPagesPage() {
 
   return (
     <div className="page-container space-y-8">
+      {/* Page picker dialog — shown after OAuth redirect with ?pending=TOKEN */}
+      <Dialog open={pickerOpen} onOpenChange={(open) => !confirmMutation.isPending && setPickerOpen(open)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Pages to Connect</DialogTitle>
+            <DialogDescription>
+              Choose which Facebook Pages you want to connect to Appleberry. You can connect more later.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="my-2 space-y-2 max-h-72 overflow-y-auto pr-1">
+            {pendingPages.map((page) => {
+              const checked = selectedPageIds.has(page.pageId);
+              return (
+                <button
+                  key={page.pageId}
+                  type="button"
+                  onClick={() => togglePage(page.pageId)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors",
+                    checked
+                      ? "border-blue-500/40 bg-blue-500/10"
+                      : "border-[#E5E7EB] bg-[#F9FAFB] hover:bg-[#F3F4F6]",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex size-5 shrink-0 items-center justify-center rounded border-2 transition-colors",
+                      checked
+                        ? "border-blue-500 bg-blue-500"
+                        : "border-[#D1D5DB] bg-white",
+                    )}
+                  >
+                    {checked && (
+                      <svg className="size-3 text-white" fill="none" viewBox="0 0 12 12">
+                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm font-semibold text-[#111827]">{page.name}</p>
+                    {page.category && (
+                      <p className="truncate text-xs text-[#6B7280]">{page.category}</p>
+                    )}
+                  </div>
+                  <p className="shrink-0 font-mono text-[10px] text-[#9CA3AF]">{page.pageId}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setPickerOpen(false)}
+              disabled={confirmMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-xl"
+              disabled={selectedPageIds.size === 0 || confirmMutation.isPending}
+              onClick={handleConfirmPages}
+            >
+              {confirmMutation.isPending ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Share2 className="mr-1.5 size-4" />
+              )}
+              Connect {selectedPageIds.size > 0 ? `${selectedPageIds.size} ` : ""}
+              {selectedPageIds.size === 1 ? "Page" : "Pages"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <PageHeader
         title="Facebook Pages"
         description="Connect your Facebook Pages to receive and reply to Messenger conversations."
