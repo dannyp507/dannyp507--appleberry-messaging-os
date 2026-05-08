@@ -74,6 +74,9 @@ services:
       JWT_REFRESH_SEC: ${JWT_REFRESH_SEC:-604800}
       API_URL: ${API_URL:-}
       FRONTEND_URL: ${FRONTEND_URL:-}
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+      FACEBOOK_CONFIG_ID: ${FACEBOOK_CONFIG_ID:-}
     expose:
       - "3001"
     healthcheck:

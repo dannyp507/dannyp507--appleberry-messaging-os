@@ -43,6 +43,13 @@ export class FacebookPagesService {
   private get frontendUrl() {
     return this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
   }
+  /** Optional Facebook Login for Business config_id.
+   *  When set, the OAuth URL uses the FLfB dialog (required for published apps
+   *  that only have "Facebook Login for Business" enabled, not classic FB Login).
+   */
+  private get fbConfigId() {
+    return this.config.get<string>('FACEBOOK_CONFIG_ID') ?? '';
+  }
 
   /** Build the Facebook OAuth URL and store a short-lived state → workspaceId mapping */
   async buildAuthUrl(workspaceId: string): Promise<string> {
@@ -53,10 +60,19 @@ export class FacebookPagesService {
     const params = new URLSearchParams({
       client_id: this.appId,
       redirect_uri: this.redirectUri,
-      scope: 'pages_messaging,pages_manage_metadata,pages_read_engagement',
       response_type: 'code',
       state,
     });
+
+    // If a Facebook Login for Business config_id is set, use it instead of
+    // listing scopes manually — the config defines the permissions in Meta's
+    // dashboard and avoids the "Feature Unavailable" error on published apps.
+    if (this.fbConfigId) {
+      params.set('config_id', this.fbConfigId);
+    } else {
+      params.set('scope', 'pages_messaging,pages_manage_metadata,pages_show_list');
+    }
+
     return `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`;
   }
 
