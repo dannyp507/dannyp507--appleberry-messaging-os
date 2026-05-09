@@ -77,12 +77,21 @@ export default function CampaignsPage() {
   });
 
   const { data: groups = [] } = useQuery({
-    queryKey: ["contact-groups"],
+    queryKey: qk.contactGroups,
     queryFn: async () => {
       const { data } = await api.get<ContactGroup[]>("/contact-groups");
       return data;
     },
+    staleTime: 60_000,
   });
+
+  // Merge fetched groups with the editing campaign's embedded group so the
+  // current group always appears in the dropdown, even before the query loads.
+  const groupOptions: { id: string; name: string }[] = editing?.contactGroup
+    ? groups.some((g) => g.id === editing.contactGroup!.id)
+      ? groups
+      : [{ id: editing.contactGroup.id, name: editing.contactGroup.name }, ...groups]
+    : groups;
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["whatsapp-accounts"],
@@ -211,6 +220,10 @@ export default function CampaignsPage() {
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">— select template —</option>
+                {/* Always include current template so it shows before full list loads */}
+                {editing?.template && !templates.some((t) => t.id === editing.template!.id) && (
+                  <option value={editing.template.id}>{editing.template.name}</option>
+                )}
                 {templates.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
@@ -224,7 +237,7 @@ export default function CampaignsPage() {
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">— select group —</option>
-                {groups.map((g) => (
+                {groupOptions.map((g) => (
                   <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
               </select>
