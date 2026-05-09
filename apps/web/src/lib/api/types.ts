@@ -64,6 +64,7 @@ export interface Template {
   buttons?: TemplateButton[] | null;
   sections?: TemplateSection[] | null;
   variables: Record<string, unknown>;
+  mediaUrl?: string | null;
   createdAt: string;
 }
 
