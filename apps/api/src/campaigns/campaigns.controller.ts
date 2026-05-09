@@ -75,6 +75,14 @@ export class CampaignsController {
     return this.campaigns.pause(workspace.id, id);
   }
 
+  @Post(':id/reset')
+  reset(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.campaigns.reset(workspace.id, id);
+  }
+
   @Get(':id/report')
   report(
     @CurrentWorkspace() workspace: Workspace,

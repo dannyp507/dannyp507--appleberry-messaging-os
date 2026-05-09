@@ -80,8 +80,8 @@ export class CampaignsService {
   async update(workspaceId: string, id: string, dto: UpdateCampaignDto) {
     const campaign = await this.prisma.campaign.findFirst({ where: { id, workspaceId } });
     if (!campaign) throw new NotFoundException('Campaign not found');
-    if (campaign.status !== CampaignStatus.DRAFT) {
-      throw new BadRequestException('Only DRAFT campaigns can be updated');
+    if (campaign.status === CampaignStatus.RUNNING) {
+      throw new BadRequestException('Pause the campaign before editing');
     }
     return this.prisma.campaign.update({
       where: { id },
@@ -97,6 +97,28 @@ export class CampaignsService {
         ...(dto.sendWindowEnd !== undefined && { sendWindowEnd: dto.sendWindowEnd }),
       },
     });
+  }
+
+  /** Reset a COMPLETED or PAUSED campaign back to DRAFT so it can be re-run.
+   *  Clears all recipient rows and resets counters. */
+  async reset(workspaceId: string, id: string) {
+    const campaign = await this.prisma.campaign.findFirst({ where: { id, workspaceId } });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (campaign.status === CampaignStatus.RUNNING) {
+      throw new BadRequestException('Pause the campaign before resetting');
+    }
+    await this.prisma.$transaction([
+      this.prisma.campaignRecipient.deleteMany({ where: { campaignId: id } }),
+      this.prisma.campaign.update({
+        where: { id },
+        data: {
+          status: CampaignStatus.DRAFT,
+          total: 0, sent: 0, failed: 0, skipped: 0,
+          startedAt: null, completedAt: null,
+        },
+      }),
+    ]);
+    return { campaignId: id, status: CampaignStatus.DRAFT, reset: true };
   }
 
   async remove(workspaceId: string, id: string) {
