@@ -79,7 +79,7 @@ export default function CampaignsPage() {
   const { data: groups = [] } = useQuery({
     queryKey: ["contact-groups"],
     queryFn: async () => {
-      const { data } = await api.get<ContactGroup[]>("/contacts/groups");
+      const { data } = await api.get<ContactGroup[]>("/contact-groups");
       return data;
     },
   });
