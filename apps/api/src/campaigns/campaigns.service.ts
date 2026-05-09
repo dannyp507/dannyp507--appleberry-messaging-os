@@ -163,8 +163,10 @@ export class CampaignsService {
       maxDelayMs,
     };
 
+    // Use a unique jobId per run so BullMQ doesn't deduplicate against
+    // a previously-completed orchestration for the same campaign.
     await this.orchestrateQueue.add('orchestrate', job, {
-      jobId: `orch-${id}`,
+      jobId: `orch-${id}-${Date.now()}`,
       attempts: 2,
       backoff: { type: 'fixed', delay: 5000 },
     });
