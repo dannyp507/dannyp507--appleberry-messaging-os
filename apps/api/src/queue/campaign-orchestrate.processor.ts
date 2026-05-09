@@ -177,6 +177,7 @@ export class CampaignOrchestrateProcessor extends WorkerHost {
         accountId: account.id,
         campaignId,
         campaignRecipientId: rec.id,
+        mediaUrl: (campaign.template as { mediaUrl?: string }).mediaUrl ?? undefined,
       };
 
       const step =

@@ -40,4 +40,8 @@ export class CreateTemplateDto {
   @IsOptional()
   @IsObject()
   variables?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  mediaUrl?: string;
 }

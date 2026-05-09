@@ -21,7 +21,12 @@ export class TemplatesService {
         name: dto.name,
         content: dto.content,
         type: dto.type ?? 'TEXT',
+        header: dto.header,
+        footer: dto.footer,
+        buttons: dto.buttons as Prisma.InputJsonValue ?? undefined,
+        sections: dto.sections as Prisma.InputJsonValue ?? undefined,
         variables: (dto.variables ?? {}) as Prisma.InputJsonValue,
+        mediaUrl: dto.mediaUrl ?? null,
       },
     });
   }

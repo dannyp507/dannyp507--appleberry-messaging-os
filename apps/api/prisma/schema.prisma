@@ -822,6 +822,7 @@ model Template {
   buttons     Json?
   sections    Json?
   variables   Json             @default("{}")
+  mediaUrl    String?
   isArchived  Boolean          @default(false)
   usageCount  Int              @default(0)
   tags        String[]         @default([])
