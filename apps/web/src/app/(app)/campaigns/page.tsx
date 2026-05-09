@@ -31,7 +31,7 @@ import { Loader2, Megaphone, Pause, Pencil, Plus, RefreshCw, Trash2 } from "luci
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-interface ContactGroup { id: string; name: string; }
+interface ContactGroup { id: string; name: string; _count?: { members: number }; }
 
 function statusVariant(
   s: CampaignStatus,
@@ -87,7 +87,7 @@ export default function CampaignsPage() {
 
   // Merge fetched groups with the editing campaign's embedded group so the
   // current group always appears in the dropdown, even before the query loads.
-  const groupOptions: { id: string; name: string }[] = editing?.contactGroup
+  const groupOptions: ContactGroup[] = editing?.contactGroup
     ? groups.some((g) => g.id === editing.contactGroup!.id)
       ? groups
       : [{ id: editing.contactGroup.id, name: editing.contactGroup.name }, ...groups]
@@ -238,7 +238,9 @@ export default function CampaignsPage() {
               >
                 <option value="">— select group —</option>
                 {groupOptions.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
+                  <option key={g.id} value={g.id}>
+                    {g.name}{g._count ? ` (${g._count.members} contacts)` : ""}
+                  </option>
                 ))}
               </select>
             </div>
