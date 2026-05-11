@@ -325,10 +325,13 @@ model Workspace {
   googleIntegration    GoogleIntegration?
   leadCaptureConfig    LeadCaptureConfig?
   calendarConfig       CalendarConfig?
-  contactSubscriptions ContactSubscription[]
-  dripSequences        DripSequence[]
-  dripEnrollments      DripEnrollment[]
-  subscribeForms       SubscribeForm[]
+  contactSubscriptions    ContactSubscription[]
+  dripSequences           DripSequence[]
+  dripEnrollments         DripEnrollment[]
+  subscribeForms          SubscribeForm[]
+  fbCommentAutomations    FbCommentAutomation[]
+  fbCommentEvents         FbCommentEvent[]
+  workspaceBrandSettings  WorkspaceBrandSettings?
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -588,10 +591,12 @@ model FacebookPage {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  inboxThreads       InboxThread[]
-  messageLogs        MessageLog[]
-  autoresponderRules AutoresponderRule[]
+  workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inboxThreads         InboxThread[]
+  messageLogs          MessageLog[]
+  autoresponderRules   AutoresponderRule[]
+  fbCommentAutomations FbCommentAutomation[]
+  fbCommentEvents      FbCommentEvent[]
 
   @@unique([workspaceId, pageId])
   @@index([workspaceId])
@@ -1418,6 +1423,118 @@ model CalendarConfig {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, map: "CalendarConfig_workspace_fkey")
 
   @@index([workspaceId])
+}
+
+// ─── Facebook Comment Automation ─────────────────────────────────────────────
+
+enum FbCommentActionType {
+  PRIVATE_REPLY
+  PUBLIC_COMMENT
+  BOTH
+}
+
+/// One automation = one Facebook post + keyword rules + one action config.
+/// When a matching comment arrives the processor fires the configured action.
+model FbCommentAutomation {
+  id             String              @id @default(uuid()) @db.Uuid
+  workspaceId    String              @db.Uuid
+  facebookPageId String              @db.Uuid
+  /// Facebook post ID (format: {pageId}_{postId} or video ID)
+  postId         String
+  /// Short preview of the post shown in the UI
+  postSnippet    String?
+  name           String
+  isActive       Boolean             @default(true)
+  actionType     FbCommentActionType @default(PRIVATE_REPLY)
+  /// Message body sent as private DM or public reply
+  messageText    String              @db.Text
+  /// Optional CTA button appended to the message (Messenger templates)
+  buttonLabel    String?
+  buttonUrl      String?
+  mediaUrl       String?
+  /// When true, messageText is used as an AI system prompt and AI generates the reply
+  aiEnabled      Boolean             @default(false)
+  aiSystemPrompt String?             @db.Text
+  replyCount     Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  workspace  Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fbPage     FacebookPage          @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+  keywords   FbAutomationKeyword[]
+  events     FbCommentEvent[]
+
+  @@index([workspaceId])
+  @@index([facebookPageId])
+  @@index([workspaceId, isActive])
+}
+
+/// One keyword row per trigger keyword belonging to an automation.
+model FbAutomationKeyword {
+  id           String   @id @default(uuid()) @db.Uuid
+  automationId String   @db.Uuid
+  keyword      String
+  /// "EXACT" | "CONTAINS"
+  matchType    String   @default("CONTAINS")
+  createdAt    DateTime @default(now())
+
+  automation FbCommentAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+}
+
+/// Immutable log of every comment event processed by the automation engine.
+/// commentId is unique — used as the primary deduplication key.
+model FbCommentEvent {
+  id               String               @id @default(uuid()) @db.Uuid
+  workspaceId      String               @db.Uuid
+  facebookPageId   String               @db.Uuid
+  automationId     String?              @db.Uuid
+  /// Facebook comment ID — unique across the whole table for dedup
+  commentId        String               @unique
+  postId           String
+  commenterId      String
+  commenterName    String?
+  commentText      String               @db.Text
+  matchedKeyword   String?
+  actionType       FbCommentActionType?
+  privateReplySent Boolean              @default(false)
+  publicReplySent  Boolean              @default(false)
+  error            String?              @db.Text
+  processedAt      DateTime             @default(now())
+
+  workspace  Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fbPage     FacebookPage         @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+  automation FbCommentAutomation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, processedAt])
+  @@index([facebookPageId])
+  @@index([automationId])
+}
+
+// ─── Brand AI Settings ────────────────────────────────────────────────────────
+
+/// Per-workspace brand context used by the AI comment reply feature.
+/// Provides the AI with business identity, tone, and content guidelines.
+model WorkspaceBrandSettings {
+  id                     String   @id @default(uuid()) @db.Uuid
+  workspaceId            String   @unique @db.Uuid
+  businessName           String?
+  industry               String?
+  toneOfVoice            String?  @db.Text
+  productsServices       String?  @db.Text
+  faqs                   String?  @db.Text
+  businessHours          String?
+  contactDetails         String?  @db.Text
+  websiteUrl             String?
+  wordsToUse             String?
+  wordsToAvoid           String?
+  escalationInstructions String?  @db.Text
+  customInstructions     String?  @db.Text
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 // ─── Opt-in / Subscribe Forms ─────────────────────────────────────────────────

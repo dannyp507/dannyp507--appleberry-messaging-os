@@ -345,13 +345,17 @@ export class FacebookPagesService {
    * Safe to call multiple times (idempotent).
    */
   async subscribePageToWebhook(pageId: string, pageAccessToken: string): Promise<void> {
+    // Include 'feed' to receive page post comment events for comment automation.
+    // Note: 'feed' must also be enabled in the app-level webhook subscription in
+    // the Meta Developer Console for events to be delivered.
     const res = await fetch(
       `${GRAPH_BASE}/${pageId}/subscribed_apps`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
-          subscribed_fields: 'messages,messaging_postbacks,message_deliveries,message_reads',
+          subscribed_fields:
+            'messages,messaging_postbacks,message_deliveries,message_reads,feed',
           access_token: pageAccessToken,
         }).toString(),
       },
@@ -360,7 +364,9 @@ export class FacebookPagesService {
     if (!body.success) {
       this.logger.error(`Failed to subscribe page ${pageId} to webhook: ${body.error?.message ?? JSON.stringify(body)}`);
     } else {
-      this.logger.log(`Page ${pageId} subscribed to webhook fields: messages, messaging_postbacks, message_deliveries, message_reads`);
+      this.logger.log(
+        `Page ${pageId} subscribed to webhook fields: messages, messaging_postbacks, message_deliveries, message_reads, feed`,
+      );
     }
   }
 
