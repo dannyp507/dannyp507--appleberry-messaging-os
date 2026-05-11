@@ -60,9 +60,12 @@ export class FbCommentProcessorService {
       where: {
         facebookPageId: page.id,
         isActive: true,
-        OR: [{ postId }, { postId: null }],
+        OR: [
+          { postId },
+          { postId: { equals: null } },
+        ],
       },
-      orderBy: { postId: 'desc' }, // non-null (post-specific) before null (all-posts)
+      orderBy: { createdAt: 'asc' }, // consistent ordering
       include: {
         keywords: true,
       },
