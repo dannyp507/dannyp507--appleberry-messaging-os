@@ -438,6 +438,7 @@ export interface FbCommentAutomation {
   isActive: boolean;
   actionType: FbCommentActionType;
   messageText: string;
+  dmText: string | null;
   buttonLabel: string | null;
   buttonUrl: string | null;
   mediaUrl: string | null;

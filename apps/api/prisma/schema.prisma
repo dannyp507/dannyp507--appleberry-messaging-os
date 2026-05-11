@@ -1446,13 +1446,16 @@ model FbCommentAutomation {
   name           String
   isActive       Boolean             @default(true)
   actionType     FbCommentActionType @default(PRIVATE_REPLY)
-  /// Message body sent as private DM or public reply
+  /// Message body used for the PUBLIC comment reply (visible on the post)
   messageText    String              @db.Text
-  /// Optional CTA button appended to the message (Messenger templates)
+  /// Separate message body for the PRIVATE Messenger DM — if null, falls back to messageText
+  dmText         String?             @db.Text
+  /// Optional CTA button appended to the private DM (Messenger button template)
   buttonLabel    String?
   buttonUrl      String?
+  /// Optional media URL attached to the private DM
   mediaUrl       String?
-  /// When true, messageText is used as an AI system prompt and AI generates the reply
+  /// When true, AI generates the reply (public and/or DM depending on actionType)
   aiEnabled      Boolean             @default(false)
   aiSystemPrompt String?             @db.Text
   replyCount     Int                 @default(0)

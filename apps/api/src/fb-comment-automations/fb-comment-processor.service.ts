@@ -99,15 +99,22 @@ export class FbCommentProcessorService {
         let publicReplySent = false;
         let error: string | null = null;
 
-        // Resolve reply text — AI or static
-        let replyText = automation.messageText;
+        // Resolve reply texts — AI or static
+        // publicReplyText: always from messageText (visible on the post)
+        // dmText: from automation.dmText if set, otherwise falls back to messageText
+        let publicReplyText = automation.messageText;
+        let dmBodyText = (automation.dmText ?? automation.messageText) as string;
+
         if (automation.aiEnabled) {
           const aiReply = await this.ai.generateReply(
             { workspaceId: page.workspaceId, contactId: commenterId },
             commentText,
             this.buildAiSystemPrompt(automation.aiSystemPrompt, page.workspaceId),
           );
-          if (aiReply) replyText = aiReply;
+          if (aiReply) {
+            // AI reply goes to DM; public reply still uses the static messageText
+            dmBodyText = aiReply;
+          }
         }
 
         // Execute action(s)
@@ -116,14 +123,21 @@ export class FbCommentProcessorService {
             automation.actionType === 'PRIVATE_REPLY' ||
             automation.actionType === 'BOTH'
           ) {
-            await this.sendPrivateReply(commentId, replyText, page.pageAccessToken);
+            await this.sendPrivateReply(
+              commentId,
+              dmBodyText,
+              page.pageAccessToken,
+              automation.buttonLabel ?? undefined,
+              automation.buttonUrl ?? undefined,
+              automation.mediaUrl ?? undefined,
+            );
             privateReplySent = true;
           }
           if (
             automation.actionType === 'PUBLIC_COMMENT' ||
             automation.actionType === 'BOTH'
           ) {
-            await this.sendPublicReply(commentId, replyText, page.pageAccessToken);
+            await this.sendPublicReply(commentId, publicReplyText, page.pageAccessToken);
             publicReplySent = true;
           }
         } catch (err) {
@@ -185,18 +199,71 @@ export class FbCommentProcessorService {
   /** Sends a private Messenger DM to the commenter using the Messenger Send API.
    *  Uses recipient.comment_id which works across all post types (regular, check-in, video, etc.)
    *  Unlike the legacy /private_replies endpoint, this is not restricted by post type.
-   *  Requires pages_messaging permission. */
+   *  Requires pages_messaging permission.
+   *
+   *  When buttonLabel + buttonUrl are supplied the message is sent as a Messenger
+   *  button template with a single web_url button appended to the text.
+   *  When mediaUrl is supplied (and no button) the message includes a media attachment. */
   private async sendPrivateReply(
     commentId: string,
     message: string,
     pageAccessToken: string,
+    buttonLabel?: string,
+    buttonUrl?: string,
+    mediaUrl?: string,
+  ): Promise<void> {
+    // Build the message payload
+    let messagePayload: Record<string, unknown>;
+
+    if (buttonLabel && buttonUrl) {
+      // Messenger button template — text + URL button
+      messagePayload = {
+        attachment: {
+          type: 'template',
+          payload: {
+            template_type: 'button',
+            text: message,
+            buttons: [
+              {
+                type: 'web_url',
+                url: buttonUrl,
+                title: buttonLabel,
+              },
+            ],
+          },
+        },
+      };
+    } else if (mediaUrl) {
+      // Media attachment (image/video) — send as two separate messages:
+      // 1. the text, 2. the media (Messenger doesn't support text+media in one template)
+      await this.sendMessengerMessage(commentId, pageAccessToken, { text: message });
+      messagePayload = {
+        attachment: {
+          type: 'image',
+          payload: { url: mediaUrl, is_reusable: true },
+        },
+      };
+    } else {
+      // Plain text DM
+      messagePayload = { text: message };
+    }
+
+    await this.sendMessengerMessage(commentId, pageAccessToken, messagePayload);
+    this.logger.log(`Private Messenger reply sent to comment ${commentId}`);
+  }
+
+  /** Core Messenger Send API call — POST /me/messages with recipient.comment_id */
+  private async sendMessengerMessage(
+    commentId: string,
+    pageAccessToken: string,
+    messagePayload: Record<string, unknown>,
   ): Promise<void> {
     const res = await fetch(`${GRAPH_BASE}/me/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipient: { comment_id: commentId },
-        message: { text: message },
+        message: messagePayload,
         access_token: pageAccessToken,
       }),
     });
@@ -210,7 +277,6 @@ export class FbCommentProcessorService {
       );
       throw new Error(e?.message ?? `HTTP ${res.status}`);
     }
-    this.logger.log(`Private Messenger reply sent to comment ${commentId}`);
   }
 
   /** POST /{comment_id}/comments — posts a public reply to a comment thread. */

@@ -47,6 +47,11 @@ export class CreateFbAutomationDto {
   @IsNotEmpty()
   messageText!: string;
 
+  /** Separate text for the private Messenger DM. Falls back to messageText if omitted. */
+  @IsString()
+  @IsOptional()
+  dmText?: string;
+
   @IsString()
   @IsOptional()
   buttonLabel?: string;

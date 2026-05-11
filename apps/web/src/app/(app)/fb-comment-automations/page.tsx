@@ -74,7 +74,10 @@ interface AutomationForm {
   postSnippet: string;
   name: string;
   actionType: FbCommentActionType;
+  /** Visible public comment reply (shown on the post) */
   messageText: string;
+  /** Separate private Messenger DM text (blank = falls back to messageText) */
+  dmText: string;
   buttonLabel: string;
   buttonUrl: string;
   mediaUrl: string;
@@ -97,6 +100,7 @@ const EMPTY_FORM: AutomationForm = {
   name: "",
   actionType: "PRIVATE_REPLY",
   messageText: "",
+  dmText: "",
   buttonLabel: "",
   buttonUrl: "",
   mediaUrl: "",
@@ -390,6 +394,7 @@ function AutomationDialog({
         name: initial.name,
         actionType: initial.actionType,
         messageText: initial.messageText,
+        dmText: initial.dmText ?? "",
         buttonLabel: initial.buttonLabel ?? "",
         buttonUrl: initial.buttonUrl ?? "",
         mediaUrl: initial.mediaUrl ?? "",
@@ -447,8 +452,18 @@ function AutomationDialog({
 
   const saveMutation = useMutation({
     mutationFn: async (payload: AutomationForm) => {
+      // For PRIVATE_REPLY-only: messageText isn't shown to users but is required by
+      // the DB (NOT NULL). Use dmText as the value so the constraint is satisfied.
+      // The processor always uses dmText (or falls back to messageText) for the DM.
+      const effectiveMessageText =
+        payload.actionType === "PRIVATE_REPLY"
+          ? payload.dmText || payload.messageText
+          : payload.messageText;
+
       const body = {
         ...payload,
+        messageText: effectiveMessageText,
+        dmText: payload.dmText || undefined,
         buttonLabel: payload.buttonLabel || undefined,
         buttonUrl: payload.buttonUrl || undefined,
         mediaUrl: payload.mediaUrl || undefined,
@@ -486,11 +501,15 @@ function AutomationDialog({
     }));
   };
 
+  const dmRequired = form.actionType === "PRIVATE_REPLY" || form.actionType === "BOTH";
+  const publicRequired = form.actionType === "PUBLIC_COMMENT" || form.actionType === "BOTH";
+
   const canSubmit =
     form.facebookPageId &&
     form.postId &&
     form.name.trim() &&
-    form.messageText.trim() &&
+    (!publicRequired || form.messageText.trim()) &&
+    (!dmRequired || form.dmText.trim()) &&
     form.keywords.length > 0;
 
   return (
@@ -696,19 +715,112 @@ function AutomationDialog({
             />
           </div>
 
-          {/* Message */}
-          <div className="space-y-1.5">
-            <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-              {form.aiEnabled ? "Fallback Message (if AI fails) *" : "Reply Message *"}
-            </Label>
-            <Textarea
-              value={form.messageText}
-              onChange={(e) => setField("messageText", e.target.value)}
-              placeholder="Hi! Thanks for your interest. Please DM us for pricing details."
-              rows={3}
-              className="text-sm"
-            />
-          </div>
+          {/* ── Public Reply section — shown when action posts a public comment ── */}
+          {(form.actionType === "PUBLIC_COMMENT" || form.actionType === "BOTH") && (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 space-y-2">
+              <p className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase tracking-wide">
+                <Globe className="size-3.5" />
+                Public Reply
+              </p>
+              <p className="text-[10px] text-[#9CA3AF]">
+                Visible comment posted under the post — keep it short and friendly.
+              </p>
+              <Textarea
+                value={form.messageText}
+                onChange={(e) => setField("messageText", e.target.value)}
+                placeholder="Thanks for your comment! Check your DMs for details 👋"
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+          )}
+
+          {/* ── Private DM section — shown when action sends a Messenger DM ── */}
+          {(form.actionType === "PRIVATE_REPLY" || form.actionType === "BOTH") && (
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 space-y-3">
+              <p className="text-xs font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-wide">
+                <MessageSquare className="size-3.5" />
+                Private Messenger DM
+              </p>
+
+              {/* DM text — separate from public reply */}
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                  {form.aiEnabled
+                    ? "Fallback DM Text (if AI fails)"
+                    : form.actionType === "BOTH"
+                      ? "DM Message *"
+                      : "DM Message *"}
+                </Label>
+                <Textarea
+                  value={form.dmText}
+                  onChange={(e) => setField("dmText", e.target.value)}
+                  placeholder="Hi! Thanks for your interest. Here are our pricing details…"
+                  rows={3}
+                  className="text-sm"
+                />
+                {form.actionType === "PRIVATE_REPLY" && (
+                  <p className="text-[10px] text-[#9CA3AF]">
+                    Only the DM will be sent — no public comment.
+                  </p>
+                )}
+              </div>
+
+              {/* URL Button */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                    Button Label
+                  </Label>
+                  <Input
+                    value={form.buttonLabel}
+                    onChange={(e) => setField("buttonLabel", e.target.value)}
+                    placeholder="View Pricing"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                    Button URL
+                  </Label>
+                  <Input
+                    value={form.buttonUrl}
+                    onChange={(e) => setField("buttonUrl", e.target.value)}
+                    placeholder="https://…"
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+              {(form.buttonLabel || form.buttonUrl) && (
+                <p className="text-[10px] text-indigo-300">
+                  A tappable button will be appended to the DM — both label and URL required.
+                </p>
+              )}
+
+              {/* Media URL */}
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                  Media Image URL <span className="font-normal normal-case text-[#9CA3AF]">(optional)</span>
+                </Label>
+                <Input
+                  value={form.mediaUrl}
+                  onChange={(e) => setField("mediaUrl", e.target.value)}
+                  placeholder="https://…/product.jpg"
+                  className="h-8 text-sm"
+                />
+                <p className="text-[10px] text-[#9CA3AF]">
+                  Sent as a separate image message if no button is set.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Public-only: still need a message text field */}
+          {form.actionType === "PUBLIC_COMMENT" && (
+            <p className="text-[10px] text-[#9CA3AF] -mt-2">
+              No DM will be sent — only the public reply above.
+            </p>
+          )}
 
           {/* AI toggle */}
           <div
@@ -728,10 +840,10 @@ function AutomationDialog({
                       form.aiEnabled ? "text-violet-400" : "text-[#9CA3AF]",
                     )}
                   />
-                  AI-Generated Replies
+                  AI-Generated DM Replies
                 </p>
                 <p className="text-[10px] text-[#9CA3AF] mt-0.5">
-                  Let AI craft dynamic, personalised replies
+                  AI writes the DM dynamically — public reply stays as typed
                 </p>
               </div>
               <button
