@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
-import { Bot, Eye, EyeOff, Save } from "lucide-react";
+import { Bot, Eye, EyeOff, Save, Trash2 } from "lucide-react";
 
 interface AiSettings {
   defaultProvider: string;
@@ -68,6 +68,9 @@ export default function AiSettingsPage() {
   const [geminiModel, setGeminiModel] = useState("gemini-1.5-flash");
   const [showOpenai, setShowOpenai] = useState(false);
   const [showGemini, setShowGemini] = useState(false);
+  // null = no change, "" = explicit clear
+  const [clearOpenai, setClearOpenai] = useState(false);
+  const [clearGemini, setClearGemini] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -80,12 +83,17 @@ export default function AiSettingsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // clearOpenai/clearGemini → send "" to explicitly erase the stored key
+      // openaiKey has a value → send the new key
+      // neither → send undefined so the backend keeps the existing key unchanged
+      const openaiApiKey = clearOpenai ? "" : openaiKey || undefined;
+      const geminiApiKey = clearGemini ? "" : geminiKey || undefined;
       await api.put("/workspace-ai-settings", {
         defaultProvider: provider,
         systemPrompt: systemPrompt || null,
-        openaiApiKey: openaiKey || undefined,
+        openaiApiKey,
         openaiModel,
-        geminiApiKey: geminiKey || undefined,
+        geminiApiKey,
         geminiModel,
       });
     },
@@ -93,6 +101,8 @@ export default function AiSettingsPage() {
       toast.success("AI settings saved");
       setOpenaiKey("");
       setGeminiKey("");
+      setClearOpenai(false);
+      setClearGemini(false);
       qc.invalidateQueries({ queryKey: ["workspace-ai-settings"] });
     },
     onError: (e) => toast.error(getApiErrorMessage(e)),
@@ -180,37 +190,41 @@ export default function AiSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="openai-key">
-              API Key{" "}
-              <span className="text-muted-foreground font-normal">
-                (leave blank to keep existing)
-              </span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="openai-key"
-                type={showOpenai ? "text" : "password"}
-                placeholder={data?.openaiKeySet ? "sk-•••••••••••••••••••••••" : "sk-…"}
-                value={openaiKey}
-                onChange={(e) => setOpenaiKey(e.target.value)}
-                className="pr-10"
-              />
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => setShowOpenai((v) => !v)}
-              >
-                {showOpenai ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
+            <Label htmlFor="openai-key">API Key</Label>
+            {clearOpenai ? (
+              <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2">
+                <span className="flex-1 text-sm text-red-400">Key will be removed on save</span>
+                <button type="button" onClick={() => setClearOpenai(false)} className="text-xs text-muted-foreground hover:text-foreground underline">Undo</button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="openai-key"
+                    type={showOpenai ? "text" : "password"}
+                    placeholder={data?.openaiKeySet ? "sk-••• (saved) — paste new key to replace" : "sk-…"}
+                    value={openaiKey}
+                    onChange={(e) => setOpenaiKey(e.target.value)}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowOpenai((v) => !v)}
+                  >
+                    {showOpenai ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {data?.openaiKeySet && (
+                  <Button type="button" variant="outline" size="icon" className="shrink-0 text-red-400 hover:text-red-500 hover:border-red-400" onClick={() => { setClearOpenai(true); setOpenaiKey(""); }} title="Remove key">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               Get your key at{" "}
-              <a
-                href="https://platform.openai.com/api-keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
+              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">
                 platform.openai.com/api-keys
               </a>
             </p>
@@ -258,37 +272,41 @@ export default function AiSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="gemini-key">
-              API Key{" "}
-              <span className="text-muted-foreground font-normal">
-                (leave blank to keep existing)
-              </span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="gemini-key"
-                type={showGemini ? "text" : "password"}
-                placeholder={data?.geminiKeySet ? "AIza•••••••••••••••••••••" : "AIza…"}
-                value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
-                className="pr-10"
-              />
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => setShowGemini((v) => !v)}
-              >
-                {showGemini ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
+            <Label htmlFor="gemini-key">API Key</Label>
+            {clearGemini ? (
+              <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2">
+                <span className="flex-1 text-sm text-red-400">Key will be removed on save</span>
+                <button type="button" onClick={() => setClearGemini(false)} className="text-xs text-muted-foreground hover:text-foreground underline">Undo</button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="gemini-key"
+                    type={showGemini ? "text" : "password"}
+                    placeholder={data?.geminiKeySet ? "AIza••• (saved) — paste new key to replace" : "AIza…"}
+                    value={geminiKey}
+                    onChange={(e) => setGeminiKey(e.target.value)}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowGemini((v) => !v)}
+                  >
+                    {showGemini ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {data?.geminiKeySet && (
+                  <Button type="button" variant="outline" size="icon" className="shrink-0 text-red-400 hover:text-red-500 hover:border-red-400" onClick={() => { setClearGemini(true); setGeminiKey(""); }} title="Remove key">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               Get your key at{" "}
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline">
                 aistudio.google.com/app/apikey
               </a>
             </p>
