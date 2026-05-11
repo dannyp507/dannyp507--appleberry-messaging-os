@@ -8,16 +8,20 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { TemplateRenderService } from '../messaging/template-render.service';
 import { FacebookPagesService } from './facebook-pages.service';
+import { FbCommentProcessorService } from '../fb-comment-automations/fb-comment-processor.service';
 
 export interface FacebookWebhookPayload {
   object: 'page' | 'instagram';
-  entry: MessengerEntry[];
+  entry: WebhookEntry[];
 }
 
-interface MessengerEntry {
+interface WebhookEntry {
   id: string; // Facebook page ID
   time: number;
+  /** Messenger events (DMs, postbacks, delivery receipts) */
   messaging?: MessengerEvent[];
+  /** Page feed events (comments, likes, posts) */
+  changes?: FeedChange[];
 }
 
 interface MessengerEvent {
@@ -28,6 +32,20 @@ interface MessengerEvent {
   postback?: { payload: string; title: string };
 }
 
+interface FeedChange {
+  field: string;
+  value: {
+    item?: string;        // 'comment' | 'post' | 'like' | 'share' | 'reaction'
+    verb?: string;        // 'add' | 'remove' | 'edit'
+    comment_id?: string;
+    post_id?: string;
+    parent_id?: string;   // parent comment / post ID
+    from?: { id: string; name?: string };
+    message?: string;
+    created_time?: number;
+  };
+}
+
 @Injectable()
 export class FacebookInboundService {
   readonly logger = new Logger(FacebookInboundService.name);
@@ -36,27 +54,59 @@ export class FacebookInboundService {
     private readonly prisma: PrismaService,
     private readonly fbPages: FacebookPagesService,
     private readonly templates: TemplateRenderService,
+    private readonly commentProcessor: FbCommentProcessorService,
   ) {}
 
   async handleWebhook(payload: FacebookWebhookPayload): Promise<void> {
     for (const entry of payload.entry) {
-      if (!entry.messaging?.length) continue;
-      for (const event of entry.messaging) {
-        const text = event.message?.text;
-        if (!text) continue; // attachments / postbacks handled in Phase 2
+      const pageId = entry.id;
 
-        const senderId = event.sender.id;
-        const pageId = entry.id;
+      // ── Messenger DM events ────────────────────────────────────────────────
+      if (entry.messaging?.length) {
+        for (const event of entry.messaging) {
+          const text = event.message?.text;
+          if (!text) continue; // attachments / postbacks handled later
 
-        // Skip echo messages (page sent to itself)
-        if (senderId === pageId) continue;
+          const senderId = event.sender.id;
 
-        try {
-          await this.processMessage(pageId, senderId, text, event.message?.mid);
-        } catch (err) {
-          this.logger.error(
-            `Error processing FB message sender=${senderId} page=${pageId}: ${String(err)}`,
-          );
+          // Skip echo messages (page sent to itself)
+          if (senderId === pageId) continue;
+
+          try {
+            await this.processMessage(pageId, senderId, text, event.message?.mid);
+          } catch (err) {
+            this.logger.error(
+              `Error processing FB message sender=${senderId} page=${pageId}: ${String(err)}`,
+            );
+          }
+        }
+      }
+
+      // ── Feed change events (post comments, likes, etc.) ────────────────────
+      if (entry.changes?.length) {
+        for (const change of entry.changes) {
+          if (change.field !== 'feed') continue;
+          const v = change.value;
+
+          // Only process new comments (not edits/deletes, not likes/shares)
+          if (v.item !== 'comment' || v.verb !== 'add') continue;
+          if (!v.comment_id || !v.post_id || !v.from?.id || !v.message) continue;
+
+          try {
+            await this.commentProcessor.processComment({
+              pageId,
+              commentId: v.comment_id,
+              postId: v.post_id,
+              commenterId: v.from.id,
+              commenterName: v.from.name,
+              commentText: v.message,
+              parentId: v.parent_id,
+            });
+          } catch (err) {
+            this.logger.error(
+              `Error processing FB comment commentId=${v.comment_id} page=${pageId}: ${String(err)}`,
+            );
+          }
         }
       }
     }

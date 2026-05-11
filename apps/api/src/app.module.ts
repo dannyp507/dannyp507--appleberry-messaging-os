@@ -36,6 +36,8 @@ import { WhatsAppCloudModule } from './whatsapp-cloud/whatsapp-cloud.module';
 import { SubscribersModule } from './subscribers/subscribers.module';
 import { SequencesModule } from './sequences/sequences.module';
 import { SubscribeFormsModule } from './subscribe-forms/subscribe-forms.module';
+import { FbCommentAutomationsModule } from './fb-comment-automations/fb-comment-automations.module';
+import { BrandSettingsModule } from './brand-settings/brand-settings.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -81,6 +83,8 @@ import { AppController } from './app.controller';
     SubscribersModule,
     SequencesModule,
     SubscribeFormsModule,
+    FbCommentAutomationsModule,
+    BrandSettingsModule,
   ],
   providers: [
     {

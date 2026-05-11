@@ -32,6 +32,8 @@ import {
   Menu,
   ChevronRight,
   FileInput,
+  MessageCircleMore,
+  Palette,
 } from "lucide-react";
 
 // ─── Nav definitions ──────────────────────────────────────────────────────────
@@ -46,11 +48,12 @@ const mainNav = [
 ] satisfies NavEntry[];
 
 const automationNav = [
-  { href: "/chatbot",            label: "Chatbot Flows",     icon: GitBranch   },
-  { href: "/sequences",          label: "Sequences",         icon: ListOrdered },
-  { href: "/subscribe-forms",    label: "Subscribe Forms",   icon: FileInput   },
-  { href: "/keyword-triggers",   label: "Keyword Triggers",  icon: Tag         },
-  { href: "/autoresponder",      label: "Autoresponders",    icon: Bot         },
+  { href: "/chatbot",                   label: "Chatbot Flows",        icon: GitBranch        },
+  { href: "/sequences",                 label: "Sequences",            icon: ListOrdered      },
+  { href: "/subscribe-forms",           label: "Subscribe Forms",      icon: FileInput        },
+  { href: "/keyword-triggers",          label: "Keyword Triggers",     icon: Tag              },
+  { href: "/autoresponder",             label: "Autoresponders",       icon: Bot              },
+  { href: "/fb-comment-automations",    label: "FB Comments",          icon: MessageCircleMore },
 ] satisfies NavEntry[];
 
 const channelsNav = [
@@ -64,6 +67,7 @@ const settingsNav = [
   { href: "/settings",                  label: "Settings",      icon: Settings   },
   { href: "/settings/integrations",     label: "Integrations",  icon: Share2     },
   { href: "/settings/ai",               label: "AI Providers",  icon: Sparkles   },
+  { href: "/settings/brand",            label: "Brand AI",      icon: Palette    },
   { href: "/settings/billing",          label: "Billing",       icon: CreditCard },
   { href: "/settings/api-keys",         label: "API Keys",      icon: Key        },
 ] satisfies NavEntry[];

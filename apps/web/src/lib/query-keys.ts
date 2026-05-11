@@ -23,4 +23,11 @@ export const qk = {
   googleSpreadsheets: ["google-spreadsheets"] as const,
   googleSheetTabs: (spreadsheetId: string) => ["google-sheet-tabs", spreadsheetId] as const,
   googleCalendars: ["google-calendars"] as const,
+  // Facebook comment automations
+  fbCommentAutomations: ["fb-comment-automations"] as const,
+  fbCommentAutomation: (id: string) => ["fb-comment-automation", id] as const,
+  fbCommentEvents: (automationId: string) => ["fb-comment-events", automationId] as const,
+  fbPagePosts: (pageId: string) => ["fb-page-posts", pageId] as const,
+  // Brand settings
+  brandSettings: ["brand-settings"] as const,
 };
