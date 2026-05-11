@@ -252,26 +252,33 @@ export class FbCommentProcessorService {
     this.logger.log(`Private Messenger reply sent to comment ${commentId}`);
   }
 
-  /** Core Messenger Send API call — POST /me/messages with recipient.comment_id */
+  /** Core Messenger Send API call — POST /me/messages with recipient.comment_id.
+   *  messaging_type RESPONSE is required by Meta for all message types including
+   *  button templates; omitting it causes template messages to be silently dropped. */
   private async sendMessengerMessage(
     commentId: string,
     pageAccessToken: string,
     messagePayload: Record<string, unknown>,
   ): Promise<void> {
+    const body = JSON.stringify({
+      recipient: { comment_id: commentId },
+      messaging_type: 'RESPONSE',
+      message: messagePayload,
+      access_token: pageAccessToken,
+    });
+
+    this.logger.debug(`Messenger send payload: ${body}`);
+
     const res = await fetch(`${GRAPH_BASE}/me/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        recipient: { comment_id: commentId },
-        message: messagePayload,
-        access_token: pageAccessToken,
-      }),
+      body,
     });
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as {
+      const errBody = (await res.json().catch(() => ({}))) as {
         error?: { message: string; code?: number; error_subcode?: number; type?: string };
       };
-      const e = body.error;
+      const e = errBody.error;
       this.logger.error(
         `private_reply error — code=${e?.code} subcode=${e?.error_subcode} type=${e?.type} msg=${e?.message}`,
       );

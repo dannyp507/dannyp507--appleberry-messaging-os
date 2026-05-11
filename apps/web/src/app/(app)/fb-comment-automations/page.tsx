@@ -44,6 +44,9 @@ import {
   ChevronRight,
   ExternalLink,
   Globe,
+  Link,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MediaPicker } from "@/components/media/media-picker";
@@ -738,20 +741,16 @@ function AutomationDialog({
 
           {/* ── Private DM section — shown when action sends a Messenger DM ── */}
           {(form.actionType === "PRIVATE_REPLY" || form.actionType === "BOTH") && (
-            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 space-y-3">
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 space-y-4">
               <p className="text-xs font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-wide">
                 <MessageSquare className="size-3.5" />
                 Private Messenger DM
               </p>
 
-              {/* DM text — separate from public reply */}
+              {/* DM text */}
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                  {form.aiEnabled
-                    ? "Fallback DM Text (if AI fails)"
-                    : form.actionType === "BOTH"
-                      ? "DM Message *"
-                      : "DM Message *"}
+                  {form.aiEnabled ? "Fallback DM Text (if AI fails) *" : "DM Message *"}
                 </Label>
                 <Textarea
                   value={form.dmText}
@@ -760,59 +759,120 @@ function AutomationDialog({
                   rows={3}
                   className="text-sm"
                 />
-                {form.actionType === "PRIVATE_REPLY" && (
-                  <p className="text-[10px] text-[#9CA3AF]">
-                    Only the DM will be sent — no public comment.
-                  </p>
-                )}
               </div>
 
-              {/* URL Button */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                    Button Label
-                  </Label>
-                  <Input
-                    value={form.buttonLabel}
-                    onChange={(e) => setField("buttonLabel", e.target.value)}
-                    placeholder="View Pricing"
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                    Button URL
-                  </Label>
-                  <Input
-                    value={form.buttonUrl}
-                    onChange={(e) => setField("buttonUrl", e.target.value)}
-                    placeholder="https://…"
-                    className="h-8 text-sm"
-                  />
+              {/* ── URL Button card ── */}
+              <div className={cn(
+                "rounded-lg border transition-colors",
+                (form.buttonLabel || form.buttonUrl)
+                  ? "border-indigo-400/30 bg-indigo-500/8"
+                  : "border-[#E5E7EB] dark:border-[#2a2f3d]",
+              )}>
+                {/* Toggle header */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (form.buttonLabel || form.buttonUrl) {
+                      setField("buttonLabel", "");
+                      setField("buttonUrl", "");
+                    } else {
+                      // focus the label input after render
+                    }
+                  }}
+                  className="flex w-full items-center justify-between px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "flex size-6 items-center justify-center rounded-lg",
+                      (form.buttonLabel || form.buttonUrl)
+                        ? "bg-indigo-500/20"
+                        : "bg-[#F3F4F6] dark:bg-[#1e2433]",
+                    )}>
+                      <Link className={cn(
+                        "size-3.5",
+                        (form.buttonLabel || form.buttonUrl) ? "text-indigo-400" : "text-[#9CA3AF]",
+                      )} />
+                    </div>
+                    <div className="text-left">
+                      <p className={cn(
+                        "text-xs font-semibold",
+                        (form.buttonLabel || form.buttonUrl)
+                          ? "text-indigo-400"
+                          : "text-[#111827] dark:text-[#f3f4f6]",
+                      )}>
+                        URL Button
+                      </p>
+                      <p className="text-[10px] text-[#9CA3AF]">
+                        Add a tappable button at the bottom of the DM
+                      </p>
+                    </div>
+                  </div>
+                  <div className={cn(
+                    "flex size-5 items-center justify-center rounded-full transition-colors",
+                    (form.buttonLabel || form.buttonUrl)
+                      ? "bg-indigo-500/20 text-indigo-400"
+                      : "bg-[#F3F4F6] dark:bg-[#1e2433] text-[#9CA3AF]",
+                  )}>
+                    {(form.buttonLabel || form.buttonUrl)
+                      ? <Minus className="size-3" />
+                      : <Plus className="size-3" />}
+                  </div>
+                </button>
+
+                {/* Button fields — shown when either field has a value or we expand */}
+                <div className="px-3 pb-3 space-y-2.5">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                      Button Name <span className="font-normal">(what it says)</span>
+                    </Label>
+                    <Input
+                      value={form.buttonLabel}
+                      onChange={(e) => setField("buttonLabel", e.target.value)}
+                      placeholder="e.g.  View Pricing  /  Shop Now  /  Book a Call"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                      Button URL <span className="font-normal">(where it goes)</span>
+                    </Label>
+                    <Input
+                      value={form.buttonUrl}
+                      onChange={(e) => setField("buttonUrl", e.target.value)}
+                      placeholder="https://yoursite.com/pricing"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  {form.buttonLabel && form.buttonUrl && (
+                    <div className="flex items-center gap-2 rounded-lg border border-indigo-400/20 bg-indigo-500/8 px-3 py-2">
+                      <div className="flex-1 rounded border border-indigo-400/30 bg-indigo-500/10 px-2 py-1 text-center text-xs font-semibold text-indigo-400">
+                        {form.buttonLabel}
+                      </div>
+                      <p className="text-[10px] text-[#9CA3AF]">→ {form.buttonUrl.slice(0, 30)}{form.buttonUrl.length > 30 ? "…" : ""}</p>
+                    </div>
+                  )}
+                  {(form.buttonLabel || form.buttonUrl) && !(form.buttonLabel && form.buttonUrl) && (
+                    <p className="text-[10px] text-amber-500">
+                      Both button name and URL are required for the button to appear.
+                    </p>
+                  )}
                 </div>
               </div>
-              {(form.buttonLabel || form.buttonUrl) && (
-                <p className="text-[10px] text-indigo-300">
-                  A tappable button will be appended to the DM — both label and URL required.
-                </p>
+
+              {/* Media Image — picker (only shown if no button set) */}
+              {!(form.buttonLabel && form.buttonUrl) && (
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                    Image Attachment <span className="font-normal normal-case">(optional — instead of button)</span>
+                  </Label>
+                  <MediaPicker
+                    value={form.mediaUrl}
+                    onChange={(url) => setField("mediaUrl", url)}
+                    label="Pick DM Image"
+                    placeholder="No image selected"
+                  />
+                </div>
               )}
-
-              {/* Media Image — picker */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                  Media Image <span className="font-normal normal-case text-[#9CA3AF]">(optional)</span>
-                </Label>
-                <MediaPicker
-                  value={form.mediaUrl}
-                  onChange={(url) => setField("mediaUrl", url)}
-                  label="Pick DM Image"
-                  placeholder="No image — tap Pick to choose from library"
-                />
-                <p className="text-[10px] text-[#9CA3AF]">
-                  Sent as a separate image after the DM text (only when no button is set).
-                </p>
-              </div>
             </div>
           )}
 
