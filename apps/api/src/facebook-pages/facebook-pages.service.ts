@@ -71,7 +71,7 @@ export class FacebookPagesService {
     if (this.fbConfigId) {
       params.set('config_id', this.fbConfigId);
     } else {
-      params.set('scope', 'pages_messaging,pages_manage_metadata,pages_show_list,pages_read_engagement');
+      params.set('scope', 'pages_messaging,pages_manage_metadata,pages_show_list,pages_read_engagement,pages_manage_engagement');
     }
 
     return `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`;

@@ -182,24 +182,35 @@ export class FbCommentProcessorService {
 
   // ── Graph API Calls ───────────────────────────────────────────────────────────
 
-  /** POST /{comment_id}/private_replies — sends a Messenger DM to the commenter.
-   *  Works for top-level post comments; not available for replies to comments.
+  /** Sends a private Messenger DM to the commenter using the Messenger Send API.
+   *  Uses recipient.comment_id which works across all post types (regular, check-in, video, etc.)
+   *  Unlike the legacy /private_replies endpoint, this is not restricted by post type.
    *  Requires pages_messaging permission. */
   private async sendPrivateReply(
     commentId: string,
     message: string,
     pageAccessToken: string,
   ): Promise<void> {
-    const res = await fetch(`${GRAPH_BASE}/${commentId}/private_replies`, {
+    const res = await fetch(`${GRAPH_BASE}/me/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, access_token: pageAccessToken }),
+      body: JSON.stringify({
+        recipient: { comment_id: commentId },
+        message: { text: message },
+        access_token: pageAccessToken,
+      }),
     });
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: { message: string } };
-      throw new Error(body.error?.message ?? `HTTP ${res.status}`);
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: { message: string; code?: number; error_subcode?: number; type?: string };
+      };
+      const e = body.error;
+      this.logger.error(
+        `private_reply error — code=${e?.code} subcode=${e?.error_subcode} type=${e?.type} msg=${e?.message}`,
+      );
+      throw new Error(e?.message ?? `HTTP ${res.status}`);
     }
-    this.logger.log(`Private reply sent to comment ${commentId}`);
+    this.logger.log(`Private Messenger reply sent to comment ${commentId}`);
   }
 
   /** POST /{comment_id}/comments — posts a public reply to a comment thread. */
