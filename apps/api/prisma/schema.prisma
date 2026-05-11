@@ -332,6 +332,7 @@ model Workspace {
   fbCommentAutomations    FbCommentAutomation[]
   fbCommentEvents         FbCommentEvent[]
   workspaceBrandSettings  WorkspaceBrandSettings?
+  workspaceMedia          WorkspaceMedia[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1564,4 +1565,29 @@ model SubscribeForm {
   sequence        DripSequence?   @relation(fields: [sequenceId], references: [id])
 
   @@index([workspaceId])
+}
+
+// ─── Workspace Media Library ──────────────────────────────────────────────────
+
+/// Stores uploaded and compressed media files for a workspace.
+/// Files are kept on disk at UPLOADS_BASE_DIR/{workspaceId}/{storedName}
+/// and served at API_PUBLIC_URL/uploads/{workspaceId}/{storedName}.
+model WorkspaceMedia {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @db.Uuid
+  /// Original file name from the upload
+  originalName String
+  /// Stored file name on disk (uuid + extension)
+  storedName   String
+  mimeType     String
+  /// Size in bytes AFTER compression
+  sizeBytes    Int
+  /// Public URL to access the file
+  url          String
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, createdAt])
 }

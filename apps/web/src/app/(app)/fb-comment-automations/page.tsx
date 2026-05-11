@@ -46,6 +46,7 @@ import {
   Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MediaPicker } from "@/components/media/media-picker";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -797,19 +798,19 @@ function AutomationDialog({
                 </p>
               )}
 
-              {/* Media URL */}
+              {/* Media Image — picker */}
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                  Media Image URL <span className="font-normal normal-case text-[#9CA3AF]">(optional)</span>
+                  Media Image <span className="font-normal normal-case text-[#9CA3AF]">(optional)</span>
                 </Label>
-                <Input
+                <MediaPicker
                   value={form.mediaUrl}
-                  onChange={(e) => setField("mediaUrl", e.target.value)}
-                  placeholder="https://…/product.jpg"
-                  className="h-8 text-sm"
+                  onChange={(url) => setField("mediaUrl", url)}
+                  label="Pick DM Image"
+                  placeholder="No image — tap Pick to choose from library"
                 />
                 <p className="text-[10px] text-[#9CA3AF]">
-                  Sent as a separate image message if no button is set.
+                  Sent as a separate image after the DM text (only when no button is set).
                 </p>
               </div>
             </div>

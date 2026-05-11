@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import * as path from 'path';
 import { AiModule } from './ai/ai.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
@@ -38,6 +40,7 @@ import { SequencesModule } from './sequences/sequences.module';
 import { SubscribeFormsModule } from './subscribe-forms/subscribe-forms.module';
 import { FbCommentAutomationsModule } from './fb-comment-automations/fb-comment-automations.module';
 import { BrandSettingsModule } from './brand-settings/brand-settings.module';
+import { MediaModule } from './media/media.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -50,6 +53,21 @@ import { AppController } from './app.controller';
         limit: 200,
       },
     ]),
+    // Serve uploaded files as static assets at /uploads/*
+    ServeStaticModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          rootPath: config.get<string>('UPLOADS_BASE_DIR') ?? path.join(process.cwd(), 'uploads'),
+          serveRoot: '/uploads',
+          serveStaticOptions: {
+            index: false,
+            fallthrough: false,
+          },
+        },
+      ],
+    }),
     PrismaModule,
     BillingModule,
     AuditModule,
@@ -85,6 +103,7 @@ import { AppController } from './app.controller';
     SubscribeFormsModule,
     FbCommentAutomationsModule,
     BrandSettingsModule,
+    MediaModule,
   ],
   providers: [
     {

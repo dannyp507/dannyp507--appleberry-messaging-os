@@ -452,6 +452,17 @@ export interface FbCommentAutomation {
   _count: { events: number };
 }
 
+export interface WorkspaceMedia {
+  id: string;
+  workspaceId: string;
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  createdAt: string;
+}
+
 export interface FbCommentEvent {
   id: string;
   workspaceId: string;

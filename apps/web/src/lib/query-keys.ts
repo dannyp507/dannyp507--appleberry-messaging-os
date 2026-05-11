@@ -30,4 +30,6 @@ export const qk = {
   fbPagePosts: (pageId: string) => ["fb-page-posts", pageId] as const,
   // Brand settings
   brandSettings: ["brand-settings"] as const,
+  // Media library
+  workspaceMedia: ["workspace-media"] as const,
 };
