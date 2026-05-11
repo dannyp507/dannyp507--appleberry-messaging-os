@@ -6,6 +6,7 @@ import { qk } from "@/lib/query-keys";
 import type { Template, TemplateButton, TemplateSection } from "@/lib/api/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { MediaPicker } from "@/components/media/media-picker";
 
 type TemplateType = "TEXT" | "MEDIA" | "BUTTON" | "LIST";
 
@@ -36,31 +37,11 @@ export default function TemplatesPage() {
   const [buttons, setButtons] = useState<TemplateButton[]>([emptyButton()]);
   const [sections, setSections] = useState<TemplateSection[]>([emptySection()]);
   const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaUploading, setMediaUploading] = useState(false);
 
   const resetForm = () => {
     setName(""); setType("TEXT"); setHeader(""); setContent("");
     setFooter(""); setButtons([emptyButton()]); setSections([emptySection()]);
-    setMediaUrl(""); setMediaUploading(false);
-  };
-
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setMediaUploading(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const { data } = await api.post<{ url: string }>("/autoresponder/media/upload", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setMediaUrl(data.url);
-      toast.success("Media uploaded");
-    } catch {
-      toast.error("Media upload failed");
-    } finally {
-      setMediaUploading(false);
-    }
+    setMediaUrl("");
   };
 
   const { data: templates = [], isLoading } = useQuery({
@@ -147,7 +128,7 @@ export default function TemplatesPage() {
               </div>
               {t.mediaUrl && (
                 <img
-                  src={`${process.env.NEXT_PUBLIC_API_URL}${t.mediaUrl}`}
+                  src={t.mediaUrl}
                   alt="media"
                   className="w-full h-28 rounded-lg object-cover"
                 />
@@ -215,36 +196,14 @@ export default function TemplatesPage() {
               {type === "MEDIA" && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-[#9CA3AF] uppercase tracking-widest">
-                    Media <span className="normal-case font-normal">(image / video)</span>
+                    Media <span className="normal-case font-normal">(image)</span>
                   </label>
-                  {mediaUrl ? (
-                    <div className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5">
-                      {mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                        <img src={`${process.env.NEXT_PUBLIC_API_URL}${mediaUrl}`} alt="preview" className="h-12 w-12 rounded object-cover shrink-0" />
-                      ) : (
-                        <span className="material-symbols-outlined text-emerald-400">video_file</span>
-                      )}
-                      <p className="flex-1 truncate text-xs text-emerald-400">{mediaUrl.split("/").pop()}</p>
-                      <button type="button" onClick={() => setMediaUrl("")} className="text-[#9CA3AF] hover:text-red-400">
-                        <span className="material-symbols-outlined text-sm">close</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[#E5E7EB] bg-[#F3F4F6] px-4 py-5 text-sm text-[#6B7280] transition-colors hover:border-[#6366F1]/40 hover:bg-[#F3F4F6] ${mediaUploading ? "opacity-60 pointer-events-none" : ""}`}>
-                      {mediaUploading ? (
-                        <>
-                          <span className="material-symbols-outlined animate-spin text-[#6366F1]">progress_activity</span>
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-[#9CA3AF]">upload</span>
-                          Click to upload image or video
-                        </>
-                      )}
-                      <input type="file" accept="image/*,video/*" className="hidden" onChange={handleMediaUpload} disabled={mediaUploading} />
-                    </label>
-                  )}
+                  <MediaPicker
+                    value={mediaUrl}
+                    onChange={setMediaUrl}
+                    label="Template Image"
+                    placeholder="No image selected"
+                  />
                 </div>
               )}
               <div className="space-y-1.5">
@@ -349,7 +308,7 @@ export default function TemplatesPage() {
             <div className="bg-[#F3F4F6] rounded-xl rounded-tl-none p-4 space-y-2 text-sm">
               {previewTemplate.mediaUrl && (
                 <img
-                  src={`${process.env.NEXT_PUBLIC_API_URL}${previewTemplate.mediaUrl}`}
+                  src={previewTemplate.mediaUrl}
                   alt="media"
                   className="w-full rounded-lg object-cover max-h-48"
                 />
