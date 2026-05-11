@@ -2,7 +2,8 @@
 
 import { useRef, useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api/client";
+import { api, apiBaseURL } from "@/lib/api/client";
+import { useAuthStore } from "@/stores/auth-store";
 import { qk } from "@/lib/query-keys";
 import { toast } from "@/lib/toast";
 import type { WorkspaceMedia } from "@/lib/api/types";
@@ -44,14 +45,27 @@ function UploadZone({ onUploaded }: { onUploaded: (m: WorkspaceMedia) => void })
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
       const results: WorkspaceMedia[] = [];
+      const { accessToken, workspaceId } = useAuthStore.getState();
       for (const file of files) {
         setProgress(`Uploading ${file.name}…`);
         const formData = new FormData();
         formData.append("file", file);
-        // Do NOT set Content-Type — Axios detects FormData and lets the browser
-        // inject the correct multipart/form-data boundary automatically.
-        const { data } = await api.post<WorkspaceMedia>("/media/upload", formData);
-        results.push(data);
+        // Use native fetch — Axios default Content-Type: application/json
+        // overrides FormData boundary detection and breaks multer parsing.
+        const res = await fetch(`${apiBaseURL}/media/upload`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "X-Workspace-Id": workspaceId ?? "",
+            // No Content-Type — browser sets multipart/form-data with boundary
+          },
+          body: formData,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({})) as { message?: string };
+          throw new Error(err.message ?? `Upload failed (${res.status})`);
+        }
+        results.push(await res.json() as WorkspaceMedia);
       }
       return results;
     },

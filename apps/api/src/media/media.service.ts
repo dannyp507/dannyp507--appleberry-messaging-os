@@ -50,6 +50,11 @@ export class MediaService {
     workspaceId: string,
     file: Express.Multer.File,
   ) {
+    if (!file) {
+      throw new BadRequestException(
+        'No file received. Send a multipart/form-data POST with field name "file".',
+      );
+    }
     if (!ALLOWED_TYPES.has(file.mimetype)) {
       throw new BadRequestException(
         `Unsupported file type: ${file.mimetype}. Allowed: JPEG, PNG, WebP, GIF, HEIC.`,
