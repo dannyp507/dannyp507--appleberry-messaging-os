@@ -415,3 +415,82 @@ export interface GoogleIntegrationStatus {
   sheetsConfig?: GoogleSheetsConfig | null;
   calendarConfig?: GoogleCalendarConfig | null;
 }
+
+// ─── Facebook Comment Automation ─────────────────────────────────────────────
+
+export type FbCommentActionType = "PRIVATE_REPLY" | "PUBLIC_COMMENT" | "BOTH";
+
+export interface FbAutomationKeyword {
+  id: string;
+  automationId: string;
+  keyword: string;
+  matchType: "EXACT" | "CONTAINS";
+  createdAt: string;
+}
+
+export interface FbCommentAutomation {
+  id: string;
+  workspaceId: string;
+  facebookPageId: string;
+  postId: string;
+  postSnippet: string | null;
+  name: string;
+  isActive: boolean;
+  actionType: FbCommentActionType;
+  messageText: string;
+  buttonLabel: string | null;
+  buttonUrl: string | null;
+  mediaUrl: string | null;
+  aiEnabled: boolean;
+  aiSystemPrompt: string | null;
+  replyCount: number;
+  createdAt: string;
+  updatedAt: string;
+  fbPage: { id: string; pageId: string; name: string };
+  keywords: FbAutomationKeyword[];
+  _count: { events: number };
+}
+
+export interface FbCommentEvent {
+  id: string;
+  workspaceId: string;
+  facebookPageId: string;
+  automationId: string | null;
+  commentId: string;
+  postId: string;
+  commenterId: string;
+  commenterName: string | null;
+  commentText: string;
+  matchedKeyword: string | null;
+  actionType: FbCommentActionType | null;
+  privateReplySent: boolean;
+  publicReplySent: boolean;
+  error: string | null;
+  processedAt: string;
+}
+
+export interface FbPost {
+  postId: string;
+  message: string;
+  snippet: string;
+  createdTime: string | null;
+  permalinkUrl: string | null;
+  thumbnail: string | null;
+}
+
+// ─── Brand Settings ───────────────────────────────────────────────────────────
+
+export interface BrandSettings {
+  businessName: string | null;
+  industry: string | null;
+  toneOfVoice: string | null;
+  productsServices: string | null;
+  faqs: string | null;
+  businessHours: string | null;
+  contactDetails: string | null;
+  websiteUrl: string | null;
+  wordsToUse: string | null;
+  wordsToAvoid: string | null;
+  escalationInstructions: string | null;
+  customInstructions: string | null;
+}
