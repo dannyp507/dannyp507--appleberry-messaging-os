@@ -48,9 +48,9 @@ function UploadZone({ onUploaded }: { onUploaded: (m: WorkspaceMedia) => void })
         setProgress(`Uploading ${file.name}…`);
         const formData = new FormData();
         formData.append("file", file);
-        const { data } = await api.post<WorkspaceMedia>("/media/upload", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        // Do NOT set Content-Type — Axios detects FormData and lets the browser
+        // inject the correct multipart/form-data boundary automatically.
+        const { data } = await api.post<WorkspaceMedia>("/media/upload", formData);
         results.push(data);
       }
       return results;
