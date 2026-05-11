@@ -54,12 +54,15 @@ export class FbCommentProcessorService {
     }
 
     // ── 3. Find active automations for this post ───────────────────────────────
+    // Matches automations scoped to this exact post OR "all posts" automations (postId = null).
+    // Post-specific automations fire first (ordered by postId desc → non-null before null).
     const automations = await this.prisma.fbCommentAutomation.findMany({
       where: {
         facebookPageId: page.id,
         isActive: true,
-        postId,
+        OR: [{ postId }, { postId: null }],
       },
+      orderBy: { postId: 'desc' }, // non-null (post-specific) before null (all-posts)
       include: {
         keywords: true,
       },

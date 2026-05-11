@@ -421,9 +421,9 @@ function AutomationDialog({
     };
   });
 
-  // When page/post come from preset or editing, show them as info, not inputs
+  // When page comes from preset or editing, lock the page selection
   const pageIsLocked = isEditing || !!preset?.facebookPageId;
-  const postIsLocked = isEditing || !!preset?.postId;
+  // Post is NEVER locked — user can always change which post an automation targets
 
   const { data: pages = [] } = useQuery({
     queryKey: qk.facebookPages,
@@ -451,7 +451,7 @@ function AutomationDialog({
       );
       return data;
     },
-    enabled: !!form.facebookPageId && !postIsLocked,
+    enabled: !!form.facebookPageId,
   });
 
   const saveMutation = useMutation({
@@ -467,12 +467,13 @@ function AutomationDialog({
       const body = {
         ...payload,
         messageText: effectiveMessageText,
+        postId: payload.postId || null,           // "" → null means "All Posts"
+        postSnippet: payload.postSnippet || null,
         dmText: payload.dmText || undefined,
         buttonLabel: payload.buttonLabel || undefined,
         buttonUrl: payload.buttonUrl || undefined,
         mediaUrl: payload.mediaUrl || undefined,
         aiSystemPrompt: payload.aiSystemPrompt || undefined,
-        postSnippet: payload.postSnippet || undefined,
         keywords: payload.keywords.filter((k) => k.keyword.trim()),
       };
       if (isEditing) {
@@ -510,7 +511,6 @@ function AutomationDialog({
 
   const canSubmit =
     form.facebookPageId &&
-    form.postId &&
     form.name.trim() &&
     (!publicRequired || form.messageText.trim()) &&
     (!dmRequired || form.dmText.trim()) &&
@@ -574,21 +574,12 @@ function AutomationDialog({
             </div>
           </div>
 
-          {/* Post — locked info or picker */}
-          {postIsLocked ? (
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                Post
-              </Label>
-              <div className="rounded-lg bg-[#F3F4F6] dark:bg-[#1e2433] px-3 py-2.5 text-xs text-[#6B7280] line-clamp-2">
-                {form.postSnippet || form.postId}
-              </div>
-            </div>
-          ) : form.facebookPageId ? (
+          {/* Post picker — always visible when a page is selected */}
+          {form.facebookPageId ? (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                  Target Post *
+                  Target Post
                 </Label>
                 <button
                   type="button"
@@ -598,16 +589,32 @@ function AutomationDialog({
                   <RefreshCw className="size-3" /> Refresh
                 </button>
               </div>
-              {loadingPosts ? (
+              {loadingPosts && !posts.length ? (
                 <div className="flex items-center gap-2 py-3 text-[#9CA3AF] text-sm">
                   <Loader2 className="size-4 animate-spin" /> Loading posts…
                 </div>
-              ) : posts.length === 0 ? (
-                <p className="text-xs text-[#9CA3AF] py-2">
-                  No posts found for this page.
-                </p>
               ) : (
-                <div className="border border-[#E5E7EB] dark:border-[#1e2433] rounded-xl overflow-hidden max-h-44 overflow-y-auto">
+                <div className="border border-[#E5E7EB] dark:border-[#1e2433] rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                  {/* All Posts option */}
+                  <button
+                    type="button"
+                    onClick={() => { setField("postId", ""); setField("postSnippet", ""); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2.5 flex items-center gap-2.5 hover:bg-[#F9FAFB] dark:hover:bg-[#1a1f2e] transition-colors border-b border-[#F3F4F6] dark:border-[#1e2433]",
+                      !form.postId && "bg-indigo-500/5 border-l-2 border-l-[#6366F1]",
+                    )}
+                  >
+                    <div className="size-9 rounded flex items-center justify-center bg-indigo-500/10 shrink-0">
+                      <span className="text-indigo-400 text-lg">✦</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-[#111827] dark:text-[#f3f4f6]">All Posts</p>
+                      <p className="text-[10px] text-[#9CA3AF]">Trigger on any comment on this page</p>
+                    </div>
+                    {!form.postId && (
+                      <span className="text-[#6366F1] text-[10px] font-bold shrink-0">✓</span>
+                    )}
+                  </button>
                   {posts.map((post) => (
                     <button
                       key={post.postId}
@@ -1042,10 +1049,12 @@ function AutomationRow({
 
         {/* Post + stats */}
         <div className="flex items-center gap-3 text-[10px] text-[#9CA3AF]">
-          {automation.postSnippet && (
-            <span className="truncate max-w-[200px]" title={automation.postSnippet}>
-              📄 {automation.postSnippet}
+          {automation.postId ? (
+            <span className="truncate max-w-[200px]" title={automation.postSnippet ?? automation.postId}>
+              📄 {automation.postSnippet || automation.postId}
             </span>
+          ) : (
+            <span className="text-indigo-400 font-medium">✦ All Posts</span>
           )}
           <span className="shrink-0 font-medium">
             {automation.replyCount} replies

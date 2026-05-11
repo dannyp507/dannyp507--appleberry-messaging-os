@@ -1440,8 +1440,8 @@ model FbCommentAutomation {
   id             String              @id @default(uuid()) @db.Uuid
   workspaceId    String              @db.Uuid
   facebookPageId String              @db.Uuid
-  /// Facebook post ID (format: {pageId}_{postId} or video ID)
-  postId         String
+  /// Facebook post ID (format: {pageId}_{postId} or video ID). Null = apply to ALL posts on the page.
+  postId         String?
   /// Short preview of the post shown in the UI
   postSnippet    String?
   name           String

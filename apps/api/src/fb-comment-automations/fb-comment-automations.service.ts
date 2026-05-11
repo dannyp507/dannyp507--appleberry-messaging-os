@@ -49,7 +49,7 @@ export class FbCommentAutomationsService {
       data: {
         workspaceId,
         facebookPageId: dto.facebookPageId,
-        postId: dto.postId,
+        postId: dto.postId ?? null,
         postSnippet: dto.postSnippet ?? null,
         name: dto.name,
         isActive: dto.isActive ?? true,

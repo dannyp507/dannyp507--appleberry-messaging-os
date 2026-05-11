@@ -28,8 +28,8 @@ export class CreateFbAutomationDto {
   facebookPageId!: string;
 
   @IsString()
-  @IsNotEmpty()
-  postId!: string;
+  @IsOptional()
+  postId?: string;
 
   @IsString()
   @IsOptional()
