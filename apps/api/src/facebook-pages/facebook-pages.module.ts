@@ -8,9 +8,10 @@ import { FacebookWebhookController } from './facebook-webhook.controller';
 import { FacebookPagesService } from './facebook-pages.service';
 import { FacebookInboundService } from './facebook-inbound.service';
 import { FbCommentProcessorService } from '../fb-comment-automations/fb-comment-processor.service';
+import { InstagramModule } from '../instagram/instagram.module';
 
 @Module({
-  imports: [CommonModule, RedisModule, MessagingModule, AiModule],
+  imports: [CommonModule, RedisModule, MessagingModule, AiModule, forwardRef(() => InstagramModule)],
   controllers: [FacebookPagesController, FacebookWebhookController],
   providers: [FacebookPagesService, FacebookInboundService, FbCommentProcessorService],
   exports: [FacebookPagesService],
