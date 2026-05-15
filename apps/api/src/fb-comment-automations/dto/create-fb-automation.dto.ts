@@ -6,7 +6,6 @@ import {
   IsArray,
   ValidateNested,
   IsNotEmpty,
-  ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -79,6 +78,5 @@ export class CreateFbAutomationDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => KeywordDto)
-  @ArrayMinSize(1)
   keywords!: KeywordDto[];
 }

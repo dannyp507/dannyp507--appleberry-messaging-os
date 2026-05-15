@@ -9,6 +9,7 @@ import type {
   FbCommentAutomation,
   FbCommentEvent,
   FacebookPage,
+  FacebookPageAiSettings,
   FbPost,
   FbCommentActionType,
 } from "@/lib/api/types";
@@ -35,6 +36,7 @@ import {
   Pencil,
   Power,
   Eye,
+  EyeOff,
   Loader2,
   MessageSquare,
   Bot,
@@ -42,12 +44,22 @@ import {
   RefreshCw,
   Settings2,
   ChevronRight,
+  ChevronDown,
   ExternalLink,
   Globe,
   Link,
   Plus,
   Minus,
+  Sparkles,
+  Save,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { MediaPicker } from "@/components/media/media-picker";
 
@@ -456,13 +468,13 @@ function AutomationDialog({
 
   const saveMutation = useMutation({
     mutationFn: async (payload: AutomationForm) => {
-      // For PRIVATE_REPLY-only: messageText isn't shown to users but is required by
-      // the DB (NOT NULL). Use dmText as the value so the constraint is satisfied.
-      // The processor always uses dmText (or falls back to messageText) for the DM.
+      // messageText is NOT NULL in DB. When AI is enabled and user left it blank,
+      // use a placeholder — the processor replaces it with the AI-generated reply.
+      // For PRIVATE_REPLY-only: also fall back to dmText.
       const effectiveMessageText =
-        payload.actionType === "PRIVATE_REPLY"
-          ? payload.dmText || payload.messageText
-          : payload.messageText;
+        payload.messageText.trim() ||
+        (payload.actionType === "PRIVATE_REPLY" ? payload.dmText : "") ||
+        (payload.aiEnabled ? "AI will respond" : "");
 
       const body = {
         ...payload,
@@ -512,9 +524,8 @@ function AutomationDialog({
   const canSubmit =
     form.facebookPageId &&
     form.name.trim() &&
-    (!publicRequired || form.messageText.trim()) &&
-    (!dmRequired || form.dmText.trim()) &&
-    form.keywords.length > 0;
+    (form.aiEnabled || !publicRequired || form.messageText.trim()) &&
+    (form.aiEnabled || !dmRequired || form.dmText.trim());
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -1248,6 +1259,290 @@ function PostFeedPanel({
   );
 }
 
+// ─── Per-Page AI Settings Panel ──────────────────────────────────────────────
+
+const OPENAI_MODELS = [
+  { value: "gpt-4o", label: "GPT-4o" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini (fast)" },
+  { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo (budget)" },
+];
+
+const GEMINI_MODELS = [
+  { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (fast)" },
+  { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
+  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+];
+
+const MASKED = "••••••••••••••••";
+
+function PageAiPanel({ pageId }: { pageId: string }) {
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery<FacebookPageAiSettings>({
+    queryKey: qk.fbPageAiSettings(pageId),
+    queryFn: async () => {
+      const { data } = await api.get(
+        `/fb-comment-automations/pages/${pageId}/ai-settings`,
+      );
+      return data;
+    },
+    enabled: !!pageId,
+  });
+
+  const [open, setOpen] = useState(false);
+  const [provider, setProvider] = useState<string>("openai");
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [openaiModel, setOpenaiModel] = useState("gpt-4o-mini");
+  const [geminiKey, setGeminiKey] = useState("");
+  const [geminiModel, setGeminiModel] = useState("gemini-1.5-flash");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [showOpenai, setShowOpenai] = useState(false);
+  const [showGemini, setShowGemini] = useState(false);
+  const [clearOpenai, setClearOpenai] = useState(false);
+  const [clearGemini, setClearGemini] = useState(false);
+
+  // Hydrate form from fetched data
+  useEffect(() => {
+    if (!data) return;
+    setProvider(data.aiProvider ?? "openai");
+    setOpenaiModel(data.openaiModel ?? "gpt-4o-mini");
+    setGeminiModel(data.geminiModel ?? "gemini-1.5-flash");
+    setSystemPrompt(data.systemPrompt ?? "");
+    setOpenaiKey("");
+    setGeminiKey("");
+    setClearOpenai(false);
+    setClearGemini(false);
+  }, [data]);
+
+  // Reset form state when the panel is opened for a new page
+  useEffect(() => {
+    setOpenaiKey("");
+    setGeminiKey("");
+    setClearOpenai(false);
+    setClearGemini(false);
+    setShowOpenai(false);
+    setShowGemini(false);
+  }, [pageId]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const openaiApiKey = clearOpenai ? "" : openaiKey || undefined;
+      const geminiApiKey = clearGemini ? "" : geminiKey || undefined;
+      await api.post(`/fb-comment-automations/pages/${pageId}/ai-settings`, {
+        aiProvider: provider,
+        systemPrompt: systemPrompt || null,
+        openaiApiKey,
+        openaiModel,
+        geminiApiKey,
+        geminiModel,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Page AI settings saved");
+      setOpenaiKey("");
+      setGeminiKey("");
+      setClearOpenai(false);
+      setClearGemini(false);
+      qc.invalidateQueries({ queryKey: qk.fbPageAiSettings(pageId) });
+    },
+    onError: () => toast.error("Failed to save AI settings"),
+  });
+
+  const keySet = provider === "gemini" ? data?.geminiKeySet : data?.openaiKeySet;
+  const clearFlag = provider === "gemini" ? clearGemini : clearOpenai;
+  const setClearFlag = provider === "gemini" ? setClearGemini : setClearOpenai;
+  const keyValue = provider === "gemini" ? geminiKey : openaiKey;
+  const setKeyValue = provider === "gemini" ? setGeminiKey : setOpenaiKey;
+  const showKey = provider === "gemini" ? showGemini : showOpenai;
+  const setShowKey = provider === "gemini" ? setShowGemini : setShowOpenai;
+
+  return (
+    <div className="border-b border-[#E5E7EB] dark:border-[#1e2433] shrink-0">
+      {/* Toggle row */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-2.5 text-left hover:bg-[#F9FAFB] dark:hover:bg-[#0d1017] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-3.5 text-violet-400" />
+          <span className="text-xs font-semibold text-[#6B7280] dark:text-[#9CA3AF] uppercase tracking-wide">
+            AI Settings
+          </span>
+          {(data?.openaiKeySet || data?.geminiKeySet) && !open && (
+            <span className="text-[10px] bg-violet-500/15 text-violet-400 px-1.5 py-0.5 rounded-full font-semibold">
+              Configured
+            </span>
+          )}
+        </div>
+        <ChevronDown
+          className={cn(
+            "size-3.5 text-[#9CA3AF] transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {/* Expanded panel */}
+      {open && (
+        <div className="px-5 pb-4 space-y-3 bg-[#F9FAFB] dark:bg-[#0a0d14]">
+          {isLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="size-4 animate-spin text-[#9CA3AF]" />
+            </div>
+          ) : (
+            <>
+              <p className="text-[11px] text-[#9CA3AF] leading-relaxed pt-1">
+                Override the workspace AI settings for this Facebook page. Keys
+                and prompts here take priority over workspace-level settings.
+              </p>
+
+              {/* Provider */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-[#6B7280] font-semibold uppercase tracking-wide">
+                  Provider
+                </Label>
+                <Select value={provider} onValueChange={(v) => { if (v) setProvider(v); }}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="gemini">Google Gemini</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* API Key */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-[#6B7280] font-semibold uppercase tracking-wide">
+                  {provider === "gemini" ? "Gemini" : "OpenAI"} API Key
+                </Label>
+                {clearFlag ? (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400">
+                    <Trash2 className="size-3 shrink-0" />
+                    <span className="flex-1">Key will be removed on save</span>
+                    <button
+                      type="button"
+                      onClick={() => setClearFlag(false)}
+                      className="underline text-[10px]"
+                    >
+                      Undo
+                    </button>
+                  </div>
+                ) : keySet ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 relative">
+                      <Input
+                        type={showKey ? "text" : "password"}
+                        value={keyValue || MASKED}
+                        onChange={(e) => setKeyValue(e.target.value === MASKED ? "" : e.target.value)}
+                        className="h-8 text-xs pr-8 font-mono"
+                        placeholder="Enter new key to replace"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#6B7280]"
+                      >
+                        {showKey ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setClearFlag(true); setKeyValue(""); }}
+                      title="Remove key"
+                      className="p-1.5 rounded text-[#9CA3AF] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Input
+                      type={showKey ? "text" : "password"}
+                      value={keyValue}
+                      onChange={(e) => setKeyValue(e.target.value)}
+                      className="h-8 text-xs pr-8 font-mono"
+                      placeholder={`Paste ${provider === "gemini" ? "Gemini" : "OpenAI"} API key…`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(!showKey)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#6B7280]"
+                    >
+                      {showKey ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                    </button>
+                  </div>
+                )}
+                <p className="text-[10px] text-[#9CA3AF]">
+                  Leave blank to use workspace-level key
+                </p>
+              </div>
+
+              {/* Model */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-[#6B7280] font-semibold uppercase tracking-wide">
+                  Model
+                </Label>
+                <Select
+                  value={provider === "gemini" ? geminiModel : openaiModel}
+                  onValueChange={(v) => { if (v) { if (provider === "gemini") setGeminiModel(v); else setOpenaiModel(v); } }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(provider === "gemini" ? GEMINI_MODELS : OPENAI_MODELS).map(
+                      (m) => (
+                        <SelectItem key={m.value} value={m.value} className="text-xs">
+                          {m.label}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* System Prompt */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-[#6B7280] font-semibold uppercase tracking-wide">
+                  System Prompt / Tone
+                </Label>
+                <Textarea
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  className="text-xs min-h-[80px] resize-none"
+                  placeholder="E.g. You are a friendly assistant for Acme Co. Reply in English, keep it under 100 words…"
+                />
+                <p className="text-[10px] text-[#9CA3AF]">
+                  Overrides the workspace system prompt for this page only
+                </p>
+              </div>
+
+              {/* Save */}
+              <Button
+                size="sm"
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                className="stitch-gradient text-white border-0 text-xs h-7 px-3 w-full"
+              >
+                {saveMutation.isPending ? (
+                  <Loader2 className="size-3 mr-1.5 animate-spin" />
+                ) : (
+                  <Save className="size-3 mr-1.5" />
+                )}
+                Save AI Settings
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function FbCommentAutomationsPage() {
@@ -1467,6 +1762,9 @@ export default function FbCommentAutomationsPage() {
                   Add
                 </Button>
               </div>
+
+              {/* Per-page AI settings panel */}
+              <PageAiPanel pageId={selectedPageId!} />
 
               {/* Stats row */}
               {pageAutomations.length > 0 && (

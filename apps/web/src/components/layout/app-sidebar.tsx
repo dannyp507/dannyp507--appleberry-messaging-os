@@ -35,6 +35,7 @@ import {
   MessageCircleMore,
   Palette,
   Image,
+  Camera,
 } from "lucide-react";
 
 // ─── Nav definitions ──────────────────────────────────────────────────────────
@@ -59,10 +60,11 @@ const automationNav = [
 ] satisfies NavEntry[];
 
 const channelsNav = [
-  { href: "/whatsapp-accounts",  label: "WhatsApp",         icon: Smartphone },
-  { href: "/facebook-pages",     label: "Facebook Pages",   icon: Share2     },
-  { href: "/telegram-accounts",  label: "Telegram",         icon: Send       },
-  { href: "/link-generator",     label: "Links & QR Codes", icon: QrCode     },
+  { href: "/whatsapp-accounts",   label: "WhatsApp",         icon: Smartphone },
+  { href: "/facebook-pages",      label: "Facebook Pages",   icon: Share2     },
+  { href: "/instagram-accounts",  label: "Instagram",        icon: Camera     },
+  { href: "/telegram-accounts",   label: "Telegram",         icon: Send       },
+  { href: "/link-generator",      label: "Links & QR Codes", icon: QrCode     },
 ] satisfies NavEntry[];
 
 const settingsNav = [

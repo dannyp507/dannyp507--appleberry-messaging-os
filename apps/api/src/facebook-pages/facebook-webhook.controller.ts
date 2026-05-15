@@ -6,6 +6,8 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { Public } from '../common/decorators/public.decorator';
 import { FacebookInboundService, FacebookWebhookPayload } from './facebook-inbound.service';
 import { FacebookPagesService } from './facebook-pages.service';
+import { InstagramInboundService } from '../instagram/instagram-inbound.service';
+import { InstagramAccountsService } from '../instagram/instagram-accounts.service';
 
 @Controller('facebook')
 @SkipThrottle()
@@ -14,6 +16,8 @@ export class FacebookWebhookController {
     private readonly inbound: FacebookInboundService,
     private readonly fbService: FacebookPagesService,
     private readonly config: ConfigService,
+    private readonly instagramInbound: InstagramInboundService,
+    private readonly instagramAccountsService: InstagramAccountsService,
   ) {}
 
   /**
@@ -73,15 +77,20 @@ export class FacebookWebhookController {
     // Respond immediately — Meta requires 200 within 20 s
     res.status(200).send('EVENT_RECEIVED');
 
-    // Only handle Page/Messenger events — Instagram Messaging is not yet configured
     if (payload?.object === 'page') {
       void this.inbound.handleWebhook(payload);
+    }
+
+    if (payload?.object === 'instagram') {
+      void this.instagramInbound.handleWebhook(payload as any);
     }
   }
 
   /**
    * GET /facebook/callback
-   * OAuth redirect target — Meta sends the auth code here.
+   * OAuth redirect target for both Facebook Pages and Instagram.
+   * Routes to the correct service based on the Redis state prefix:
+   *   ig:oauth:{state} → Instagram  |  fb:oauth:{state} → Facebook Pages
    */
   @Public()
   @Get('callback')
@@ -90,9 +99,15 @@ export class FacebookWebhookController {
     @Query('state') state: string,
     @Res() res: Response,
   ) {
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
     if (!code || !state) {
-      const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
       return res.redirect(`${frontendUrl}/facebook-pages?error=missing_params`);
+    }
+    // Detect Instagram OAuth flow by its Redis state key prefix
+    const isInstagram = await this.instagramAccountsService.isInstagramOAuthState(state);
+    if (isInstagram) {
+      const redirectUrl = await this.instagramAccountsService.handleCallback(code, state);
+      return res.redirect(redirectUrl);
     }
     const redirectUrl = await this.fbService.handleCallback(code, state);
     return res.redirect(redirectUrl);

@@ -4,15 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
-import type { FacebookPage, FacebookPageAiSettings } from "@/lib/api/types";
+import type { InstagramAccount, InstagramAccountAiSettings } from "@/lib/api/types";
 import { qk } from "@/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Bot,
   BrainCircuit,
+  Camera,
   CheckCircle2,
-  Share2,
   Globe,
   Info,
   Key,
@@ -32,29 +32,27 @@ import { cn } from "@/lib/utils";
 
 type Tab = "overview" | "ai-training" | "dm-bot" | "settings";
 
-export default function FacebookPageDetailPage() {
+export default function InstagramAccountDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
 
-  const { data: pages = [] } = useQuery({
-    queryKey: qk.facebookPages,
+  const { data: accounts = [] } = useQuery({
+    queryKey: qk.instagramAccounts,
     queryFn: async () => {
-      const { data } = await api.get<FacebookPage[]>("/facebook/pages");
+      const { data } = await api.get<InstagramAccount[]>("/instagram/accounts");
       return data;
     },
   });
 
-  const page = pages.find((p) => p.id === id);
+  const account = accounts.find((a) => a.id === id);
 
   // ── AI settings (shared between AI Training + DM Bot tabs) ────────────────
-  const { data: aiSettings } = useQuery<FacebookPageAiSettings>({
-    queryKey: qk.fbPageAiSettings(id),
+  const { data: aiSettings } = useQuery<InstagramAccountAiSettings>({
+    queryKey: qk.igAccountAiSettings(id),
     queryFn: async () => {
-      const { data } = await api.get(
-        `/fb-comment-automations/pages/${id}/ai-settings`,
-      );
+      const { data } = await api.get(`/instagram/accounts/${id}/ai-settings`);
       return data;
     },
     enabled: !!id && (tab === "ai-training" || tab === "dm-bot"),
@@ -105,7 +103,7 @@ export default function FacebookPageDetailPage() {
   // ── Save AI Training ──────────────────────────────────────────────────────
   const saveAiMutation = useMutation({
     mutationFn: async () => {
-      await api.post(`/fb-comment-automations/pages/${id}/ai-settings`, {
+      await api.post(`/instagram/accounts/${id}/ai-settings`, {
         aiProvider,
         geminiApiKey: geminiApiKey === "••••••••••••••••" ? undefined : (geminiApiKey || null),
         geminiModel: geminiModel || null,
@@ -116,7 +114,7 @@ export default function FacebookPageDetailPage() {
     },
     onSuccess: () => {
       toast.success("AI training saved");
-      void queryClient.invalidateQueries({ queryKey: qk.fbPageAiSettings(id) });
+      void queryClient.invalidateQueries({ queryKey: qk.igAccountAiSettings(id) });
     },
     onError: () => toast.error("Failed to save AI training"),
   });
@@ -124,7 +122,7 @@ export default function FacebookPageDetailPage() {
   // ── Save DM Bot ───────────────────────────────────────────────────────────
   const saveDmMutation = useMutation({
     mutationFn: async () => {
-      await api.post(`/fb-comment-automations/pages/${id}/ai-settings`, {
+      await api.post(`/instagram/accounts/${id}/ai-settings`, {
         dmAiEnabled,
         dmAiFallbackOnly,
         dmWelcomeEnabled,
@@ -139,24 +137,24 @@ export default function FacebookPageDetailPage() {
     },
     onSuccess: () => {
       toast.success("DM Bot settings saved");
-      void queryClient.invalidateQueries({ queryKey: qk.fbPageAiSettings(id) });
+      void queryClient.invalidateQueries({ queryKey: qk.igAccountAiSettings(id) });
     },
     onError: () => toast.error("Failed to save DM Bot settings"),
   });
 
   const removeMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/facebook/pages/${id}`);
+      await api.delete(`/instagram/accounts/${id}`);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.facebookPages });
-      toast.success("Page disconnected");
-      router.push("/facebook-pages");
+      void queryClient.invalidateQueries({ queryKey: qk.instagramAccounts });
+      toast.success("Account disconnected");
+      router.push("/instagram-accounts");
     },
-    onError: () => toast.error("Could not remove page"),
+    onError: () => toast.error("Could not remove account"),
   });
 
-  if (!page) {
+  if (!account) {
     return (
       <div className="page-container flex items-center justify-center py-24">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -175,31 +173,31 @@ export default function FacebookPageDetailPage() {
     <div className="page-container space-y-6">
       {/* Back + title */}
       <div className="flex items-center gap-4">
-        <Link href="/facebook-pages">
+        <Link href="/instagram-accounts">
           <Button variant="ghost" size="icon" className="rounded-xl">
             <ArrowLeft className="size-4" />
           </Button>
         </Link>
         <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-blue-500/15">
-            <Share2 className="size-5 text-blue-500" />
+          <div className="flex size-10 items-center justify-center rounded-xl bg-pink-500/15">
+            <Camera className="size-5 text-pink-500" />
           </div>
           <div>
-            <h1 className="text-lg font-bold leading-tight">{page.name}</h1>
-            {page.category && (
-              <p className="text-xs text-muted-foreground">{page.category}</p>
+            <h1 className="text-lg font-bold leading-tight">{account.name}</h1>
+            {account.username && (
+              <p className="text-xs text-muted-foreground">@{account.username}</p>
             )}
           </div>
         </div>
         <Badge
           variant="outline"
           className={`ml-auto shrink-0 rounded-lg text-xs font-mono ${
-            page.isActive
+            account.isActive
               ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               : "text-muted-foreground"
           }`}
         >
-          {page.isActive ? "Active" : "Inactive"}
+          {account.isActive ? "Active" : "Inactive"}
         </Badge>
       </div>
 
@@ -231,10 +229,10 @@ export default function FacebookPageDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <div className="size-2 rounded-full bg-emerald-500" />
-              <span className="text-sm font-medium">Page token active</span>
+              <span className="text-sm font-medium">Account token active</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Page access tokens do not expire unless the user revokes access.
+              Instagram access tokens do not expire unless the user revokes access.
             </p>
           </div>
 
@@ -246,11 +244,11 @@ export default function FacebookPageDetailPage() {
             <p className="text-sm font-medium">Verify endpoint</p>
             <code className="mt-1.5 block rounded-lg bg-muted px-3 py-2 font-mono text-xs break-all">
               {typeof window !== "undefined"
-                ? `${window.location.origin.replace(":3000", ":3001")}/facebook/webhook`
-                : "/facebook/webhook"}
+                ? `${window.location.origin.replace(":3000", ":3001")}/instagram/webhook`
+                : "/instagram/webhook"}
             </code>
             <p className="mt-2 text-xs text-muted-foreground">
-              Register this URL in your Meta App Dashboard under Webhooks → Page subscription.
+              Register this URL in your Meta App Dashboard under Webhooks → Instagram subscription.
               Subscribe to the <code className="font-mono">messages</code> field.
             </p>
           </div>
@@ -260,21 +258,47 @@ export default function FacebookPageDetailPage() {
               <MessageCircle className="size-4" />
               Conversations
             </div>
-            <p className="text-3xl font-bold">{page._count?.inboxThreads ?? 0}</p>
+            <p className="text-3xl font-bold">{account._count?.inboxThreads ?? 0}</p>
             <Link
-              href={`/inbox?channel=MESSENGER&pageId=${page.id}`}
+              href={`/inbox?channel=INSTAGRAM&accountId=${account.id}`}
               className="mt-3 inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2"
             >
               Open in Inbox
             </Link>
           </div>
 
-          <div className="col-span-full flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 px-5 py-4 text-sm">
-            <Info className="mt-0.5 size-4 shrink-0 text-blue-500" />
+          {/* Account info card */}
+          <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Camera className="size-4" />
+              Account Info
+            </div>
+            <div className="space-y-2 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">IG User ID</p>
+                <code className="font-mono text-xs">{account.igUserId}</code>
+              </div>
+              {account.username && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Username</p>
+                  <p className="font-medium">@{account.username}</p>
+                </div>
+              )}
+              {account.linkedFbPageId && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Linked FB Page ID</p>
+                  <code className="font-mono text-xs">{account.linkedFbPageId}</code>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="col-span-full flex items-start gap-3 rounded-xl border border-pink-500/20 bg-pink-500/5 px-5 py-4 text-sm">
+            <Info className="mt-0.5 size-4 shrink-0 text-pink-500" />
             <div>
               <p className="font-medium">24-Hour Messaging Window</p>
               <p className="mt-0.5 text-muted-foreground">
-                You can only reply to a Messenger conversation within 24 hours of the last user
+                You can only reply to an Instagram DM within 24 hours of the last user
                 message. After this window expires, replies will fail with a permissions error
                 from Meta.
               </p>
@@ -288,7 +312,7 @@ export default function FacebookPageDetailPage() {
                 <div>
                   <p className="text-sm font-medium">Keyword Triggers</p>
                   <p className="text-xs text-muted-foreground">
-                    All-channel and Messenger-scoped keyword rules apply to this Page.
+                    All-channel and Instagram-scoped keyword rules apply to this account.
                   </p>
                 </div>
               </div>
@@ -299,23 +323,23 @@ export default function FacebookPageDetailPage() {
                 <div>
                   <p className="text-sm font-medium">Autoresponder Rules</p>
                   <p className="text-xs text-muted-foreground">
-                    Page-scoped and workspace-wide autoresponders fire for this Page.
+                    Account-scoped and workspace-wide autoresponders fire for this account.
                   </p>
                 </div>
               </div>
             </Link>
 
             {/* Flows card */}
-            <Link href={`/facebook-pages/${id}/flows`}>
-              <div className="flex items-center gap-3 rounded-xl border border-purple-500/20 bg-purple-500/5 px-5 py-4 hover:bg-purple-500/10 transition-colors cursor-pointer">
-                <GitBranch className="size-5 text-purple-400" />
+            <Link href={`/instagram-accounts/${id}/flows`}>
+              <div className="flex items-center gap-3 rounded-xl border border-pink-500/20 bg-pink-500/5 px-5 py-4 hover:bg-pink-500/10 transition-colors cursor-pointer">
+                <GitBranch className="size-5 text-pink-400" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-purple-300">Messenger Flows</p>
+                  <p className="text-sm font-medium text-pink-300">Instagram Flows</p>
                   <p className="text-xs text-muted-foreground">
-                    Visual drag-and-drop chatbot flows for this Messenger page.
+                    Visual drag-and-drop chatbot flows for this Instagram account.
                   </p>
                 </div>
-                <ExternalLink className="size-4 text-purple-400/60" />
+                <ExternalLink className="size-4 text-pink-400/60" />
               </div>
             </Link>
           </div>
@@ -327,14 +351,14 @@ export default function FacebookPageDetailPage() {
         <div className="grid gap-4 max-w-2xl">
 
           {/* Isolation notice */}
-          <div className="flex items-start gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 px-5 py-4 text-sm">
-            <BrainCircuit className="mt-0.5 size-4 shrink-0 text-violet-400" />
+          <div className="flex items-start gap-3 rounded-xl border border-pink-500/20 bg-pink-500/5 px-5 py-4 text-sm">
+            <BrainCircuit className="mt-0.5 size-4 shrink-0 text-pink-400" />
             <div>
-              <p className="font-medium text-violet-300">Page-only training</p>
+              <p className="font-medium text-pink-300">Account-only training</p>
               <p className="mt-0.5 text-muted-foreground">
-                Everything you configure here applies <strong>only to {page.name}</strong>.
-                It fires for both DM replies and comment automation AI on this page.
-                It does not affect WhatsApp, Telegram, or any other Facebook page.
+                Everything you configure here applies <strong>only to {account.name}</strong>.
+                It fires for DM replies on this Instagram account.
+                It does not affect WhatsApp, Telegram, Facebook, or any other Instagram account.
               </p>
             </div>
           </div>
@@ -342,7 +366,7 @@ export default function FacebookPageDetailPage() {
           {/* Provider + API key */}
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm space-y-5">
             <div className="flex items-center gap-2">
-              <Key className="size-4 text-violet-400" />
+              <Key className="size-4 text-pink-400" />
               <span className="text-sm font-semibold">AI Provider</span>
             </div>
 
@@ -360,7 +384,7 @@ export default function FacebookPageDetailPage() {
                     className={cn(
                       "rounded-lg border px-4 py-2 text-sm font-medium transition-all",
                       aiProvider === p
-                        ? "border-violet-500 bg-violet-500/15 text-violet-300"
+                        ? "border-pink-500 bg-pink-500/15 text-pink-300"
                         : "border-border/60 text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -379,7 +403,7 @@ export default function FacebookPageDetailPage() {
                   </label>
                   <input
                     type="password"
-                    className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-pink-500"
                     placeholder="AIza..."
                     value={geminiApiKey}
                     onChange={(e) => setGeminiApiKey(e.target.value)}
@@ -393,7 +417,7 @@ export default function FacebookPageDetailPage() {
                     Model
                   </label>
                   <input
-                    className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-pink-500"
                     placeholder="gemini-2.0-flash"
                     value={geminiModel}
                     onChange={(e) => setGeminiModel(e.target.value)}
@@ -411,7 +435,7 @@ export default function FacebookPageDetailPage() {
                   </label>
                   <input
                     type="password"
-                    className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-pink-500"
                     placeholder="sk-..."
                     value={openaiApiKey}
                     onChange={(e) => setOpenaiApiKey(e.target.value)}
@@ -425,7 +449,7 @@ export default function FacebookPageDetailPage() {
                     Model
                   </label>
                   <input
-                    className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-pink-500"
                     placeholder="gpt-4o-mini"
                     value={openaiModel}
                     onChange={(e) => setOpenaiModel(e.target.value)}
@@ -438,16 +462,16 @@ export default function FacebookPageDetailPage() {
           {/* System prompt — the main training area */}
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-violet-400" />
+              <Sparkles className="size-4 text-pink-400" />
               <span className="text-sm font-semibold">Bot Training</span>
               <span className="ml-auto text-xs text-muted-foreground">System prompt</span>
             </div>
             <p className="text-xs text-muted-foreground">
               Write everything the AI needs to know about this business — name, services, prices, hours, tone, rules.
-              This is the only place you need to train the bot. It applies to DMs and comment replies on this page.
+              This is the only place you need to train the bot. It applies to DMs on this account.
             </p>
             <textarea
-              className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono leading-relaxed"
+              className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-pink-500 font-mono leading-relaxed"
               rows={16}
               placeholder={`You are the AI assistant for [Business Name].
 
@@ -485,29 +509,29 @@ Rules:
         <div className="grid gap-4 max-w-xl">
 
           {/* Link to AI Training */}
-          <div className="flex items-start gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-3 text-sm">
-            <BrainCircuit className="mt-0.5 size-4 shrink-0 text-violet-400" />
+          <div className="flex items-start gap-3 rounded-xl border border-pink-500/20 bg-pink-500/5 px-4 py-3 text-sm">
+            <BrainCircuit className="mt-0.5 size-4 shrink-0 text-pink-400" />
             <p className="text-muted-foreground">
               The AI uses the training from the{" "}
               <button
                 type="button"
                 onClick={() => setTab("ai-training")}
-                className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+                className="text-pink-400 underline underline-offset-2 hover:text-pink-300"
               >
                 AI Training tab
               </button>
-              {" "}for all DM replies on this page.
+              {" "}for all DM replies on this account.
             </p>
           </div>
 
           {/* Welcome message */}
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2">
-              <MessageCircle className="size-4 text-blue-400" />
+              <MessageCircle className="size-4 text-pink-400" />
               <span className="text-sm font-semibold">Welcome Message</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Sent automatically the <strong>first time</strong> someone messages this Page.
+              Sent automatically the <strong>first time</strong> someone messages this account.
             </p>
             <label className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium">Enable welcome message</span>
@@ -516,7 +540,7 @@ Rules:
                 onClick={() => setDmWelcomeEnabled((v) => !v)}
                 className={cn(
                   "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                  dmWelcomeEnabled ? "bg-blue-500" : "bg-muted",
+                  dmWelcomeEnabled ? "bg-pink-500" : "bg-muted",
                 )}
               >
                 <span
@@ -529,7 +553,7 @@ Rules:
             </label>
             {dmWelcomeEnabled && (
               <textarea
-                className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-pink-500"
                 rows={3}
                 placeholder="Hi! Thanks for messaging us. How can we help you today?"
                 value={dmWelcomeText}
@@ -541,7 +565,7 @@ Rules:
           {/* AI Reply */}
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-violet-400" />
+              <Sparkles className="size-4 text-pink-400" />
               <span className="text-sm font-semibold">AI Reply</span>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -554,7 +578,7 @@ Rules:
                 onClick={() => setDmAiEnabled((v) => !v)}
                 className={cn(
                   "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                  dmAiEnabled ? "bg-violet-500" : "bg-muted",
+                  dmAiEnabled ? "bg-pink-500" : "bg-muted",
                 )}
               >
                 <span
@@ -578,7 +602,7 @@ Rules:
                   onClick={() => setDmAiFallbackOnly((v) => !v)}
                   className={cn(
                     "mt-0.5 relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                    dmAiFallbackOnly ? "bg-violet-500" : "bg-muted",
+                    dmAiFallbackOnly ? "bg-pink-500" : "bg-muted",
                   )}
                 >
                   <span
@@ -618,7 +642,7 @@ Rules:
               <span className="text-sm font-semibold">Typing Indicator</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Shows the &quot;...&quot; typing bubble in Messenger before every bot reply. Makes the bot feel more natural and human-like.
+              Shows the &quot;...&quot; typing bubble in Instagram before every bot reply. Makes the bot feel more natural and human-like.
             </p>
             <label className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium">Enable typing indicator</span>
@@ -717,26 +741,32 @@ Rules:
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Settings className="size-4" />
-              Page details
+              Account details
             </div>
             <div className="space-y-3 text-sm">
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Page name</p>
-                <p className="font-medium">{page.name}</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Account name</p>
+                <p className="font-medium">{account.name}</p>
               </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Facebook Page ID</p>
-                <code className="font-mono text-xs bg-muted px-2 py-1 rounded-lg">{page.pageId}</code>
-              </div>
-              {page.category && (
+              {account.username && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Category</p>
-                  <p>{page.category}</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Username</p>
+                  <p>@{account.username}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Instagram User ID</p>
+                <code className="font-mono text-xs bg-muted px-2 py-1 rounded-lg">{account.igUserId}</code>
+              </div>
+              {account.linkedFbPageId && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Linked Facebook Page ID</p>
+                  <code className="font-mono text-xs bg-muted px-2 py-1 rounded-lg">{account.linkedFbPageId}</code>
                 </div>
               )}
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Connected</p>
-                <p>{new Date(page.createdAt).toLocaleDateString()}</p>
+                <p>{new Date(account.createdAt).toLocaleDateString()}</p>
               </div>
             </div>
           </div>
@@ -744,7 +774,7 @@ Rules:
           <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-5">
             <p className="mb-1 text-sm font-medium text-destructive">Danger zone</p>
             <p className="mb-4 text-xs text-muted-foreground">
-              Disconnecting this Page will stop all Messenger automation. Existing inbox threads
+              Disconnecting this account will stop all Instagram DM automation. Existing inbox threads
               are preserved but new messages will not be received.
             </p>
             <Button
@@ -759,7 +789,7 @@ Rules:
               ) : (
                 <Trash2 className="mr-1.5 size-4" />
               )}
-              Disconnect page
+              Disconnect account
             </Button>
           </div>
         </div>

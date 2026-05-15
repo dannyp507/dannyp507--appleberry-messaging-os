@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { CommonModule } from '../common/common.module';
 import { RedisModule } from '../redis/redis.module';
 import { MessagingModule } from '../messaging/messaging.module';
@@ -8,9 +8,10 @@ import { FacebookWebhookController } from './facebook-webhook.controller';
 import { FacebookPagesService } from './facebook-pages.service';
 import { FacebookInboundService } from './facebook-inbound.service';
 import { FbCommentProcessorService } from '../fb-comment-automations/fb-comment-processor.service';
+import { InstagramModule } from '../instagram/instagram.module';
 
 @Module({
-  imports: [CommonModule, RedisModule, MessagingModule, AiModule],
+  imports: [CommonModule, RedisModule, MessagingModule, AiModule, forwardRef(() => InstagramModule)],
   controllers: [FacebookPagesController, FacebookWebhookController],
   providers: [FacebookPagesService, FacebookInboundService, FbCommentProcessorService],
   exports: [FacebookPagesService],

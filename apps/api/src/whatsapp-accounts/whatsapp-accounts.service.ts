@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
@@ -8,6 +8,8 @@ import * as QRCode from 'qrcode';
 
 @Injectable()
 export class WhatsappAccountsService {
+  private readonly logger = new Logger(WhatsappAccountsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly billing: BillingService,
@@ -220,7 +222,7 @@ export class WhatsappAccountsService {
       accountId?: string;
     },
   ) {
-    console.log('[EmbeddedSignup] called — code:', params.code ? `present (${params.code.length} chars)` : 'missing', '| phoneNumberId:', params.phoneNumberId);
+    this.logger.debug(`[EmbeddedSignup] code=${params.code ? 'present' : 'missing'} phoneNumberId=${params.phoneNumberId}`);
     let accessToken = params.accessToken;
 
     if (params.code && !accessToken) {
@@ -272,7 +274,7 @@ export class WhatsappAccountsService {
 
     const shortRes = await fetch(shortUrl.toString());
     const shortJson = (await shortRes.json()) as Record<string, unknown>;
-    console.log('[ExchangeMetaCode] step1 status:', shortRes.status, '| body:', JSON.stringify(shortJson).slice(0, 400));
+    this.logger.debug(`[ExchangeMetaCode] step1 status=${shortRes.status} ok=${shortRes.ok}`);
 
     if (!shortRes.ok || typeof shortJson.access_token !== 'string') {
       const msg =

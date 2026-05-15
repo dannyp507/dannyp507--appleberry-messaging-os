@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Permissions } from '../common/decorators/permissions.decorator';
@@ -37,8 +38,11 @@ export class ChatbotAdminController {
   ) {}
 
   @Get()
-  list(@CurrentWorkspace() workspace: Workspace) {
-    return this.admin.list(workspace.id);
+  list(
+    @CurrentWorkspace() workspace: Workspace,
+    @Query('facebookPageId') facebookPageId?: string,
+  ) {
+    return this.admin.list(workspace.id, facebookPageId);
   }
 
   @Post('import')
@@ -94,6 +98,14 @@ export class ChatbotAdminController {
     return this.admin.removeEdge(workspace.id, id, edgeId);
   }
 
+  @Delete(':id')
+  deleteFlow(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.admin.removeFlow(workspace.id, id);
+  }
+
   @Get(':id')
   getOne(
     @CurrentWorkspace() workspace: Workspace,
@@ -105,9 +117,9 @@ export class ChatbotAdminController {
   @Post()
   create(
     @CurrentWorkspace() workspace: Workspace,
-    @Body() dto: CreateChatbotFlowDto,
+    @Body() dto: CreateChatbotFlowDto & { facebookPageId?: string },
   ) {
-    return this.admin.createFlow(workspace.id, dto.name);
+    return this.admin.createFlow(workspace.id, dto.name, dto.facebookPageId);
   }
 
   @Patch(':id/status')

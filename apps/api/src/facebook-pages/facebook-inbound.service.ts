@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TemplateRenderService } from '../messaging/template-render.service';
 import { FacebookPagesService } from './facebook-pages.service';
 import { FbCommentProcessorService } from '../fb-comment-automations/fb-comment-processor.service';
+import { AiService } from '../ai/ai.service';
 
 export interface FacebookWebhookPayload {
   object: 'page' | 'instagram';
@@ -55,6 +56,7 @@ export class FacebookInboundService {
     private readonly fbPages: FacebookPagesService,
     private readonly templates: TemplateRenderService,
     private readonly commentProcessor: FbCommentProcessorService,
+    private readonly ai: AiService,
   ) {}
 
   async handleWebhook(payload: FacebookWebhookPayload): Promise<void> {
@@ -216,6 +218,63 @@ export class FacebookInboundService {
       `FB inbound: sender=${senderId} page=${pageId} new_thread=${isNewThread} text="${text.slice(0, 40)}"`,
     );
 
+    // ── Load DM bot settings once (used in welcome + AI fallback) ─────────────
+    const dmSettings = await this.prisma.facebookPageAiSettings.findUnique({
+      where: { facebookPageId: page.id },
+    });
+
+    // ── Human takeover keywords (checked before all other automation) ─────────
+    // These always take priority — no other response is sent on the same message.
+    const msgLower = text.trim().toLowerCase();
+
+    if (dmSettings?.aiOffKeyword?.trim() && msgLower === dmSettings.aiOffKeyword.trim().toLowerCase()) {
+      await this.prisma.inboxThread.update({ where: { id: thread.id }, data: { aiPaused: true } });
+      if (dmSettings.aiOffReply?.trim()) {
+        await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 800);
+        await this.fbPages.sendMessage(page.pageAccessToken, senderId, dmSettings.aiOffReply);
+        await this.prisma.inboxMessage.create({
+          data: { threadId: thread.id, direction: 'OUTBOUND', message: dmSettings.aiOffReply },
+        });
+      }
+      this.logger.log(`AI paused (human takeover) for thread=${thread.id}`);
+      return;
+    }
+
+    if (dmSettings?.aiOnKeyword?.trim() && msgLower === dmSettings.aiOnKeyword.trim().toLowerCase()) {
+      await this.prisma.inboxThread.update({ where: { id: thread.id }, data: { aiPaused: false } });
+      if (dmSettings.aiOnReply?.trim()) {
+        await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 800);
+        await this.fbPages.sendMessage(page.pageAccessToken, senderId, dmSettings.aiOnReply);
+        await this.prisma.inboxMessage.create({
+          data: { threadId: thread.id, direction: 'OUTBOUND', message: dmSettings.aiOnReply },
+        });
+      }
+      this.logger.log(`AI resumed for thread=${thread.id}`);
+      return;
+    }
+
+    // If a human agent has taken over this thread, skip all bot automation
+    const aiPaused = (thread as { aiPaused?: boolean }).aiPaused ?? false;
+    if (aiPaused) {
+      this.logger.log(`AI paused — skipping automation for thread=${thread.id}`);
+      return;
+    }
+
+    // ── Welcome message — sent on the very first DM to this page ─────────────
+    if (isNewThread && dmSettings?.dmWelcomeEnabled && dmSettings.dmWelcomeText?.trim()) {
+      await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 1200);
+      await this.fbPages.sendMessage(page.pageAccessToken, senderId, dmSettings.dmWelcomeText);
+      await this.prisma.inboxMessage.create({
+        data: { threadId: thread.id, direction: 'OUTBOUND', message: dmSettings.dmWelcomeText },
+      });
+      await this.prisma.inboxThread.update({
+        where: { id: thread.id },
+        data: { lastMessagePreview: dmSettings.dmWelcomeText.slice(0, 120), lastMessageAt: new Date() },
+      });
+      this.logger.log(`Welcome message sent to new thread sender=${senderId}`);
+      // Continue processing — welcome is sent in addition to the normal reply
+    }
+
     // ── STEP A: Autoresponder rules (page-scoped first, workspace-wide fallback) ─
     // Only matches rules scoped to THIS page OR workspace-wide rules that have
     // no channel account set at all (excludes WA-only rules and other FB pages).
@@ -244,6 +303,7 @@ export class FacebookInboundService {
         .map((p) => p.trim())
         .filter(Boolean);
 
+      await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 1200);
       for (const part of parts) {
         await this.fbPages.sendMessage(page.pageAccessToken, senderId, part);
         await this.prisma.inboxMessage.create({
@@ -279,6 +339,7 @@ export class FacebookInboundService {
         });
         if (!template) continue;
         const body = this.templates.interpolate(template, contact);
+        await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 1200);
         await this.fbPages.sendMessage(page.pageAccessToken, senderId, body);
         await this.prisma.inboxMessage.create({
           data: { threadId: thread.id, direction: 'OUTBOUND', message: body },
@@ -292,6 +353,7 @@ export class FacebookInboundService {
           .split(/\n---\n/)
           .map((p) => p.trim())
           .filter(Boolean);
+        await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 1200);
         for (const part of parts) {
           await this.fbPages.sendMessage(page.pageAccessToken, senderId, part);
           await this.prisma.inboxMessage.create({
@@ -310,7 +372,99 @@ export class FacebookInboundService {
       }
     }
 
-    this.logger.log(`No automation match for FB message sender=${senderId} page=${pageId}`);
+    // ── STEP C: AI fallback / default reply ───────────────────────────────────
+    if (dmSettings?.dmAiEnabled) {
+      // Show typing indicator before calling AI (AI processing itself acts as the delay)
+      await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 0);
+
+      // Load recent messages for conversation context (up to 10 turns = 20 rows)
+      const recentRows = await this.prisma.inboxMessage.findMany({
+        where: { threadId: thread.id },
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+      });
+
+      const recentMessages = recentRows.map((m) => ({
+        direction: m.direction,
+        message: m.message,
+      }));
+
+      const aiReply = await this.ai.generateReply(
+        {
+          workspaceId,
+          contactId: contact.id,
+          threadId: thread.id,
+          recentMessages,
+          facebookPageId: page.id,
+        },
+        text,
+      );
+
+      if (aiReply) {
+        await this.fbPages.sendMessage(page.pageAccessToken, senderId, aiReply);
+        await this.prisma.inboxMessage.create({
+          data: { threadId: thread.id, direction: 'OUTBOUND', message: aiReply },
+        });
+        await this.prisma.inboxThread.update({
+          where: { id: thread.id },
+          data: { lastMessagePreview: aiReply.slice(0, 120), lastMessageAt: new Date() },
+        });
+        this.logger.log(`AI DM reply sent to sender=${senderId} page=${pageId}`);
+        return;
+      }
+
+      this.logger.warn(`AI enabled but returned no reply for sender=${senderId} page=${pageId}`);
+    }
+
+    // No AI or AI failed — use static default reply if configured
+    if (dmSettings?.dmDefaultReply?.trim()) {
+      await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 1200);
+      await this.fbPages.sendMessage(page.pageAccessToken, senderId, dmSettings.dmDefaultReply);
+      await this.prisma.inboxMessage.create({
+        data: { threadId: thread.id, direction: 'OUTBOUND', message: dmSettings.dmDefaultReply },
+      });
+      await this.prisma.inboxThread.update({
+        where: { id: thread.id },
+        data: { lastMessagePreview: dmSettings.dmDefaultReply.slice(0, 120), lastMessageAt: new Date() },
+      });
+      this.logger.log(`Default DM reply sent to sender=${senderId} page=${pageId}`);
+      return;
+    }
+
+    this.logger.log(`No automation match for FB DM sender=${senderId} page=${pageId}`);
+  }
+
+  /**
+   * If typing indicator is enabled, sends `typing_on` to Messenger and optionally
+   * waits `delayMs` milliseconds so the bubble is visible before the reply arrives.
+   * For AI replies pass delayMs=0 — the AI call itself provides the natural delay.
+   * Never throws — a failed typing call must never block the actual reply.
+   */
+  private async maybeTyping(
+    dmSettings: { dmTypingEnabled?: boolean } | null | undefined,
+    pageAccessToken: string,
+    recipientId: string,
+    delayMs: number,
+  ): Promise<void> {
+    if (!dmSettings?.dmTypingEnabled) return;
+    try {
+      await fetch(
+        `https://graph.facebook.com/v21.0/me/messages?access_token=${pageAccessToken}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipient: { id: recipientId },
+            sender_action: 'typing_on',
+          }),
+        },
+      );
+    } catch (e) {
+      this.logger.warn(`[TypingIndicator] Failed to send typing_on: ${String(e)}`);
+    }
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
   }
 
   /** Best-effort: fetch the user's display name from Messenger User Profile API */

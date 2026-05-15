@@ -151,6 +151,28 @@ export interface FacebookPage {
   _count?: { inboxThreads: number };
 }
 
+export interface FacebookPageAiSettings {
+  aiProvider: string | null;
+  openaiApiKey: string | null;
+  openaiModel: string | null;
+  geminiApiKey: string | null;
+  geminiModel: string | null;
+  systemPrompt: string | null;
+  openaiKeySet: boolean;
+  geminiKeySet: boolean;
+  // DM Bot settings
+  dmAiEnabled: boolean;
+  dmAiFallbackOnly: boolean;
+  dmWelcomeEnabled: boolean;
+  dmWelcomeText: string | null;
+  dmDefaultReply: string | null;
+  dmTypingEnabled: boolean;
+  aiOffKeyword: string | null;
+  aiOffReply: string | null;
+  aiOnKeyword: string | null;
+  aiOnReply: string | null;
+}
+
 export interface InboxThread {
   id: string;
   workspaceId: string;
@@ -219,6 +241,7 @@ export interface ChatbotFlowSummary {
   name: string;
   status: ChatbotFlowStatus;
   entryNodeId: string | null;
+  facebookPageId: string | null;
   createdAt: string;
   _count?: { nodes: number; edges: number };
 }
@@ -489,6 +512,40 @@ export interface FbPost {
   permalinkUrl: string | null;
   thumbnail: string | null;
 }
+
+// ─── Instagram ───────────────────────────────────────────────────────────────
+
+export type InstagramAccount = {
+  id: string;
+  igUserId: string;
+  username: string | null;
+  name: string;
+  linkedFbPageId: string | null;
+  isActive: boolean;
+  createdAt: string;
+  _count?: { inboxThreads: number };
+};
+
+export type InstagramAccountAiSettings = {
+  id: string;
+  instagramAccountId: string;
+  aiProvider: string | null;
+  geminiKeySet: boolean;
+  geminiModel: string | null;
+  openaiKeySet: boolean;
+  openaiModel: string | null;
+  systemPrompt: string | null;
+  dmAiEnabled: boolean;
+  dmAiFallbackOnly: boolean;
+  dmWelcomeEnabled: boolean;
+  dmWelcomeText: string | null;
+  dmDefaultReply: string | null;
+  dmTypingEnabled: boolean;
+  aiOffKeyword: string | null;
+  aiOffReply: string | null;
+  aiOnKeyword: string | null;
+  aiOnReply: string | null;
+};
 
 // ─── Brand Settings ───────────────────────────────────────────────────────────
 

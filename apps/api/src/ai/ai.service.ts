@@ -7,6 +7,10 @@ export type AiReplyContext = {
   contactId: string;
   threadId?: string;
   recentMessages?: Array<{ direction: string; message: string }>;
+  /** When set, page-level AI settings are checked first (key + system prompt) */
+  facebookPageId?: string;
+  /** When set, Instagram account AI settings are checked first (key + system prompt) */
+  instagramAccountId?: string;
 };
 
 @Injectable()
@@ -23,14 +27,45 @@ export class AiService {
     message: string,
     overrideSystemPrompt?: string,
   ): Promise<string | null> {
-    const settings = await this.aiSettings.getRaw(context.workspaceId);
+    // Resolution order: page settings → workspace settings → env var
+    const workspaceSettings = await this.aiSettings.getRaw(context.workspaceId);
 
-    // Resolve provider, key, model — workspace DB wins over env vars
-    const provider = settings?.defaultProvider ?? 'openai';
+    // Lazily load channel-level settings (Facebook page or Instagram account)
+    let pageSettings: {
+      aiProvider?: string | null;
+      openaiApiKey?: string | null;
+      openaiModel?: string | null;
+      geminiApiKey?: string | null;
+      geminiModel?: string | null;
+      systemPrompt?: string | null;
+    } | null = null;
+
+    if (context.facebookPageId) {
+      // Avoid circular dep — query prisma directly via the settings service
+      pageSettings = await this.aiSettings.getPageRaw(context.facebookPageId);
+    } else if (context.instagramAccountId) {
+      pageSettings = await this.aiSettings.getIgAccountRaw(context.instagramAccountId);
+    }
+
+    const isChannelScoped = !!(context.facebookPageId || context.instagramAccountId);
+
+    // Provider: channel → workspace → default
+    const provider =
+      pageSettings?.aiProvider ||
+      workspaceSettings?.defaultProvider ||
+      'openai';
+
+    // System prompt resolution:
+    // - For channel-scoped (FB/IG): channel prompt only (never leak workspace/WhatsApp prompt)
+    // - For other channels: workspace prompt → built-in default
+    const CHANNEL_DEFAULT =
+      'You are a helpful customer support assistant. Reply concisely and professionally. If you cannot help, ask the customer to contact the team directly.';
     const systemPrompt =
       overrideSystemPrompt ??
-      settings?.systemPrompt ??
-      'You are a helpful customer support assistant. Reply concisely in plain text. If you cannot help, suggest the user contact a human agent.';
+      pageSettings?.systemPrompt ??
+      (isChannelScoped
+        ? CHANNEL_DEFAULT                  // channel-scoped — never fall back to workspace prompt
+        : (workspaceSettings?.systemPrompt ?? CHANNEL_DEFAULT));
 
     const history =
       context.recentMessages?.map((m) => ({
@@ -42,21 +77,27 @@ export class AiService {
       })) ?? [];
 
     if (provider === 'gemini') {
+      // Key: page → workspace → env
       const apiKey =
-        settings?.geminiApiKey?.trim() ||
+        pageSettings?.geminiApiKey?.trim() ||
+        workspaceSettings?.geminiApiKey?.trim() ||
         this.config.get<string>('GEMINI_API_KEY') ||
         '';
       if (!apiKey) {
         this.logger.debug('Gemini API key not set; skipping AI reply');
         return null;
       }
-      const model = settings?.geminiModel ?? 'gemini-1.5-flash';
+      const model =
+        pageSettings?.geminiModel ||
+        workspaceSettings?.geminiModel ||
+        'gemini-2.5-flash';
       return this.callGemini(apiKey, model, systemPrompt, history, message);
     }
 
-    // Default: OpenAI
+    // Default: OpenAI — key: page → workspace → env
     const apiKey =
-      settings?.openaiApiKey?.trim() ||
+      pageSettings?.openaiApiKey?.trim() ||
+      workspaceSettings?.openaiApiKey?.trim() ||
       this.config.get<string>('OPENAI_API_KEY') ||
       '';
     if (!apiKey) {
@@ -64,7 +105,8 @@ export class AiService {
       return null;
     }
     const model =
-      settings?.openaiModel ??
+      pageSettings?.openaiModel ||
+      workspaceSettings?.openaiModel ||
       this.config.get<string>('OPENAI_MODEL', 'gpt-4o-mini');
     return this.callOpenAi(apiKey, model, systemPrompt, history, message);
   }

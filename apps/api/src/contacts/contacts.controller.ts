@@ -29,7 +29,7 @@ import { ContactsService } from './contacts.service';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { ListContactsQueryDto } from './dto/list-contacts.query';
 
-const uploadDir = '/tmp/appleberry-uploads';
+const uploadDir = '/app/uploads/imports';
 
 @Controller('contacts')
 @UseGuards(WorkspaceContextGuard, RolesGuard, PermissionsGuard)

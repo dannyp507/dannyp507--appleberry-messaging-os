@@ -9,7 +9,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import sharp from 'sharp';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sharp = require('sharp') as typeof import('sharp');
 
 /** Accepted input mime types */
 const ALLOWED_TYPES = new Set([

@@ -15,9 +15,14 @@ export class ChatbotAdminService {
     private readonly billing: BillingService,
   ) {}
 
-  list(workspaceId: string) {
+  list(workspaceId: string, facebookPageId?: string) {
     return this.prisma.chatbotFlow.findMany({
-      where: { workspaceId },
+      where: {
+        workspaceId,
+        ...(facebookPageId !== undefined
+          ? { facebookPageId }
+          : {}),
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         _count: { select: { nodes: true, edges: true } },
@@ -36,10 +41,15 @@ export class ChatbotAdminService {
     return flow;
   }
 
-  async createFlow(workspaceId: string, name: string) {
+  async createFlow(workspaceId: string, name: string, facebookPageId?: string) {
     await this.billing.assertCanCreateChatbotFlow(workspaceId);
     return this.prisma.chatbotFlow.create({
-      data: { workspaceId, name, status: ChatbotFlowStatus.DRAFT },
+      data: {
+        workspaceId,
+        name,
+        status: ChatbotFlowStatus.DRAFT,
+        ...(facebookPageId ? { facebookPageId } : {}),
+      },
     });
   }
 
@@ -202,6 +212,15 @@ export class ChatbotAdminService {
       throw new NotFoundException('Edge not found');
     }
     await this.prisma.chatbotEdge.delete({ where: { id: edgeId } });
+    return { deleted: true };
+  }
+
+  async removeFlow(workspaceId: string, flowId: string) {
+    const flow = await this.prisma.chatbotFlow.findFirst({
+      where: { id: flowId, workspaceId },
+    });
+    if (!flow) throw new NotFoundException('Flow not found');
+    await this.prisma.chatbotFlow.delete({ where: { id: flowId } });
     return { deleted: true };
   }
 }

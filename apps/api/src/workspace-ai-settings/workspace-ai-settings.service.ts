@@ -95,10 +95,24 @@ export class WorkspaceAiSettingsService {
     };
   }
 
-  /** Internal use only — returns raw (unmasked) keys for AI calls */
+  /** Internal use only — returns raw (unmasked) workspace keys for AI calls */
   async getRaw(workspaceId: string) {
     return this.prisma.workspaceAiSettings.findUnique({
       where: { workspaceId },
+    });
+  }
+
+  /** Internal use only — returns raw (unmasked) page-level AI settings */
+  async getPageRaw(facebookPageId: string) {
+    return this.prisma.facebookPageAiSettings.findUnique({
+      where: { facebookPageId },
+    });
+  }
+
+  /** Internal use only — returns raw (unmasked) Instagram account AI settings */
+  async getIgAccountRaw(instagramAccountId: string) {
+    return this.prisma.instagramAccountAiSettings.findUnique({
+      where: { instagramAccountId },
     });
   }
 }

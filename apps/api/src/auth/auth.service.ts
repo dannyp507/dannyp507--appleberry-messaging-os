@@ -67,7 +67,7 @@ export class AuthService {
 
   private get googleCallbackUrl(): string {
     return (
-      this.config.get<string>('GOOGLE_CALLBACK_URL') ??
+      this.config.get<string>('GOOGLE_CALLBACK_URL') ||
       `${this.config.get<string>('API_PUBLIC_URL') ?? 'http://localhost:3001'}/auth/google/callback`
     );
   }

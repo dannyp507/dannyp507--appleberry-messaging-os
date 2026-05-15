@@ -91,8 +91,18 @@ export class FbCommentProcessorService {
     }
 
     // ── 4. Match keywords — fire first matching automation ────────────────────
+    // Automations with no keywords act as a catch-all fallback (fired only if
+    // no keyword automation matched first).
     let matched = false;
+    let fallbackAutomation: typeof automations[number] | null = null;
+
     for (const automation of automations) {
+      // Automations with no keywords → save as fallback, skip keyword loop
+      if (automation.keywords.length === 0) {
+        if (!fallbackAutomation) fallbackAutomation = automation;
+        continue;
+      }
+
       for (const kw of automation.keywords) {
         if (!this.matches(commentText, kw.keyword, kw.matchType)) continue;
 
@@ -101,85 +111,20 @@ export class FbCommentProcessorService {
             `commentId=${commentId}`,
         );
 
-        let privateReplySent = false;
-        let publicReplySent = false;
-        let error: string | null = null;
-
-        // Resolve reply texts — AI or static
-        // publicReplyText: always from messageText (visible on the post)
-        // dmText: from automation.dmText if set, otherwise falls back to messageText
-        let publicReplyText = automation.messageText;
-        let dmBodyText = (automation.dmText ?? automation.messageText) as string;
-
-        if (automation.aiEnabled) {
-          const aiReply = await this.ai.generateReply(
-            { workspaceId: page.workspaceId, contactId: commenterId },
-            commentText,
-            this.buildAiSystemPrompt(automation.aiSystemPrompt, page.workspaceId),
-          );
-          if (aiReply) {
-            // AI reply goes to DM; public reply still uses the static messageText
-            dmBodyText = aiReply;
-          }
-        }
-
-        // Execute action(s)
-        try {
-          if (
-            automation.actionType === 'PRIVATE_REPLY' ||
-            automation.actionType === 'BOTH'
-          ) {
-            await this.sendPrivateReply(
-              commentId,
-              dmBodyText,
-              page.pageAccessToken,
-              automation.buttonLabel ?? undefined,
-              automation.buttonUrl ?? undefined,
-              automation.mediaUrl ?? undefined,
-            );
-            privateReplySent = true;
-          }
-          if (
-            automation.actionType === 'PUBLIC_COMMENT' ||
-            automation.actionType === 'BOTH'
-          ) {
-            await this.sendPublicReply(commentId, publicReplyText, page.pageAccessToken);
-            publicReplySent = true;
-          }
-        } catch (err) {
-          error = err instanceof Error ? err.message : String(err);
-          this.logger.error(
-            `Failed to send reply for commentId=${commentId}: ${error}`,
-          );
-        }
-
-        // Increment automation reply counter
-        await this.prisma.fbCommentAutomation.update({
-          where: { id: automation.id },
-          data: { replyCount: { increment: 1 } },
-        });
-
-        // Log the event
-        await this.logEvent({
-          workspaceId: page.workspaceId,
-          facebookPageId: page.id,
-          automationId: automation.id,
-          commentId,
-          postId,
-          commenterId,
-          commenterName,
-          commentText,
-          matchedKeyword: kw.keyword,
-          actionType: automation.actionType,
-          privateReplySent,
-          publicReplySent,
-          error,
-        });
-
+        await this.fireAutomation(automation, kw.keyword, { page, commentId, postId, commenterId, commenterName, commentText });
         matched = true;
-        break; // Fire only the first matching automation per comment
+        break;
       }
       if (matched) break;
+    }
+
+    // ── 4b. Fallback — no keyword matched, fire catch-all automation if present ─
+    if (!matched && fallbackAutomation) {
+      this.logger.log(
+        `No keyword matched — firing fallback automation "${fallbackAutomation.name}" commentId=${commentId}`,
+      );
+      await this.fireAutomation(fallbackAutomation, null, { page, commentId, postId, commenterId, commenterName, commentText });
+      matched = true;
     }
 
     if (!matched) {
@@ -200,24 +145,120 @@ export class FbCommentProcessorService {
     }
   }
 
+  // ── Fire automation (shared by keyword match + fallback) ─────────────────────
+
+  private async fireAutomation(
+    automation: {
+      id: string; name: string; actionType: string; aiEnabled: boolean;
+      aiSystemPrompt: string | null; messageText: string | null;
+      dmText: string | null; buttonLabel: string | null; buttonUrl: string | null;
+      mediaUrl: string | null;
+    },
+    matchedKeyword: string | null,
+    ctx: {
+      page: { id: string; pageId: string; workspaceId: string; pageAccessToken: string };
+      commentId: string; postId: string; commenterId: string;
+      commenterName?: string; commentText: string;
+    },
+  ): Promise<void> {
+    const { page, commentId, postId, commenterId, commenterName, commentText } = ctx;
+
+    let privateReplySent = false;
+    let publicReplySent = false;
+    let error: string | null = null;
+
+    let publicReplyText = automation.messageText;
+    let dmBodyText = (automation.dmText ?? automation.messageText ?? '') as string;
+
+    if (automation.aiEnabled) {
+      const aiReply = await this.ai.generateReply(
+        { workspaceId: page.workspaceId, contactId: commenterId, facebookPageId: page.id },
+        commentText,
+        this.buildAiSystemPrompt(automation.aiSystemPrompt, page.workspaceId),
+      );
+      if (aiReply) {
+        dmBodyText = aiReply;
+        // For fallback (no keyword), also use AI reply as the public comment
+        if (!matchedKeyword) publicReplyText = aiReply;
+      }
+    }
+
+    try {
+      if (automation.actionType === 'PRIVATE_REPLY' || automation.actionType === 'BOTH') {
+        await this.sendPrivateReply(
+          commentId, commenterId, page.pageId, dmBodyText, page.pageAccessToken,
+          automation.buttonLabel ?? undefined,
+          automation.buttonUrl ?? undefined,
+          automation.mediaUrl ?? undefined,
+        );
+        privateReplySent = true;
+      }
+      if (automation.actionType === 'PUBLIC_COMMENT' || automation.actionType === 'BOTH') {
+        if (publicReplyText) {
+          await this.sendPublicReply(commentId, publicReplyText, page.pageAccessToken);
+          publicReplySent = true;
+        }
+      }
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to send reply for commentId=${commentId}: ${error}`);
+    }
+
+    await this.prisma.fbCommentAutomation.update({
+      where: { id: automation.id },
+      data: { replyCount: { increment: 1 } },
+    });
+
+    await this.logEvent({
+      workspaceId: page.workspaceId,
+      facebookPageId: page.id,
+      automationId: automation.id,
+      commentId, postId, commenterId, commenterName, commentText,
+      matchedKeyword: matchedKeyword ?? undefined,
+      actionType: automation.actionType as import('@prisma/client').FbCommentActionType,
+      privateReplySent,
+      publicReplySent,
+      error,
+    });
+  }
+
   // ── Graph API Calls ───────────────────────────────────────────────────────────
 
-  /** Sends a private Messenger DM to the commenter using the Messenger Send API.
-   *  Uses recipient.comment_id which works across all post types (regular, check-in, video, etc.)
-   *  Unlike the legacy /private_replies endpoint, this is not restricted by post type.
-   *  Requires pages_messaging permission.
+  /** Sends a private Messenger DM to the commenter.
+   *
+   *  Strategy (preserves comment visibility):
+   *  1. Look up the commenter's Page-Scoped User ID (PSID) via the conversations API.
+   *     Sending to a PSID does NOT mark the comment as "replied privately", so the
+   *     original comment stays visible on the post.
+   *  2. If no existing conversation found (first-time commenter), fall back to
+   *     recipient.comment_id — the comment will be hidden by Facebook, but the DM
+   *     still reaches the user.
    *
    *  When buttonLabel + buttonUrl are supplied the message is sent as a Messenger
    *  button template with a single web_url button appended to the text.
    *  When mediaUrl is supplied (and no button) the message includes a media attachment. */
   private async sendPrivateReply(
     commentId: string,
+    commenterId: string,
+    pageNumericId: string,
     message: string,
     pageAccessToken: string,
     buttonLabel?: string,
     buttonUrl?: string,
     mediaUrl?: string,
   ): Promise<void> {
+    // Prefer PSID so the original comment is NOT hidden by Facebook
+    const psid = await this.getPsidForCommenter(commenterId, pageNumericId, pageAccessToken);
+    const recipient: Record<string, unknown> = psid
+      ? { id: psid }
+      : { comment_id: commentId };
+
+    if (psid) {
+      this.logger.debug(`Resolved PSID ${psid} for commenter ${commenterId} — comment will stay visible`);
+    } else {
+      this.logger.debug(`No PSID found for commenter ${commenterId} — using comment_id (comment will be hidden)`);
+    }
+
     // Build the message payload
     let messagePayload: Record<string, unknown>;
 
@@ -240,9 +281,8 @@ export class FbCommentProcessorService {
         },
       };
     } else if (mediaUrl) {
-      // Media attachment (image/video) — send as two separate messages:
-      // 1. the text, 2. the media (Messenger doesn't support text+media in one template)
-      await this.sendMessengerMessage(commentId, pageAccessToken, { text: message });
+      // Media attachment — send text first, then the image
+      await this.sendMessengerMessage(recipient, pageAccessToken, { text: message });
       messagePayload = {
         attachment: {
           type: 'image',
@@ -254,26 +294,55 @@ export class FbCommentProcessorService {
       messagePayload = { text: message };
     }
 
-    await this.sendMessengerMessage(commentId, pageAccessToken, messagePayload);
-    this.logger.log(`Private Messenger reply sent to comment ${commentId}`);
+    await this.sendMessengerMessage(recipient, pageAccessToken, messagePayload);
+    this.logger.log(`Private Messenger reply sent to comment ${commentId} (via ${psid ? 'PSID' : 'comment_id'})`);
   }
 
-  /** Core Messenger Send API call — POST /me/messages with recipient.comment_id.
+  /** Look up the commenter's Page-Scoped User ID (PSID) from existing conversations.
+   *  Returns null if the user has never messaged the page before. */
+  private async getPsidForCommenter(
+    commenterUserId: string,
+    pageNumericId: string,
+    pageAccessToken: string,
+  ): Promise<string | null> {
+    try {
+      const url =
+        `${GRAPH_BASE}/me/conversations` +
+        `?user_id=${commenterUserId}&fields=participants&access_token=${pageAccessToken}`;
+      const res = await fetch(url);
+      const data = (await res.json()) as {
+        data?: Array<{ participants?: { data?: Array<{ id: string; name: string }> } }>;
+        error?: { message: string };
+      };
+      if (!res.ok || !data.data?.length) return null;
+
+      // The conversation has two participants: the page and the user.
+      // The PSID is the participant whose id is NOT the page's numeric ID.
+      const participants = data.data[0].participants?.data ?? [];
+      const userParticipant = participants.find((p) => p.id !== pageNumericId);
+      return userParticipant?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Core Messenger Send API call — POST /me/messages.
+   *  Accepts either { id: psid } or { comment_id: commentId } as the recipient.
    *  messaging_type RESPONSE is required by Meta for all message types including
    *  button templates; omitting it causes template messages to be silently dropped. */
   private async sendMessengerMessage(
-    commentId: string,
+    recipient: Record<string, unknown>,
     pageAccessToken: string,
     messagePayload: Record<string, unknown>,
   ): Promise<void> {
     const body = JSON.stringify({
-      recipient: { comment_id: commentId },
+      recipient,
       messaging_type: 'RESPONSE',
       message: messagePayload,
       access_token: pageAccessToken,
     });
 
-    this.logger.debug(`Messenger send payload: ${body}`);
+    this.logger.debug(`Messenger send payload: ${JSON.stringify({ recipient, message: messagePayload })}`);
 
     const res = await fetch(`${GRAPH_BASE}/me/messages`, {
       method: 'POST',

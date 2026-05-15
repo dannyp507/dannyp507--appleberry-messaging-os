@@ -1,4 +1,5 @@
 import { Body, Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Public } from '../common/decorators/public.decorator';
 import { TelegramInboundService } from './telegram-inbound.service';
 
 interface TelegramUpdate {
@@ -16,6 +17,7 @@ interface TelegramUpdate {
 export class TelegramWebhookController {
   constructor(private readonly inbound: TelegramInboundService) {}
 
+  @Public()
   @Post(':accountId')
   handleWebhook(
     @Param('accountId', ParseUUIDPipe) accountId: string,

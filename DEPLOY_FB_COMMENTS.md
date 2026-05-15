@@ -7,7 +7,7 @@ Run from local machine or via your normal deploy process (git push → pull on V
 
 ```bash
 # SSH into VPS, then:
-docker exec -i appleberry-api-test-db-1 psql -U postgres -d appleberry << 'EOF'
+docker exec -i appleberry-api-test-postgres-1 psql -U appleberry -d appleberry << 'EOF'
 CREATE TYPE "FbCommentActionType" AS ENUM ('PRIVATE_REPLY', 'PUBLIC_COMMENT', 'BOTH');
 
 CREATE TABLE "FbCommentAutomation" (
@@ -20,6 +20,7 @@ CREATE TABLE "FbCommentAutomation" (
   "isActive"       BOOLEAN      NOT NULL DEFAULT true,
   "actionType"     "FbCommentActionType" NOT NULL DEFAULT 'PRIVATE_REPLY',
   "messageText"    TEXT         NOT NULL,
+  "dmText"         TEXT,
   "buttonLabel"    TEXT,
   "buttonUrl"      TEXT,
   "mediaUrl"       TEXT,
@@ -95,6 +96,14 @@ CREATE TABLE "WorkspaceBrandSettings" (
   CONSTRAINT "WorkspaceBrandSettings_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE
 );
 EOF
+```
+
+## Step 2b: If upgrading an existing deployment (dmText column)
+
+Run this if you already ran Step 2 previously and just need the new `dmText` field:
+
+```bash
+docker exec -i appleberry-api-test-postgres-1 psql -U appleberry -d appleberry -c 'ALTER TABLE "FbCommentAutomation" ADD COLUMN IF NOT EXISTS "dmText" TEXT;'
 ```
 
 ## Step 3: Copy schema.prisma to VPS API container

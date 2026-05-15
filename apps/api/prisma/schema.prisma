@@ -296,6 +296,7 @@ model Workspace {
   whatsappAccounts     WhatsAppAccount[]
   telegramAccounts     TelegramAccount[]
   facebookPages        FacebookPage[]
+  instagramAccounts    InstagramAccount[]
   messageLogs          MessageLog[]
   contacts             Contact[]
   tags                 Tag[]
@@ -592,16 +593,107 @@ model FacebookPage {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace            Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   inboxThreads         InboxThread[]
   messageLogs          MessageLog[]
   autoresponderRules   AutoresponderRule[]
   fbCommentAutomations FbCommentAutomation[]
   fbCommentEvents      FbCommentEvent[]
+  aiSettings           FacebookPageAiSettings?
+  chatbotFlows         ChatbotFlow[]
 
   @@unique([workspaceId, pageId])
   @@index([workspaceId])
   @@index([pageId])
+}
+
+/// Per-page AI configuration — overrides workspace-level AI settings.
+/// Key resolution order: page key → workspace key → environment variable.
+model FacebookPageAiSettings {
+  id             String   @id @default(uuid()) @db.Uuid
+  facebookPageId String   @unique @db.Uuid
+  /// Which provider to use for this page (overrides workspace default when set)
+  aiProvider     String?
+  /// OpenAI API key scoped to this page — keeps client keys isolated
+  openaiApiKey   String?  @db.Text
+  openaiModel    String?
+  /// Google Gemini API key scoped to this page
+  geminiApiKey   String?  @db.Text
+  geminiModel    String?
+  /// Tone/voice prompt for this page's AI — "You are a helpful agent for [Brand]..."
+  systemPrompt   String?  @db.Text
+
+  // ── Messenger DM Bot settings ─────────────────────────────────────────────
+  /// Enable AI replies for direct Messenger DMs sent to this page
+  dmAiEnabled      Boolean @default(false)
+  /// When true: AI only fires if no keyword/autoresponder rule matched (recommended)
+  dmAiFallbackOnly Boolean @default(true)
+  /// Greeting sent automatically when a user messages this page for the first time
+  dmWelcomeEnabled Boolean @default(false)
+  dmWelcomeText    String? @db.Text
+  /// Static fallback reply sent when AI is off and no rule matched
+  dmDefaultReply   String? @db.Text
+  /// Show typing indicator ("...") before sending any DM bot reply
+  dmTypingEnabled  Boolean @default(false)
+
+  // ── Human Takeover keywords ───────────────────────────────────────────────
+  /// Customer sends this keyword to pause the AI for their thread only
+  aiOffKeyword  String?  @db.Text
+  /// Message sent to confirm AI has been paused (optional)
+  aiOffReply    String?  @db.Text
+  /// Customer sends this keyword to re-enable the AI for their thread
+  aiOnKeyword   String?  @db.Text
+  /// Message sent to confirm AI has resumed (optional)
+  aiOnReply     String?  @db.Text
+
+  updatedAt      DateTime @updatedAt
+
+  facebookPage FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+}
+
+model InstagramAccount {
+  id              String   @id @default(uuid()) @db.Uuid
+  workspaceId     String   @db.Uuid
+  igUserId        String
+  username        String?
+  name            String
+  pageAccessToken String   @db.Text
+  linkedFbPageId  String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace          Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inboxThreads       InboxThread[]
+  autoresponderRules AutoresponderRule[]
+  aiSettings         InstagramAccountAiSettings?
+
+  @@unique([workspaceId, igUserId])
+  @@index([workspaceId])
+  @@index([igUserId])
+}
+
+model InstagramAccountAiSettings {
+  id                 String  @id @default(uuid()) @db.Uuid
+  instagramAccountId String  @unique @db.Uuid
+  aiProvider         String?
+  openaiApiKey       String? @db.Text
+  openaiModel        String?
+  geminiApiKey       String? @db.Text
+  geminiModel        String?
+  systemPrompt       String? @db.Text
+  dmAiEnabled        Boolean @default(false)
+  dmAiFallbackOnly   Boolean @default(true)
+  dmWelcomeEnabled   Boolean @default(false)
+  dmWelcomeText      String? @db.Text
+  dmDefaultReply     String? @db.Text
+  dmTypingEnabled    Boolean @default(false)
+  aiOffKeyword       String? @db.Text
+  aiOffReply         String? @db.Text
+  aiOnKeyword        String? @db.Text
+  aiOnReply          String? @db.Text
+
+  account InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
 }
 
 // ─── Contacts & CRM ───────────────────────────────────────────────────────────
@@ -953,25 +1045,29 @@ model MessageLog {
 // ─── Chatbot ─────────────────────────────��────────────────────────────��───────
 
 model ChatbotFlow {
-  id          String            @id @default(uuid()) @db.Uuid
-  workspaceId String            @db.Uuid
-  name        String
-  description String?
-  status      ChatbotFlowStatus @default(DRAFT)
-  entryNodeId String?           @unique @db.Uuid
-  version     Int               @default(1)
-  runCount    Int               @default(0)
-  completionRate Float          @default(0)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id             String            @id @default(uuid()) @db.Uuid
+  workspaceId    String            @db.Uuid
+  /// Optional: link this flow to a specific Facebook Page (Messenger flows)
+  facebookPageId String?           @db.Uuid
+  name           String
+  description    String?
+  status         ChatbotFlowStatus @default(DRAFT)
+  entryNodeId    String?           @unique @db.Uuid
+  version        Int               @default(1)
+  runCount       Int               @default(0)
+  completionRate Float             @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fbPage    FacebookPage? @relation(fields: [facebookPageId], references: [id], onDelete: SetNull)
   entryNode ChatbotNode?  @relation("FlowEntryNode", fields: [entryNodeId], references: [id], onDelete: SetNull)
   nodes     ChatbotNode[] @relation("FlowNodes")
   edges     ChatbotEdge[]
   runs      ChatbotRun[]
 
   @@index([workspaceId])
+  @@index([facebookPageId])
   @@index([status])
 }
 
@@ -1073,6 +1169,8 @@ model AutoresponderRule {
   whatsappAccountId String?                @db.Uuid
   /// null = workspace-wide for Messenger; set to scope to one Facebook Page
   facebookPageId    String?                @db.Uuid
+  /// null = workspace-wide for Instagram; set to scope to one Instagram Account
+  instagramAccountId String?               @db.Uuid
   name              String?
   keyword           String
   matchType         AutoresponderMatchType @default(CONTAINS)
@@ -1088,13 +1186,15 @@ model AutoresponderRule {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  whatsappAccount WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: SetNull)
-  fbPage          FacebookPage?    @relation(fields: [facebookPageId], references: [id], onDelete: SetNull)
+  workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  whatsappAccount WhatsAppAccount?  @relation(fields: [whatsappAccountId], references: [id], onDelete: SetNull)
+  fbPage          FacebookPage?     @relation(fields: [facebookPageId], references: [id], onDelete: SetNull)
+  igAccount       InstagramAccount? @relation(fields: [instagramAccountId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, active, priority])
   @@index([whatsappAccountId])
   @@index([facebookPageId])
+  @@index([instagramAccountId])
 }
 
 model FallbackRule {
@@ -1126,12 +1226,15 @@ model InboxThread {
   whatsappAccountId   String?           @db.Uuid
   telegramAccountId   String?           @db.Uuid
   facebookPageId      String?           @db.Uuid
+  instagramAccountId  String?           @db.Uuid
   externalChatId      String?
   assignedToId        String?           @db.Uuid
   status              InboxThreadStatus @default(OPEN)
   isStarred           Boolean           @default(false)
   isRead              Boolean           @default(false)
   botActive           Boolean           @default(false)
+  /// When true the AI bot is paused for this thread (human takeover active)
+  aiPaused            Boolean           @default(false)
   unreadCount         Int               @default(0)
   lastMessageAt       DateTime?
   lastMessagePreview  String?
@@ -1144,6 +1247,7 @@ model InboxThread {
   waAccount       WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
   tgAccount       TelegramAccount? @relation(fields: [telegramAccountId], references: [id], onDelete: Cascade)
   fbPage          FacebookPage?    @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+  igAccount       InstagramAccount? @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
   assignedTo      User?            @relation("AssignedThreads", fields: [assignedToId], references: [id], onDelete: SetNull)
   messages        InboxMessage[]
 
@@ -1152,6 +1256,7 @@ model InboxThread {
   @@index([workspaceId, channel])
   @@index([assignedToId])
   @@index([workspaceId, lastMessageAt])
+  @@index([instagramAccountId])
 }
 
 model InboxMessage {
