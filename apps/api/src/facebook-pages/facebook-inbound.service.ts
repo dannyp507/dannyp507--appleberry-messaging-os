@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TemplateRenderService } from '../messaging/template-render.service';
 import { FacebookPagesService } from './facebook-pages.service';
 import { FbCommentProcessorService } from '../fb-comment-automations/fb-comment-processor.service';
+import { AiService } from '../ai/ai.service';
 
 export interface FacebookWebhookPayload {
   object: 'page' | 'instagram';
@@ -55,6 +56,7 @@ export class FacebookInboundService {
     private readonly fbPages: FacebookPagesService,
     private readonly templates: TemplateRenderService,
     private readonly commentProcessor: FbCommentProcessorService,
+    private readonly ai: AiService,
   ) {}
 
   async handleWebhook(payload: FacebookWebhookPayload): Promise<void> {
