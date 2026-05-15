@@ -241,15 +241,14 @@ export default function InstagramAccountDetailPage() {
               <Webhook className="size-4" />
               Webhook
             </div>
-            <p className="text-sm font-medium">Verify endpoint</p>
+            <p className="text-sm font-medium">Webhook endpoint</p>
             <code className="mt-1.5 block rounded-lg bg-muted px-3 py-2 font-mono text-xs break-all">
               {typeof window !== "undefined"
-                ? `${window.location.origin.replace(":3000", ":3001")}/instagram/webhook`
-                : "/instagram/webhook"}
+                ? `${window.location.origin.replace(":3000", ":3001")}/facebook/webhook`
+                : "/facebook/webhook"}
             </code>
             <p className="mt-2 text-xs text-muted-foreground">
-              Register this URL in your Meta App Dashboard under Webhooks → Instagram subscription.
-              Subscribe to the <code className="font-mono">messages</code> field.
+              Instagram events arrive at the <strong>same webhook URL as Facebook</strong>. Register this URL in your Meta App Dashboard under Webhooks → Instagram → messages field. The same URL handles both.
             </p>
           </div>
 
