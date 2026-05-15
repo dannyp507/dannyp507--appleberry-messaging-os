@@ -1,3 +1,10 @@
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Environment files — never commit secrets
+# .example files are safe and ARE committed
+infrastructure/docker/.env.api-test
+infrastructure/docker/.env.production
+infrastructure/docker/.env.staging
+infrastructure/docker/.env
