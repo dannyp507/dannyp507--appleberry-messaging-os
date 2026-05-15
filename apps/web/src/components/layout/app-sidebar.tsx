@@ -34,6 +34,7 @@ import {
   FileInput,
   MessageCircleMore,
   Palette,
+  Camera,
 } from "lucide-react";
 
 // ─── Nav definitions ──────────────────────────────────────────────────────────
@@ -45,7 +46,7 @@ const mainNav = [
   { href: "/subscribers",  label: "Subscribers",    icon: UserCheck       },
   { href: "/campaigns",    label: "Campaigns",      icon: Megaphone       },
   { href: "/templates",    label: "Templates",      icon: FileText        },
-  { href: "/media",        label: "Media Library",  icon: Image           },
+  { href: "/media",        label: "Media Library",  icon: FileText        },
 ] satisfies NavEntry[];
 
 const automationNav = [

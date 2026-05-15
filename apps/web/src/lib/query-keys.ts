@@ -28,6 +28,16 @@ export const qk = {
   fbCommentAutomation: (id: string) => ["fb-comment-automation", id] as const,
   fbCommentEvents: (automationId: string) => ["fb-comment-events", automationId] as const,
   fbPagePosts: (pageId: string) => ["fb-page-posts", pageId] as const,
+  // Facebook Page AI settings
+  fbPageAiSettings: (id: string) => ["fb-page-ai-settings", id] as const,
+  // Facebook Page chatbot flows
+  fbPageFlows: (id: string) => ["fb-page-flows", id] as const,
+  // Instagram accounts
+  instagramAccounts: ["instagram-accounts"] as const,
+  igAccountAiSettings: (id: string) => ["ig-account-ai-settings", id] as const,
+  igAccountFlows: (id: string) => ["ig-account-flows", id] as const,
+  // Workspace media library
+  workspaceMedia: ["workspace-media"] as const,
   // Brand settings
   brandSettings: ["brand-settings"] as const,
 };

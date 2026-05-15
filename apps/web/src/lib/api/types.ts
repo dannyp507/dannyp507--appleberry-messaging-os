@@ -439,6 +439,41 @@ export interface GoogleIntegrationStatus {
   calendarConfig?: GoogleCalendarConfig | null;
 }
 
+// ─── Instagram ───────────────────────────────────────────────────────────────
+
+export interface InstagramAccount {
+  id: string;
+  igUserId: string;
+  username: string | null;
+  name: string;
+  linkedFbPageId: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { inboxThreads: number };
+}
+
+export interface InstagramAccountAiSettings {
+  aiProvider: string | null;
+  openaiApiKey: string | null;
+  openaiModel: string | null;
+  geminiApiKey: string | null;
+  geminiModel: string | null;
+  systemPrompt: string | null;
+  openaiKeySet: boolean;
+  geminiKeySet: boolean;
+  dmAiEnabled: boolean;
+  dmAiFallbackOnly: boolean;
+  dmWelcomeEnabled: boolean;
+  dmWelcomeText: string | null;
+  dmDefaultReply: string | null;
+  dmTypingEnabled: boolean;
+  aiOffKeyword: string | null;
+  aiOffReply: string | null;
+  aiOnKeyword: string | null;
+  aiOnReply: string | null;
+}
+
 // ─── Facebook Comment Automation ─────────────────────────────────────────────
 
 export type FbCommentActionType = "PRIVATE_REPLY" | "PUBLIC_COMMENT" | "BOTH";
@@ -499,6 +534,19 @@ export interface FbPost {
   createdTime: string | null;
   permalinkUrl: string | null;
   thumbnail: string | null;
+}
+
+// ─── Workspace Media ──────────────────────────────────────────────────────────
+
+export interface WorkspaceMedia {
+  id: string;
+  workspaceId: string;
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  createdAt: string;
 }
 
 // ─── Brand Settings ───────────────────────────────────────────────────────────
