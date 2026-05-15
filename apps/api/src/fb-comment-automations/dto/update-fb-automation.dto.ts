@@ -28,7 +28,6 @@ export class UpdateFbAutomationDto {
   @IsBoolean() @IsOptional() isActive?: boolean;
   @IsString() @IsOptional() actionType?: string;
   @IsString() @IsOptional() messageText?: string;
-  @IsString() @IsOptional() dmText?: string;
   @IsString() @IsOptional() buttonLabel?: string;
   @IsString() @IsOptional() buttonUrl?: string;
   @IsString() @IsOptional() mediaUrl?: string;

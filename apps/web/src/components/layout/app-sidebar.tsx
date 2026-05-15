@@ -34,8 +34,6 @@ import {
   FileInput,
   MessageCircleMore,
   Palette,
-  Image,
-  Camera,
 } from "lucide-react";
 
 // ─── Nav definitions ──────────────────────────────────────────────────────────

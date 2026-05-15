@@ -333,7 +333,6 @@ model Workspace {
   fbCommentAutomations    FbCommentAutomation[]
   fbCommentEvents         FbCommentEvent[]
   workspaceBrandSettings  WorkspaceBrandSettings?
-  workspaceMedia          WorkspaceMedia[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -593,14 +592,12 @@ model FacebookPage {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  workspace            Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   inboxThreads         InboxThread[]
   messageLogs          MessageLog[]
   autoresponderRules   AutoresponderRule[]
   fbCommentAutomations FbCommentAutomation[]
   fbCommentEvents      FbCommentEvent[]
-  aiSettings           FacebookPageAiSettings?
-  chatbotFlows         ChatbotFlow[]
 
   @@unique([workspaceId, pageId])
   @@index([workspaceId])
@@ -1545,23 +1542,20 @@ model FbCommentAutomation {
   id             String              @id @default(uuid()) @db.Uuid
   workspaceId    String              @db.Uuid
   facebookPageId String              @db.Uuid
-  /// Facebook post ID (format: {pageId}_{postId} or video ID). Null = apply to ALL posts on the page.
-  postId         String?
+  /// Facebook post ID (format: {pageId}_{postId} or video ID)
+  postId         String
   /// Short preview of the post shown in the UI
   postSnippet    String?
   name           String
   isActive       Boolean             @default(true)
   actionType     FbCommentActionType @default(PRIVATE_REPLY)
-  /// Message body used for the PUBLIC comment reply (visible on the post)
+  /// Message body sent as private DM or public reply
   messageText    String              @db.Text
-  /// Separate message body for the PRIVATE Messenger DM — if null, falls back to messageText
-  dmText         String?             @db.Text
-  /// Optional CTA button appended to the private DM (Messenger button template)
+  /// Optional CTA button appended to the message (Messenger templates)
   buttonLabel    String?
   buttonUrl      String?
-  /// Optional media URL attached to the private DM
   mediaUrl       String?
-  /// When true, AI generates the reply (public and/or DM depending on actionType)
+  /// When true, messageText is used as an AI system prompt and AI generates the reply
   aiEnabled      Boolean             @default(false)
   aiSystemPrompt String?             @db.Text
   replyCount     Int                 @default(0)

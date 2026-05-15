@@ -461,7 +461,6 @@ export interface FbCommentAutomation {
   isActive: boolean;
   actionType: FbCommentActionType;
   messageText: string;
-  dmText: string | null;
   buttonLabel: string | null;
   buttonUrl: string | null;
   mediaUrl: string | null;
@@ -473,17 +472,6 @@ export interface FbCommentAutomation {
   fbPage: { id: string; pageId: string; name: string };
   keywords: FbAutomationKeyword[];
   _count: { events: number };
-}
-
-export interface WorkspaceMedia {
-  id: string;
-  workspaceId: string;
-  originalName: string;
-  storedName: string;
-  mimeType: string;
-  sizeBytes: number;
-  url: string;
-  createdAt: string;
 }
 
 export interface FbCommentEvent {
@@ -512,40 +500,6 @@ export interface FbPost {
   permalinkUrl: string | null;
   thumbnail: string | null;
 }
-
-// ─── Instagram ───────────────────────────────────────────────────────────────
-
-export type InstagramAccount = {
-  id: string;
-  igUserId: string;
-  username: string | null;
-  name: string;
-  linkedFbPageId: string | null;
-  isActive: boolean;
-  createdAt: string;
-  _count?: { inboxThreads: number };
-};
-
-export type InstagramAccountAiSettings = {
-  id: string;
-  instagramAccountId: string;
-  aiProvider: string | null;
-  geminiKeySet: boolean;
-  geminiModel: string | null;
-  openaiKeySet: boolean;
-  openaiModel: string | null;
-  systemPrompt: string | null;
-  dmAiEnabled: boolean;
-  dmAiFallbackOnly: boolean;
-  dmWelcomeEnabled: boolean;
-  dmWelcomeText: string | null;
-  dmDefaultReply: string | null;
-  dmTypingEnabled: boolean;
-  aiOffKeyword: string | null;
-  aiOffReply: string | null;
-  aiOnKeyword: string | null;
-  aiOnReply: string | null;
-};
 
 // ─── Brand Settings ───────────────────────────────────────────────────────────
 

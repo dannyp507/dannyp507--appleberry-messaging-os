@@ -40,8 +40,6 @@ import { SequencesModule } from './sequences/sequences.module';
 import { SubscribeFormsModule } from './subscribe-forms/subscribe-forms.module';
 import { FbCommentAutomationsModule } from './fb-comment-automations/fb-comment-automations.module';
 import { BrandSettingsModule } from './brand-settings/brand-settings.module';
-import { MediaModule } from './media/media.module';
-import { InstagramModule } from './instagram/instagram.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -104,8 +102,6 @@ import { AppController } from './app.controller';
     SubscribeFormsModule,
     FbCommentAutomationsModule,
     BrandSettingsModule,
-    MediaModule,
-    InstagramModule,
   ],
   providers: [
     {

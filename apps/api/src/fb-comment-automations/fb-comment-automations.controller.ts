@@ -20,7 +20,6 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { WorkspaceContextGuard } from '../common/guards/workspace-context.guard';
 import type { Workspace } from '@prisma/client';
 import { FbCommentAutomationsService } from './fb-comment-automations.service';
-import { FbPageAiSettingsService, UpsertPageAiSettingsDto } from './fb-page-ai-settings.service';
 import { CreateFbAutomationDto } from './dto/create-fb-automation.dto';
 import { UpdateFbAutomationDto } from './dto/update-fb-automation.dto';
 
@@ -29,10 +28,7 @@ import { UpdateFbAutomationDto } from './dto/update-fb-automation.dto';
 @Roles('owner', 'admin', 'agent')
 @Permissions('manage_campaigns') // reuse existing permission key
 export class FbCommentAutomationsController {
-  constructor(
-    private readonly service: FbCommentAutomationsService,
-    private readonly pageAi: FbPageAiSettingsService,
-  ) {}
+  constructor(private readonly service: FbCommentAutomationsService) {}
 
   @Get()
   list(@CurrentWorkspace() workspace: Workspace) {
@@ -91,31 +87,13 @@ export class FbCommentAutomationsController {
     return this.service.listEvents(workspace.id, id, skip, take);
   }
 
-  /** GET /fb-comment-automations/pages/:pageId/posts */
+  /** GET /fb-comment-automations/pages/:pageId/posts
+   *  Lists recent Facebook posts for the given connected page. */
   @Get('pages/:pageId/posts')
   listPosts(
     @CurrentWorkspace() workspace: Workspace,
     @Param('pageId', ParseUUIDPipe) pageId: string,
   ) {
     return this.service.listPosts(workspace.id, pageId);
-  }
-
-  /** GET /fb-comment-automations/pages/:pageId/ai-settings */
-  @Get('pages/:pageId/ai-settings')
-  getPageAi(
-    @CurrentWorkspace() workspace: Workspace,
-    @Param('pageId', ParseUUIDPipe) pageId: string,
-  ) {
-    return this.pageAi.get(workspace.id, pageId);
-  }
-
-  /** PUT /fb-comment-automations/pages/:pageId/ai-settings */
-  @Post('pages/:pageId/ai-settings')
-  upsertPageAi(
-    @CurrentWorkspace() workspace: Workspace,
-    @Param('pageId', ParseUUIDPipe) pageId: string,
-    @Body() dto: UpsertPageAiSettingsDto,
-  ) {
-    return this.pageAi.upsert(workspace.id, pageId, dto);
   }
 }

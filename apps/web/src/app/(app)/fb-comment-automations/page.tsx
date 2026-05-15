@@ -9,7 +9,6 @@ import type {
   FbCommentAutomation,
   FbCommentEvent,
   FacebookPage,
-  FacebookPageAiSettings,
   FbPost,
   FbCommentActionType,
 } from "@/lib/api/types";
@@ -36,7 +35,6 @@ import {
   Pencil,
   Power,
   Eye,
-  EyeOff,
   Loader2,
   MessageSquare,
   Bot,
@@ -44,24 +42,10 @@ import {
   RefreshCw,
   Settings2,
   ChevronRight,
-  ChevronDown,
   ExternalLink,
   Globe,
-  Link,
-  Plus,
-  Minus,
-  Sparkles,
-  Save,
 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { MediaPicker } from "@/components/media/media-picker";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -90,10 +74,7 @@ interface AutomationForm {
   postSnippet: string;
   name: string;
   actionType: FbCommentActionType;
-  /** Visible public comment reply (shown on the post) */
   messageText: string;
-  /** Separate private Messenger DM text (blank = falls back to messageText) */
-  dmText: string;
   buttonLabel: string;
   buttonUrl: string;
   mediaUrl: string;
@@ -116,7 +97,6 @@ const EMPTY_FORM: AutomationForm = {
   name: "",
   actionType: "PRIVATE_REPLY",
   messageText: "",
-  dmText: "",
   buttonLabel: "",
   buttonUrl: "",
   mediaUrl: "",
@@ -410,7 +390,6 @@ function AutomationDialog({
         name: initial.name,
         actionType: initial.actionType,
         messageText: initial.messageText,
-        dmText: initial.dmText ?? "",
         buttonLabel: initial.buttonLabel ?? "",
         buttonUrl: initial.buttonUrl ?? "",
         mediaUrl: initial.mediaUrl ?? "",
@@ -433,9 +412,9 @@ function AutomationDialog({
     };
   });
 
-  // When page comes from preset or editing, lock the page selection
+  // When page/post come from preset or editing, show them as info, not inputs
   const pageIsLocked = isEditing || !!preset?.facebookPageId;
-  // Post is NEVER locked — user can always change which post an automation targets
+  const postIsLocked = isEditing || !!preset?.postId;
 
   const { data: pages = [] } = useQuery({
     queryKey: qk.facebookPages,
@@ -463,29 +442,18 @@ function AutomationDialog({
       );
       return data;
     },
-    enabled: !!form.facebookPageId,
+    enabled: !!form.facebookPageId && !postIsLocked,
   });
 
   const saveMutation = useMutation({
     mutationFn: async (payload: AutomationForm) => {
-      // messageText is NOT NULL in DB. When AI is enabled and user left it blank,
-      // use a placeholder — the processor replaces it with the AI-generated reply.
-      // For PRIVATE_REPLY-only: also fall back to dmText.
-      const effectiveMessageText =
-        payload.messageText.trim() ||
-        (payload.actionType === "PRIVATE_REPLY" ? payload.dmText : "") ||
-        (payload.aiEnabled ? "AI will respond" : "");
-
       const body = {
         ...payload,
-        messageText: effectiveMessageText,
-        postId: payload.postId || null,           // "" → null means "All Posts"
-        postSnippet: payload.postSnippet || null,
-        dmText: payload.dmText || undefined,
         buttonLabel: payload.buttonLabel || undefined,
         buttonUrl: payload.buttonUrl || undefined,
         mediaUrl: payload.mediaUrl || undefined,
         aiSystemPrompt: payload.aiSystemPrompt || undefined,
+        postSnippet: payload.postSnippet || undefined,
         keywords: payload.keywords.filter((k) => k.keyword.trim()),
       };
       if (isEditing) {
@@ -518,14 +486,12 @@ function AutomationDialog({
     }));
   };
 
-  const dmRequired = form.actionType === "PRIVATE_REPLY" || form.actionType === "BOTH";
-  const publicRequired = form.actionType === "PUBLIC_COMMENT" || form.actionType === "BOTH";
-
   const canSubmit =
     form.facebookPageId &&
+    form.postId &&
     form.name.trim() &&
-    (form.aiEnabled || !publicRequired || form.messageText.trim()) &&
-    (form.aiEnabled || !dmRequired || form.dmText.trim());
+    form.messageText.trim() &&
+    form.keywords.length > 0;
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -585,12 +551,21 @@ function AutomationDialog({
             </div>
           </div>
 
-          {/* Post picker — always visible when a page is selected */}
-          {form.facebookPageId ? (
+          {/* Post — locked info or picker */}
+          {postIsLocked ? (
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                Post
+              </Label>
+              <div className="rounded-lg bg-[#F3F4F6] dark:bg-[#1e2433] px-3 py-2.5 text-xs text-[#6B7280] line-clamp-2">
+                {form.postSnippet || form.postId}
+              </div>
+            </div>
+          ) : form.facebookPageId ? (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                  Target Post
+                  Target Post *
                 </Label>
                 <button
                   type="button"
@@ -600,32 +575,16 @@ function AutomationDialog({
                   <RefreshCw className="size-3" /> Refresh
                 </button>
               </div>
-              {loadingPosts && !posts.length ? (
+              {loadingPosts ? (
                 <div className="flex items-center gap-2 py-3 text-[#9CA3AF] text-sm">
                   <Loader2 className="size-4 animate-spin" /> Loading posts…
                 </div>
+              ) : posts.length === 0 ? (
+                <p className="text-xs text-[#9CA3AF] py-2">
+                  No posts found for this page.
+                </p>
               ) : (
-                <div className="border border-[#E5E7EB] dark:border-[#1e2433] rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-                  {/* All Posts option */}
-                  <button
-                    type="button"
-                    onClick={() => { setField("postId", ""); setField("postSnippet", ""); }}
-                    className={cn(
-                      "w-full text-left px-3 py-2.5 flex items-center gap-2.5 hover:bg-[#F9FAFB] dark:hover:bg-[#1a1f2e] transition-colors border-b border-[#F3F4F6] dark:border-[#1e2433]",
-                      !form.postId && "bg-indigo-500/5 border-l-2 border-l-[#6366F1]",
-                    )}
-                  >
-                    <div className="size-9 rounded flex items-center justify-center bg-indigo-500/10 shrink-0">
-                      <span className="text-indigo-400 text-lg">✦</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-[#111827] dark:text-[#f3f4f6]">All Posts</p>
-                      <p className="text-[10px] text-[#9CA3AF]">Trigger on any comment on this page</p>
-                    </div>
-                    {!form.postId && (
-                      <span className="text-[#6366F1] text-[10px] font-bold shrink-0">✓</span>
-                    )}
-                  </button>
+                <div className="border border-[#E5E7EB] dark:border-[#1e2433] rounded-xl overflow-hidden max-h-44 overflow-y-auto">
                   {posts.map((post) => (
                     <button
                       key={post.postId}
@@ -737,169 +696,19 @@ function AutomationDialog({
             />
           </div>
 
-          {/* ── Public Reply section — shown when action posts a public comment ── */}
-          {(form.actionType === "PUBLIC_COMMENT" || form.actionType === "BOTH") && (
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 space-y-2">
-              <p className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase tracking-wide">
-                <Globe className="size-3.5" />
-                Public Reply
-              </p>
-              <p className="text-[10px] text-[#9CA3AF]">
-                Visible comment posted under the post — keep it short and friendly.
-              </p>
-              <Textarea
-                value={form.messageText}
-                onChange={(e) => setField("messageText", e.target.value)}
-                placeholder="Thanks for your comment! Check your DMs for details 👋"
-                rows={2}
-                className="text-sm"
-              />
-            </div>
-          )}
-
-          {/* ── Private DM section — shown when action sends a Messenger DM ── */}
-          {(form.actionType === "PRIVATE_REPLY" || form.actionType === "BOTH") && (
-            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 space-y-4">
-              <p className="text-xs font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-wide">
-                <MessageSquare className="size-3.5" />
-                Private Messenger DM
-              </p>
-
-              {/* DM text */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                  {form.aiEnabled ? "Fallback DM Text (if AI fails) *" : "DM Message *"}
-                </Label>
-                <Textarea
-                  value={form.dmText}
-                  onChange={(e) => setField("dmText", e.target.value)}
-                  placeholder="Hi! Thanks for your interest. Here are our pricing details…"
-                  rows={3}
-                  className="text-sm"
-                />
-              </div>
-
-              {/* ── URL Button card ── */}
-              <div className={cn(
-                "rounded-lg border transition-colors",
-                (form.buttonLabel || form.buttonUrl)
-                  ? "border-indigo-400/30 bg-indigo-500/8"
-                  : "border-[#E5E7EB] dark:border-[#2a2f3d]",
-              )}>
-                {/* Toggle header */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (form.buttonLabel || form.buttonUrl) {
-                      setField("buttonLabel", "");
-                      setField("buttonUrl", "");
-                    } else {
-                      // focus the label input after render
-                    }
-                  }}
-                  className="flex w-full items-center justify-between px-3 py-2.5"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "flex size-6 items-center justify-center rounded-lg",
-                      (form.buttonLabel || form.buttonUrl)
-                        ? "bg-indigo-500/20"
-                        : "bg-[#F3F4F6] dark:bg-[#1e2433]",
-                    )}>
-                      <Link className={cn(
-                        "size-3.5",
-                        (form.buttonLabel || form.buttonUrl) ? "text-indigo-400" : "text-[#9CA3AF]",
-                      )} />
-                    </div>
-                    <div className="text-left">
-                      <p className={cn(
-                        "text-xs font-semibold",
-                        (form.buttonLabel || form.buttonUrl)
-                          ? "text-indigo-400"
-                          : "text-[#111827] dark:text-[#f3f4f6]",
-                      )}>
-                        URL Button
-                      </p>
-                      <p className="text-[10px] text-[#9CA3AF]">
-                        Add a tappable button at the bottom of the DM
-                      </p>
-                    </div>
-                  </div>
-                  <div className={cn(
-                    "flex size-5 items-center justify-center rounded-full transition-colors",
-                    (form.buttonLabel || form.buttonUrl)
-                      ? "bg-indigo-500/20 text-indigo-400"
-                      : "bg-[#F3F4F6] dark:bg-[#1e2433] text-[#9CA3AF]",
-                  )}>
-                    {(form.buttonLabel || form.buttonUrl)
-                      ? <Minus className="size-3" />
-                      : <Plus className="size-3" />}
-                  </div>
-                </button>
-
-                {/* Button fields — shown when either field has a value or we expand */}
-                <div className="px-3 pb-3 space-y-2.5">
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                      Button Name <span className="font-normal">(what it says)</span>
-                    </Label>
-                    <Input
-                      value={form.buttonLabel}
-                      onChange={(e) => setField("buttonLabel", e.target.value)}
-                      placeholder="e.g.  View Pricing  /  Shop Now  /  Book a Call"
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                      Button URL <span className="font-normal">(where it goes)</span>
-                    </Label>
-                    <Input
-                      value={form.buttonUrl}
-                      onChange={(e) => setField("buttonUrl", e.target.value)}
-                      placeholder="https://yoursite.com/pricing"
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                  {form.buttonLabel && form.buttonUrl && (
-                    <div className="flex items-center gap-2 rounded-lg border border-indigo-400/20 bg-indigo-500/8 px-3 py-2">
-                      <div className="flex-1 rounded border border-indigo-400/30 bg-indigo-500/10 px-2 py-1 text-center text-xs font-semibold text-indigo-400">
-                        {form.buttonLabel}
-                      </div>
-                      <p className="text-[10px] text-[#9CA3AF]">→ {form.buttonUrl.slice(0, 30)}{form.buttonUrl.length > 30 ? "…" : ""}</p>
-                    </div>
-                  )}
-                  {(form.buttonLabel || form.buttonUrl) && !(form.buttonLabel && form.buttonUrl) && (
-                    <p className="text-[10px] text-amber-500">
-                      Both button name and URL are required for the button to appear.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Media Image — picker (only shown if no button set) */}
-              {!(form.buttonLabel && form.buttonUrl) && (
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                    Image Attachment <span className="font-normal normal-case">(optional — instead of button)</span>
-                  </Label>
-                  <MediaPicker
-                    value={form.mediaUrl}
-                    onChange={(url) => setField("mediaUrl", url)}
-                    label="Pick DM Image"
-                    placeholder="No image selected"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Public-only: still need a message text field */}
-          {form.actionType === "PUBLIC_COMMENT" && (
-            <p className="text-[10px] text-[#9CA3AF] -mt-2">
-              No DM will be sent — only the public reply above.
-            </p>
-          )}
+          {/* Message */}
+          <div className="space-y-1.5">
+            <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+              {form.aiEnabled ? "Fallback Message (if AI fails) *" : "Reply Message *"}
+            </Label>
+            <Textarea
+              value={form.messageText}
+              onChange={(e) => setField("messageText", e.target.value)}
+              placeholder="Hi! Thanks for your interest. Please DM us for pricing details."
+              rows={3}
+              className="text-sm"
+            />
+          </div>
 
           {/* AI toggle */}
           <div
@@ -919,10 +728,10 @@ function AutomationDialog({
                       form.aiEnabled ? "text-violet-400" : "text-[#9CA3AF]",
                     )}
                   />
-                  AI-Generated DM Replies
+                  AI-Generated Replies
                 </p>
                 <p className="text-[10px] text-[#9CA3AF] mt-0.5">
-                  AI writes the DM dynamically — public reply stays as typed
+                  Let AI craft dynamic, personalised replies
                 </p>
               </div>
               <button
@@ -1060,12 +869,10 @@ function AutomationRow({
 
         {/* Post + stats */}
         <div className="flex items-center gap-3 text-[10px] text-[#9CA3AF]">
-          {automation.postId ? (
-            <span className="truncate max-w-[200px]" title={automation.postSnippet ?? automation.postId}>
-              📄 {automation.postSnippet || automation.postId}
+          {automation.postSnippet && (
+            <span className="truncate max-w-[200px]" title={automation.postSnippet}>
+              📄 {automation.postSnippet}
             </span>
-          ) : (
-            <span className="text-indigo-400 font-medium">✦ All Posts</span>
           )}
           <span className="shrink-0 font-medium">
             {automation.replyCount} replies
@@ -1255,290 +1062,6 @@ function PostFeedPanel({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// ─── Per-Page AI Settings Panel ──────────────────────────────────────────────
-
-const OPENAI_MODELS = [
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini (fast)" },
-  { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
-  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo (budget)" },
-];
-
-const GEMINI_MODELS = [
-  { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (fast)" },
-  { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
-  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
-];
-
-const MASKED = "••••••••••••••••";
-
-function PageAiPanel({ pageId }: { pageId: string }) {
-  const qc = useQueryClient();
-
-  const { data, isLoading } = useQuery<FacebookPageAiSettings>({
-    queryKey: qk.fbPageAiSettings(pageId),
-    queryFn: async () => {
-      const { data } = await api.get(
-        `/fb-comment-automations/pages/${pageId}/ai-settings`,
-      );
-      return data;
-    },
-    enabled: !!pageId,
-  });
-
-  const [open, setOpen] = useState(false);
-  const [provider, setProvider] = useState<string>("openai");
-  const [openaiKey, setOpenaiKey] = useState("");
-  const [openaiModel, setOpenaiModel] = useState("gpt-4o-mini");
-  const [geminiKey, setGeminiKey] = useState("");
-  const [geminiModel, setGeminiModel] = useState("gemini-1.5-flash");
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [showOpenai, setShowOpenai] = useState(false);
-  const [showGemini, setShowGemini] = useState(false);
-  const [clearOpenai, setClearOpenai] = useState(false);
-  const [clearGemini, setClearGemini] = useState(false);
-
-  // Hydrate form from fetched data
-  useEffect(() => {
-    if (!data) return;
-    setProvider(data.aiProvider ?? "openai");
-    setOpenaiModel(data.openaiModel ?? "gpt-4o-mini");
-    setGeminiModel(data.geminiModel ?? "gemini-1.5-flash");
-    setSystemPrompt(data.systemPrompt ?? "");
-    setOpenaiKey("");
-    setGeminiKey("");
-    setClearOpenai(false);
-    setClearGemini(false);
-  }, [data]);
-
-  // Reset form state when the panel is opened for a new page
-  useEffect(() => {
-    setOpenaiKey("");
-    setGeminiKey("");
-    setClearOpenai(false);
-    setClearGemini(false);
-    setShowOpenai(false);
-    setShowGemini(false);
-  }, [pageId]);
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const openaiApiKey = clearOpenai ? "" : openaiKey || undefined;
-      const geminiApiKey = clearGemini ? "" : geminiKey || undefined;
-      await api.post(`/fb-comment-automations/pages/${pageId}/ai-settings`, {
-        aiProvider: provider,
-        systemPrompt: systemPrompt || null,
-        openaiApiKey,
-        openaiModel,
-        geminiApiKey,
-        geminiModel,
-      });
-    },
-    onSuccess: () => {
-      toast.success("Page AI settings saved");
-      setOpenaiKey("");
-      setGeminiKey("");
-      setClearOpenai(false);
-      setClearGemini(false);
-      qc.invalidateQueries({ queryKey: qk.fbPageAiSettings(pageId) });
-    },
-    onError: () => toast.error("Failed to save AI settings"),
-  });
-
-  const keySet = provider === "gemini" ? data?.geminiKeySet : data?.openaiKeySet;
-  const clearFlag = provider === "gemini" ? clearGemini : clearOpenai;
-  const setClearFlag = provider === "gemini" ? setClearGemini : setClearOpenai;
-  const keyValue = provider === "gemini" ? geminiKey : openaiKey;
-  const setKeyValue = provider === "gemini" ? setGeminiKey : setOpenaiKey;
-  const showKey = provider === "gemini" ? showGemini : showOpenai;
-  const setShowKey = provider === "gemini" ? setShowGemini : setShowOpenai;
-
-  return (
-    <div className="border-b border-[#E5E7EB] dark:border-[#1e2433] shrink-0">
-      {/* Toggle row */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-2.5 text-left hover:bg-[#F9FAFB] dark:hover:bg-[#0d1017] transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-3.5 text-violet-400" />
-          <span className="text-xs font-semibold text-[#6B7280] dark:text-[#9CA3AF] uppercase tracking-wide">
-            AI Settings
-          </span>
-          {(data?.openaiKeySet || data?.geminiKeySet) && !open && (
-            <span className="text-[10px] bg-violet-500/15 text-violet-400 px-1.5 py-0.5 rounded-full font-semibold">
-              Configured
-            </span>
-          )}
-        </div>
-        <ChevronDown
-          className={cn(
-            "size-3.5 text-[#9CA3AF] transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-
-      {/* Expanded panel */}
-      {open && (
-        <div className="px-5 pb-4 space-y-3 bg-[#F9FAFB] dark:bg-[#0a0d14]">
-          {isLoading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="size-4 animate-spin text-[#9CA3AF]" />
-            </div>
-          ) : (
-            <>
-              <p className="text-[11px] text-[#9CA3AF] leading-relaxed pt-1">
-                Override the workspace AI settings for this Facebook page. Keys
-                and prompts here take priority over workspace-level settings.
-              </p>
-
-              {/* Provider */}
-              <div className="space-y-1">
-                <Label className="text-[11px] text-[#6B7280] font-semibold uppercase tracking-wide">
-                  Provider
-                </Label>
-                <Select value={provider} onValueChange={(v) => { if (v) setProvider(v); }}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="openai">OpenAI</SelectItem>
-                    <SelectItem value="gemini">Google Gemini</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* API Key */}
-              <div className="space-y-1">
-                <Label className="text-[11px] text-[#6B7280] font-semibold uppercase tracking-wide">
-                  {provider === "gemini" ? "Gemini" : "OpenAI"} API Key
-                </Label>
-                {clearFlag ? (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400">
-                    <Trash2 className="size-3 shrink-0" />
-                    <span className="flex-1">Key will be removed on save</span>
-                    <button
-                      type="button"
-                      onClick={() => setClearFlag(false)}
-                      className="underline text-[10px]"
-                    >
-                      Undo
-                    </button>
-                  </div>
-                ) : keySet ? (
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 relative">
-                      <Input
-                        type={showKey ? "text" : "password"}
-                        value={keyValue || MASKED}
-                        onChange={(e) => setKeyValue(e.target.value === MASKED ? "" : e.target.value)}
-                        className="h-8 text-xs pr-8 font-mono"
-                        placeholder="Enter new key to replace"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowKey(!showKey)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#6B7280]"
-                      >
-                        {showKey ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setClearFlag(true); setKeyValue(""); }}
-                      title="Remove key"
-                      className="p-1.5 rounded text-[#9CA3AF] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <Input
-                      type={showKey ? "text" : "password"}
-                      value={keyValue}
-                      onChange={(e) => setKeyValue(e.target.value)}
-                      className="h-8 text-xs pr-8 font-mono"
-                      placeholder={`Paste ${provider === "gemini" ? "Gemini" : "OpenAI"} API key…`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowKey(!showKey)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#6B7280]"
-                    >
-                      {showKey ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                    </button>
-                  </div>
-                )}
-                <p className="text-[10px] text-[#9CA3AF]">
-                  Leave blank to use workspace-level key
-                </p>
-              </div>
-
-              {/* Model */}
-              <div className="space-y-1">
-                <Label className="text-[11px] text-[#6B7280] font-semibold uppercase tracking-wide">
-                  Model
-                </Label>
-                <Select
-                  value={provider === "gemini" ? geminiModel : openaiModel}
-                  onValueChange={(v) => { if (v) { if (provider === "gemini") setGeminiModel(v); else setOpenaiModel(v); } }}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(provider === "gemini" ? GEMINI_MODELS : OPENAI_MODELS).map(
-                      (m) => (
-                        <SelectItem key={m.value} value={m.value} className="text-xs">
-                          {m.label}
-                        </SelectItem>
-                      ),
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* System Prompt */}
-              <div className="space-y-1">
-                <Label className="text-[11px] text-[#6B7280] font-semibold uppercase tracking-wide">
-                  System Prompt / Tone
-                </Label>
-                <Textarea
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  className="text-xs min-h-[80px] resize-none"
-                  placeholder="E.g. You are a friendly assistant for Acme Co. Reply in English, keep it under 100 words…"
-                />
-                <p className="text-[10px] text-[#9CA3AF]">
-                  Overrides the workspace system prompt for this page only
-                </p>
-              </div>
-
-              {/* Save */}
-              <Button
-                size="sm"
-                onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending}
-                className="stitch-gradient text-white border-0 text-xs h-7 px-3 w-full"
-              >
-                {saveMutation.isPending ? (
-                  <Loader2 className="size-3 mr-1.5 animate-spin" />
-                ) : (
-                  <Save className="size-3 mr-1.5" />
-                )}
-                Save AI Settings
-              </Button>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -1762,9 +1285,6 @@ export default function FbCommentAutomationsPage() {
                   Add
                 </Button>
               </div>
-
-              {/* Per-page AI settings panel */}
-              <PageAiPanel pageId={selectedPageId!} />
 
               {/* Stats row */}
               {pageAutomations.length > 0 && (
