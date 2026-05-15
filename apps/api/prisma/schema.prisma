@@ -333,6 +333,7 @@ model Workspace {
   fbCommentAutomations    FbCommentAutomation[]
   fbCommentEvents         FbCommentEvent[]
   workspaceBrandSettings  WorkspaceBrandSettings?
+  workspaceMedia          WorkspaceMedia[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -598,6 +599,8 @@ model FacebookPage {
   autoresponderRules   AutoresponderRule[]
   fbCommentAutomations FbCommentAutomation[]
   fbCommentEvents      FbCommentEvent[]
+  aiSettings           FacebookPageAiSettings?
+  chatbotFlows         ChatbotFlow[]
 
   @@unique([workspaceId, pageId])
   @@index([workspaceId])
