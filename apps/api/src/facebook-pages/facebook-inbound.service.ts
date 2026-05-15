@@ -377,14 +377,15 @@ export class FacebookInboundService {
       // Show typing indicator before calling AI (AI processing itself acts as the delay)
       await this.maybeTyping(dmSettings, page.pageAccessToken, senderId, 0);
 
-      // Load recent messages for conversation context (up to 10 turns = 20 rows)
+      // Load the most recent 20 messages for conversation context.
+      // Fetch newest-first then reverse so history is chronological for the AI.
       const recentRows = await this.prisma.inboxMessage.findMany({
         where: { threadId: thread.id },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: 20,
       });
 
-      const recentMessages = recentRows.map((m) => ({
+      const recentMessages = recentRows.reverse().map((m) => ({
         direction: m.direction,
         message: m.message,
       }));

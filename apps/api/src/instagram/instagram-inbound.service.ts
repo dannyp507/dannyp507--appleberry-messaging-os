@@ -361,13 +361,15 @@ export class InstagramInboundService {
     if (dmSettings?.dmAiEnabled) {
       await this.maybeTyping(dmSettings, account.pageAccessToken, account.igUserId, senderId, 0);
 
+      // Load the most recent 20 messages for conversation context.
+      // Fetch newest-first then reverse so history is chronological for the AI.
       const recentRows = await this.prisma.inboxMessage.findMany({
         where: { threadId: thread.id },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: 20,
       });
 
-      const recentMessages = recentRows.map((m) => ({
+      const recentMessages = recentRows.reverse().map((m) => ({
         direction: m.direction,
         message: m.message,
       }));

@@ -76,6 +76,15 @@ export class AiService {
         content: m.message,
       })) ?? [];
 
+    // The inbound message is persisted to DB *before* the history is queried,
+    // so it already appears as the last entry in `history`. Remove it here to
+    // avoid sending it twice (once in history, once as the final user turn).
+    const lastH = history[history.length - 1];
+    const dedupedHistory =
+      lastH?.role === 'user' && lastH.content === message
+        ? history.slice(0, -1)
+        : history;
+
     if (provider === 'gemini') {
       // Key: page → workspace → env
       const apiKey =
@@ -91,7 +100,7 @@ export class AiService {
         pageSettings?.geminiModel ||
         workspaceSettings?.geminiModel ||
         'gemini-2.5-flash';
-      return this.callGemini(apiKey, model, systemPrompt, history, message);
+      return this.callGemini(apiKey, model, systemPrompt, dedupedHistory, message);
     }
 
     // Default: OpenAI — key: page → workspace → env
@@ -108,7 +117,7 @@ export class AiService {
       pageSettings?.openaiModel ||
       workspaceSettings?.openaiModel ||
       this.config.get<string>('OPENAI_MODEL', 'gpt-4o-mini');
-    return this.callOpenAi(apiKey, model, systemPrompt, history, message);
+    return this.callOpenAi(apiKey, model, systemPrompt, dedupedHistory, message);
   }
 
   // ── OpenAI ──────────────────────────────────────────────────────────────────
