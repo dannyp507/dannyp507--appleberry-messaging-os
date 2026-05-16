@@ -45,8 +45,8 @@ const OPENAI_MODELS = [
 
 const GEMINI_MODELS = [
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (recommended)" },
-  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  { value: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite (budget)" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (most capable)" },
+  { value: "gemini-2.5-flash-8b", label: "Gemini 2.5 Flash 8B (budget)" },
 ];
 
 export default function AiSettingsPage() {
