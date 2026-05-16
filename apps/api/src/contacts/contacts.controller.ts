@@ -30,6 +30,7 @@ import { CreateContactDto } from './dto/create-contact.dto';
 import { ListContactsQueryDto } from './dto/list-contacts.query';
 
 const uploadDir = '/app/uploads/imports';
+fs.mkdirSync(uploadDir, { recursive: true });
 
 @Controller('contacts')
 @UseGuards(WorkspaceContextGuard, RolesGuard, PermissionsGuard)
