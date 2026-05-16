@@ -185,8 +185,9 @@ export default function ContactsPage() {
     mutationFn: async (file: File) => {
       const form = new FormData();
       form.append("file", file);
+      // Do NOT set Content-Type manually — axios sets it automatically with the
+      // correct multipart boundary when the body is a FormData instance.
       await api.post("/contacts/import", form, {
-        headers: { "Content-Type": "multipart/form-data" },
         params: {
           ...(importGroupId ? { groupId: importGroupId } : {}),
           defaultCountry,
