@@ -24,7 +24,7 @@ export class WorkspaceAiSettingsService {
         openaiApiKey: null,
         openaiModel: 'gpt-4o-mini',
         geminiApiKey: null,
-        geminiModel: 'gemini-1.5-flash',
+        geminiModel: 'gemini-2.5-flash',
         openaiKeySet: false,
         geminiKeySet: false,
       };
@@ -66,7 +66,7 @@ export class WorkspaceAiSettingsService {
         openaiApiKey,
         openaiModel: dto.openaiModel ?? 'gpt-4o-mini',
         geminiApiKey,
-        geminiModel: dto.geminiModel ?? 'gemini-1.5-flash',
+        geminiModel: dto.geminiModel ?? 'gemini-2.5-flash',
       },
       update: {
         ...(dto.defaultProvider !== undefined && {

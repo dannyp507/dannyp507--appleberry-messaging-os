@@ -61,7 +61,7 @@ export default function InstagramAccountDetailPage() {
   // ── AI Training state ─────────────────────────────────────────────────────
   const [aiProvider, setAiProvider] = useState<"gemini" | "openai">("gemini");
   const [geminiApiKey, setGeminiApiKey] = useState("");
-  const [geminiModel, setGeminiModel] = useState("gemini-2.0-flash");
+  const [geminiModel, setGeminiModel] = useState("gemini-2.5-flash");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [openaiModel, setOpenaiModel] = useState("gpt-4o-mini");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -83,7 +83,7 @@ export default function InstagramAccountDetailPage() {
     // AI Training fields
     setAiProvider((aiSettings.aiProvider as "gemini" | "openai") ?? "gemini");
     setGeminiApiKey(aiSettings.geminiKeySet ? "••••••••••••••••" : "");
-    setGeminiModel(aiSettings.geminiModel ?? "gemini-2.0-flash");
+    setGeminiModel(aiSettings.geminiModel ?? "gemini-2.5-flash");
     setOpenaiApiKey(aiSettings.openaiKeySet ? "••••••••••••••••" : "");
     setOpenaiModel(aiSettings.openaiModel ?? "gpt-4o-mini");
     setSystemPrompt(aiSettings.systemPrompt ?? "");
@@ -417,7 +417,7 @@ export default function InstagramAccountDetailPage() {
                   </label>
                   <input
                     className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-pink-500"
-                    placeholder="gemini-2.0-flash"
+                    placeholder="gemini-2.5-flash"
                     value={geminiModel}
                     onChange={(e) => setGeminiModel(e.target.value)}
                   />

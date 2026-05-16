@@ -44,9 +44,9 @@ const OPENAI_MODELS = [
 ];
 
 const GEMINI_MODELS = [
-  { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (fast)" },
-  { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
-  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (recommended)" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite (budget)" },
 ];
 
 export default function AiSettingsPage() {
@@ -65,7 +65,7 @@ export default function AiSettingsPage() {
   const [openaiKey, setOpenaiKey] = useState("");
   const [openaiModel, setOpenaiModel] = useState("gpt-4o-mini");
   const [geminiKey, setGeminiKey] = useState("");
-  const [geminiModel, setGeminiModel] = useState("gemini-1.5-flash");
+  const [geminiModel, setGeminiModel] = useState("gemini-2.5-flash");
   const [showOpenai, setShowOpenai] = useState(false);
   const [showGemini, setShowGemini] = useState(false);
   // null = no change, "" = explicit clear
@@ -77,7 +77,7 @@ export default function AiSettingsPage() {
     setProvider(data.defaultProvider ?? "openai");
     setSystemPrompt(data.systemPrompt ?? "");
     setOpenaiModel(data.openaiModel ?? "gpt-4o-mini");
-    setGeminiModel(data.geminiModel ?? "gemini-1.5-flash");
+    setGeminiModel(data.geminiModel ?? "gemini-2.5-flash");
     // Don't pre-fill masked keys
   }, [data]);
 
