@@ -34,24 +34,65 @@ export class ContactsImportProcessor extends WorkerHost {
       trim: true,
     }) as Record<string, string>[];
 
+    if (rows.length === 0) {
+      this.logger.warn(`Import ${workspaceId}: CSV is empty`);
+      return;
+    }
+
+    // Log the first row's column names so we can diagnose mismatches
+    const sampleKeys = Object.keys(rows[0]);
+    this.logger.log(`Import ${workspaceId}: ${rows.length} rows, columns: [${sampleKeys.join(', ')}]`);
+
     let created = 0;
     let skippedInvalid = 0;
     let duplicates = 0;
+    const sampleSkipped: string[] = [];
 
     for (const row of rows) {
-      const firstName = row.firstName ?? row.FirstName ?? row.first_name ?? '';
-      const lastName = row.lastName ?? row.LastName ?? row.last_name ?? '';
-      const phoneRaw = row.phone ?? row.Phone ?? row.mobile ?? '';
-      const email = row.email ?? row.Email ?? undefined;
-      const tagsRaw = row.tags ?? row.Tags ?? '';
+      // ── Name: try many common column name variants ─────────────────────────
+      const firstName =
+        pick(row, ['firstName', 'FirstName', 'first_name', 'First Name', 'firstname', 'name', 'Name']) ?? '';
+      const lastName =
+        pick(row, ['lastName', 'LastName', 'last_name', 'Last Name', 'lastname', 'surname', 'Surname']) ?? '';
 
-      const { e164, isValid } = normalizePhoneE164(
-        phoneRaw,
-        defaultCountry ?? 'ZA',
-      );
+      // ── Phone: try every common variant ────────────────────────────────────
+      const phoneRaw =
+        pick(row, [
+          'phone', 'Phone', 'mobile', 'Mobile', 'cell', 'Cell',
+          'phone_number', 'Phone Number', 'PhoneNumber', 'phone number',
+          'whatsapp', 'WhatsApp', 'contact', 'Contact',
+          'telephone', 'Telephone', 'tel', 'Tel',
+          'number', 'Number',
+        ]) ?? '';
+
+      const email =
+        pick(row, ['email', 'Email', 'e-mail', 'E-mail', 'E-Mail']) ?? undefined;
+
+      const tagsRaw =
+        pick(row, ['tags', 'Tags', 'tag', 'Tag', 'groups', 'Groups']) ?? '';
+
+      if (!phoneRaw.trim()) {
+        skippedInvalid += 1;
+        if (sampleSkipped.length < 5) sampleSkipped.push(`[empty phone] row: ${JSON.stringify(row)}`);
+        continue;
+      }
+
+      // ── Phone normalisation with fallbacks ─────────────────────────────────
+      let e164 = '';
+      let isValid = false;
+
+      // Try as-is first
+      ({ e164, isValid } = normalizePhoneE164(phoneRaw.trim(), defaultCountry ?? 'ZA'));
+
+      // If that failed and it looks like a local number (8-9 digits, starts with 6-9)
+      // try prepending a zero so libphonenumber can parse it as a local ZA number.
+      if (!isValid && /^[6-9]\d{7,8}$/.test(phoneRaw.replace(/\D/g, ''))) {
+        ({ e164, isValid } = normalizePhoneE164('0' + phoneRaw.replace(/\D/g, ''), defaultCountry ?? 'ZA'));
+      }
 
       if (!isValid) {
         skippedInvalid += 1;
+        if (sampleSkipped.length < 5) sampleSkipped.push(`[bad phone: "${phoneRaw}"]`);
         continue;
       }
 
@@ -80,21 +121,17 @@ export class ContactsImportProcessor extends WorkerHost {
 
       if (tagsRaw) {
         const tagNames = tagsRaw
-          .split(/[|,]/)
+          .split(/[|,;]/)
           .map((t) => t.trim())
           .filter(Boolean);
         for (const name of tagNames) {
           const tag = await this.prisma.tag.upsert({
-            where: {
-              workspaceId_name: { workspaceId, name },
-            },
+            where: { workspaceId_name: { workspaceId, name } },
             update: {},
             create: { workspaceId, name },
           });
           await this.prisma.contactTag.upsert({
-            where: {
-              contactId_tagId: { contactId: contact.id, tagId: tag.id },
-            },
+            where: { contactId_tagId: { contactId: contact.id, tagId: tag.id } },
             update: {},
             create: { contactId: contact.id, tagId: tag.id },
           });
@@ -103,9 +140,7 @@ export class ContactsImportProcessor extends WorkerHost {
 
       if (groupId) {
         await this.prisma.contactGroupMember.upsert({
-          where: {
-            contactId_groupId: { contactId: contact.id, groupId },
-          },
+          where: { contactId_groupId: { contactId: contact.id, groupId } },
           update: {},
           create: { contactId: contact.id, groupId },
         });
@@ -115,5 +150,22 @@ export class ContactsImportProcessor extends WorkerHost {
     this.logger.log(
       `Import ${workspaceId}: created=${created}, invalidSkipped=${skippedInvalid}, duplicateFlags=${duplicates}`,
     );
+    if (sampleSkipped.length > 0) {
+      this.logger.warn(`Import ${workspaceId}: sample of skipped rows: ${sampleSkipped.join(' | ')}`);
+    }
   }
+}
+
+/** Case-insensitive key lookup across a list of possible column name variants */
+function pick(row: Record<string, string>, keys: string[]): string | undefined {
+  for (const k of keys) {
+    if (row[k] !== undefined) return row[k];
+  }
+  // Fallback: case-insensitive search
+  const lower = Object.fromEntries(Object.entries(row).map(([k, v]) => [k.toLowerCase(), v]));
+  for (const k of keys) {
+    const val = lower[k.toLowerCase()];
+    if (val !== undefined) return val;
+  }
+  return undefined;
 }
