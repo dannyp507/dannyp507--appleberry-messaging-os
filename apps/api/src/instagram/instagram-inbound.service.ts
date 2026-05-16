@@ -274,22 +274,54 @@ export class InstagramInboundService {
     for (const rule of rules) {
       if (!this.keywordMatches(rule.keyword, rule.matchType, text)) continue;
 
-      const parts = rule.response
-        .split(/\n---\n/)
-        .map((p) => p.trim())
-        .filter(Boolean);
+      // AI rules: pass delayMs=0 so the AI call provides the natural typing delay.
+      // Static rules: use a 1200ms delay so the bubble is visible before the reply.
+      await this.maybeTyping(dmSettings, account.pageAccessToken, account.igUserId, senderId, rule.useAi ? 0 : 1200);
 
-      await this.maybeTyping(dmSettings, account.pageAccessToken, account.igUserId, senderId, 1200);
-      for (const part of parts) {
-        await this.igAccounts.sendMessage(account.igUserId, account.pageAccessToken, senderId, part);
+      if (rule.useAi) {
+        // AI rule — `response` field holds the system prompt (may be empty/null).
+        // Generate a dynamic reply instead of sending the prompt as literal text.
+        const recentRows = await this.prisma.inboxMessage.findMany({
+          where: { threadId: thread.id },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: { direction: true, message: true },
+        });
+        const recentMessages = recentRows.reverse().map((m) => ({
+          direction: m.direction,
+          message: m.message,
+        }));
+        const aiReply = await this.ai.generateReply(
+          { workspaceId, contactId: contact.id, threadId: thread.id, recentMessages, instagramAccountId: account.id },
+          text,
+          rule.response?.trim() || undefined,
+        );
+        const replyText = aiReply ?? "I'm sorry, I couldn't process that right now.";
+        await this.igAccounts.sendMessage(account.igUserId, account.pageAccessToken, senderId, replyText);
         await this.prisma.inboxMessage.create({
-          data: { threadId: thread.id, direction: 'OUTBOUND', message: part },
+          data: { threadId: thread.id, direction: 'OUTBOUND', message: replyText },
+        });
+        await this.prisma.inboxThread.update({
+          where: { id: thread.id },
+          data: { lastMessagePreview: replyText.slice(0, 120), lastMessageAt: new Date() },
+        });
+      } else {
+        const parts = rule.response
+          .split(/\n---\n/)
+          .map((p) => p.trim())
+          .filter(Boolean);
+        for (const part of parts) {
+          await this.igAccounts.sendMessage(account.igUserId, account.pageAccessToken, senderId, part);
+          await this.prisma.inboxMessage.create({
+            data: { threadId: thread.id, direction: 'OUTBOUND', message: part },
+          });
+        }
+        await this.prisma.inboxThread.update({
+          where: { id: thread.id },
+          data: { lastMessagePreview: parts.at(-1)?.slice(0, 120), lastMessageAt: new Date() },
         });
       }
-      await this.prisma.inboxThread.update({
-        where: { id: thread.id },
-        data: { lastMessagePreview: parts.at(-1)?.slice(0, 120), lastMessageAt: new Date() },
-      });
+
       this.logger.log(
         `Autoresponder "${rule.name ?? rule.keyword}" matched for IG igUserId=${igUserId}`,
       );
