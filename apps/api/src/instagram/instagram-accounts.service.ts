@@ -6,6 +6,8 @@ import { randomUUID } from 'crypto';
 
 const GRAPH_VERSION = 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+// Instagram Business Login tokens must be used with graph.instagram.com
+const IG_GRAPH_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
 
 interface FbTokenResponse {
   access_token: string;
@@ -412,7 +414,7 @@ export class InstagramAccountsService {
    * Subscribes the FB page (linked to the IG account) to receive Instagram messages.
    */
   async subscribeToWebhook(igUserId: string, pageAccessToken: string): Promise<void> {
-    const res = await fetch(`${GRAPH_BASE}/${igUserId}/subscribed_apps`, {
+    const res = await fetch(`${IG_GRAPH_BASE}/${igUserId}/subscribed_apps`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -422,7 +424,7 @@ export class InstagramAccountsService {
     });
     const body = (await res.json().catch(() => ({}))) as {
       success?: boolean;
-      error?: { message: string };
+      error?: { message: string; code?: number };
     };
     if (!body.success) {
       this.logger.error(
@@ -440,7 +442,7 @@ export class InstagramAccountsService {
     recipientId: string,
     text: string,
   ): Promise<void> {
-    const res = await fetch(`${GRAPH_BASE}/${igUserId}/messages`, {
+    const res = await fetch(`${IG_GRAPH_BASE}/${igUserId}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

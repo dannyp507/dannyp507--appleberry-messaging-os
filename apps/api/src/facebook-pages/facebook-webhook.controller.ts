@@ -56,6 +56,9 @@ export class FacebookWebhookController {
     @Res() res: Response,
   ) {
     const appSecret = this.config.get<string>('FACEBOOK_APP_SECRET') ?? '';
+    // Instagram Business Login webhooks are signed with the Instagram sub-app
+    // secret, not the Facebook parent app secret. Try both.
+    const igSecret = this.config.get<string>('INSTAGRAM_APP_SECRET') ?? '';
 
     // Verify HMAC signature when app secret is configured
     if (appSecret) {
@@ -63,12 +66,15 @@ export class FacebookWebhookController {
         res.status(403).send('Missing signature');
         return;
       }
-      const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody).digest('hex')}`;
       const sigBuf = Buffer.from(sig);
-      const expBuf = Buffer.from(expected);
-      // Guard against length mismatch before timingSafeEqual
-      if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
-        this.inbound['logger'].warn('Facebook webhook: invalid signature — request rejected');
+      const matchesSecret = (secret: string) => {
+        if (!secret) return false;
+        const exp = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
+        const expBuf = Buffer.from(exp);
+        return sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf);
+      };
+      if (!matchesSecret(appSecret) && !matchesSecret(igSecret)) {
+        this.inbound['logger'].warn(`Facebook webhook: invalid signature — rawBodyLen=${rawBody?.length ?? 'null'}`);
         res.status(403).send('Forbidden');
         return;
       }
