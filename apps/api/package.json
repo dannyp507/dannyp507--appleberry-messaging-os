@@ -38,6 +38,7 @@
     "@nestjs/serve-static": "^5.0.5",
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^5.22.0",
+    "@sentry/nestjs": "^10.53.1",
     "@types/nodemailer": "^8.0.0",
     "@types/papaparse": "^5.5.2",
     "@whiskeysockets/baileys": "^6.17.16",
