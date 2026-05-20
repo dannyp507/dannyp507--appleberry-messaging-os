@@ -10,6 +10,7 @@ import { TemplateRenderService } from '../messaging/template-render.service';
 import { InstagramAccountsService } from './instagram-accounts.service';
 import { AiService } from '../ai/ai.service';
 import { IgCommentProcessorService } from '../ig-comment-automations/ig-comment-processor.service';
+import { OptOutService, OPT_OUT_REPLY, OPT_IN_REPLY } from '../opt-out/opt-out.service';
 
 export interface InstagramWebhookPayload {
   object: 'instagram';
@@ -45,6 +46,7 @@ export class InstagramInboundService {
     private readonly templates: TemplateRenderService,
     private readonly ai: AiService,
     private readonly igCommentProcessor: IgCommentProcessorService,
+    private readonly optOutSvc: OptOutService,
   ) {}
 
   async handleWebhook(payload: InstagramWebhookPayload): Promise<void> {
@@ -200,6 +202,26 @@ export class InstagramInboundService {
     this.logger.log(
       `IG inbound: sender=${senderId} igUserId=${igUserId} new_thread=${isNewThread} text="${text.slice(0, 40)}"`,
     );
+
+    // ── Opt-out / opt-in: handled before any automation ────────────────────────
+    if (OptOutService.isOptOut(text)) {
+      await this.optOutSvc.markOptOut(contact.id);
+      await this.igAccounts.sendMessage(account.igUserId, account.pageAccessToken, senderId, OPT_OUT_REPLY);
+      await this.prisma.inboxMessage.create({
+        data: { threadId: thread.id, direction: 'OUTBOUND', message: OPT_OUT_REPLY },
+      });
+      this.logger.log(`IG opt-out: contact=${contact.id} sender=${senderId}`);
+      return;
+    }
+    if (OptOutService.isOptIn(text)) {
+      await this.optOutSvc.markOptIn(contact.id);
+      await this.igAccounts.sendMessage(account.igUserId, account.pageAccessToken, senderId, OPT_IN_REPLY);
+      await this.prisma.inboxMessage.create({
+        data: { threadId: thread.id, direction: 'OUTBOUND', message: OPT_IN_REPLY },
+      });
+      this.logger.log(`IG opt-in: contact=${contact.id} sender=${senderId}`);
+      return;
+    }
 
     // ── Load DM bot settings once ──────────────────────────────────────────────
     const dmSettings = await this.prisma.instagramAccountAiSettings.findUnique({

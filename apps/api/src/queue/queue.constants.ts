@@ -11,6 +11,8 @@ export const INCOMING_MESSAGES_QUEUE = 'incoming-messages';
 
 export const DRIP_SEQUENCES_QUEUE = 'drip-sequences';
 
+export const OPT_OUT_DELETE_QUEUE = 'opt-out-delete';
+
 export type IncomingMessageJob = {
   whatsappAccountId: string;
   from: string;       // phone digits or full JID (kept for contact lookup)

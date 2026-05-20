@@ -4,6 +4,7 @@ import { ChatbotModule } from '../chatbot/chatbot.module';
 import { CommonModule } from '../common/common.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { MessagesModule } from '../messages/messages.module';
+import { OptOutModule } from '../opt-out/opt-out.module';
 import { QueueModule } from '../queue/queue.module';
 import { SequencesModule } from '../sequences/sequences.module';
 import { SubscribersModule } from '../subscribers/subscribers.module';
@@ -17,6 +18,7 @@ import { WebhooksController } from './webhooks.controller';
     AiModule,
     MessagingModule,
     MessagesModule,
+    OptOutModule,
     SequencesModule,
     SubscribersModule,
     forwardRef(() => ChatbotModule),

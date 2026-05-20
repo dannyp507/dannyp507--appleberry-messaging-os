@@ -17,6 +17,7 @@ import { SubscribersService } from '../subscribers/subscribers.service';
 import { SequencesService } from '../sequences/sequences.service';
 import type { IncomingMessageJob } from '../queue/queue.constants';
 import { normalizePhoneE164 } from '../contacts/phone.util';
+import { OptOutService } from '../opt-out/opt-out.service';
 
 @Injectable()
 export class IncomingMessageService {
@@ -30,6 +31,7 @@ export class IncomingMessageService {
     private readonly ai: AiService,
     private readonly subscribers: SubscribersService,
     private readonly sequences: SequencesService,
+    private readonly optOut: OptOutService,
   ) {}
 
   /** Replace Planify X / common template variables in a response string */
@@ -467,16 +469,12 @@ export class IncomingMessageService {
     if (!sub) return false;
 
     if (isOptOut) {
-      await Promise.all([
-        this.prisma.contactSubscription.update({
-          where: { id: sub.id },
-          data: { status: 'UNSUBSCRIBED', unsubscribedAt: new Date() },
-        }),
-        this.prisma.contact.update({
-          where: { id: contactId },
-          data: { optOut: true },
-        }),
-      ]);
+      await this.prisma.contactSubscription.update({
+        where: { id: sub.id },
+        data: { status: 'UNSUBSCRIBED', unsubscribedAt: new Date() },
+      });
+
+      await this.optOut.markOptOut(contactId);
 
       const cancelled = await this.sequences.cancelSubscriptionEnrollments(
         workspaceId,
@@ -487,8 +485,7 @@ export class IncomingMessageService {
         workspaceId,
         whatsappAccountId: account.id,
         to: replyTo,
-        message:
-          'You have been unsubscribed and will no longer receive automated messages from us. Reply START to re-subscribe at any time.',
+        message: "You've been unsubscribed. Reply START to resubscribe.",
         contactId,
         inboxThreadId: thread.id,
       });
@@ -505,10 +502,7 @@ export class IncomingMessageService {
         where: { id: sub.id },
         data: { status: 'SUBSCRIBED', unsubscribedAt: null },
       }),
-      this.prisma.contact.update({
-        where: { id: contactId },
-        data: { optOut: false },
-      }),
+      this.optOut.markOptIn(contactId),
     ]);
 
     const greeting = this.substituteVars('Hi {{name}}!', senderName);

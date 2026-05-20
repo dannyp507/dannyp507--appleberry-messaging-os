@@ -11,6 +11,7 @@ import {
 import { AiService } from '../ai/ai.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramAccountsService } from './telegram-accounts.service';
+import { OptOutService, OPT_OUT_REPLY, OPT_IN_REPLY } from '../opt-out/opt-out.service';
 
 interface TelegramUpdate {
   update_id: number;
@@ -43,6 +44,7 @@ export class TelegramInboundService {
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
     private readonly telegramSvc: TelegramAccountsService,
+    private readonly optOutSvc: OptOutService,
   ) {}
 
   private async sendReply(
@@ -155,6 +157,20 @@ export class TelegramInboundService {
     const reply = async (text: string) => {
       await this.sendReply(account.botToken, chatId, text, thread!.id);
     };
+
+    // ── Opt-out / opt-in: handled before any automation ────────────────────────
+    if (OptOutService.isOptOut(msg.text)) {
+      await this.optOutSvc.markOptOut(contact.id);
+      await reply(OPT_OUT_REPLY);
+      this.logger.log(`Telegram opt-out: contact=${contact.id} chat=${chatId}`);
+      return;
+    }
+    if (OptOutService.isOptIn(msg.text)) {
+      await this.optOutSvc.markOptIn(contact.id);
+      await reply(OPT_IN_REPLY);
+      this.logger.log(`Telegram opt-in: contact=${contact.id} chat=${chatId}`);
+      return;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Autoresponder rules (workspace-wide, applies to all channels)

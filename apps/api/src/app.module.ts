@@ -42,6 +42,7 @@ import { FbCommentAutomationsModule } from './fb-comment-automations/fb-comment-
 import { IgCommentAutomationsModule } from './ig-comment-automations/ig-comment-automations.module';
 import { BrandSettingsModule } from './brand-settings/brand-settings.module';
 import { MediaModule } from './media/media.module';
+import { OptOutModule } from './opt-out/opt-out.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -106,6 +107,7 @@ import { AppController } from './app.controller';
     IgCommentAutomationsModule,
     BrandSettingsModule,
     MediaModule,
+    OptOutModule,
   ],
   providers: [
     {

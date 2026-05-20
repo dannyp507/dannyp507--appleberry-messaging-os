@@ -10,6 +10,7 @@ import { TemplateRenderService } from '../messaging/template-render.service';
 import { FacebookPagesService } from './facebook-pages.service';
 import { FbCommentProcessorService } from '../fb-comment-automations/fb-comment-processor.service';
 import { AiService } from '../ai/ai.service';
+import { OptOutService, OPT_OUT_REPLY, OPT_IN_REPLY } from '../opt-out/opt-out.service';
 
 export interface FacebookWebhookPayload {
   object: 'page' | 'instagram';
@@ -57,6 +58,7 @@ export class FacebookInboundService {
     private readonly templates: TemplateRenderService,
     private readonly commentProcessor: FbCommentProcessorService,
     private readonly ai: AiService,
+    private readonly optOutSvc: OptOutService,
   ) {}
 
   async handleWebhook(payload: FacebookWebhookPayload): Promise<void> {
@@ -217,6 +219,26 @@ export class FacebookInboundService {
     this.logger.log(
       `FB inbound: sender=${senderId} page=${pageId} new_thread=${isNewThread} text="${text.slice(0, 40)}"`,
     );
+
+    // ── Opt-out / opt-in: handled before any automation ────────────────────────
+    if (OptOutService.isOptOut(text)) {
+      await this.optOutSvc.markOptOut(contact.id);
+      await this.fbPages.sendMessage(page.pageAccessToken, senderId, OPT_OUT_REPLY);
+      await this.prisma.inboxMessage.create({
+        data: { threadId: thread.id, direction: 'OUTBOUND', message: OPT_OUT_REPLY },
+      });
+      this.logger.log(`FB opt-out: contact=${contact.id} sender=${senderId}`);
+      return;
+    }
+    if (OptOutService.isOptIn(text)) {
+      await this.optOutSvc.markOptIn(contact.id);
+      await this.fbPages.sendMessage(page.pageAccessToken, senderId, OPT_IN_REPLY);
+      await this.prisma.inboxMessage.create({
+        data: { threadId: thread.id, direction: 'OUTBOUND', message: OPT_IN_REPLY },
+      });
+      this.logger.log(`FB opt-in: contact=${contact.id} sender=${senderId}`);
+      return;
+    }
 
     // ── Load DM bot settings once (used in welcome + AI fallback) ─────────────
     const dmSettings = await this.prisma.facebookPageAiSettings.findUnique({

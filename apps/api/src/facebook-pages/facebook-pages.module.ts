@@ -3,6 +3,7 @@ import { CommonModule } from '../common/common.module';
 import { RedisModule } from '../redis/redis.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { AiModule } from '../ai/ai.module';
+import { OptOutModule } from '../opt-out/opt-out.module';
 import { FacebookPagesController } from './facebook-pages.controller';
 import { FacebookWebhookController } from './facebook-webhook.controller';
 import { FacebookPagesService } from './facebook-pages.service';
@@ -11,7 +12,7 @@ import { FbCommentProcessorService } from '../fb-comment-automations/fb-comment-
 import { InstagramModule } from '../instagram/instagram.module';
 
 @Module({
-  imports: [CommonModule, RedisModule, MessagingModule, AiModule, forwardRef(() => InstagramModule)],
+  imports: [CommonModule, RedisModule, MessagingModule, AiModule, OptOutModule, forwardRef(() => InstagramModule)],
   controllers: [FacebookPagesController, FacebookWebhookController],
   providers: [FacebookPagesService, FacebookInboundService, FbCommentProcessorService],
   exports: [FacebookPagesService],
