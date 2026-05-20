@@ -112,7 +112,7 @@ export class InstagramAccountsService {
     // Scope must use instagram_business_* variants (not instagram_manage_*)
     const scope = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments';
 
-    return `https://www.instagram.com/oauth/authorize?${params.toString()}&scope=${scope}`;
+    return `https://www.instagram.com/oauth/authorize?force_reauth=true&${params.toString()}&scope=${scope}`;
   }
 
   /** Handle the OAuth callback: exchange code → Instagram user token → long-lived → save */
@@ -125,16 +125,17 @@ export class InstagramAccountsService {
 
     try {
       // Step 1: Exchange code for short-lived Instagram user access token
+      const exchangeBody = new URLSearchParams({
+        client_id: this.igAppId,
+        client_secret: this.igAppSecret,
+        grant_type: 'authorization_code',
+        redirect_uri: this.redirectUri,
+        code,
+      });
       const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: this.igAppId,
-          client_secret: this.igAppSecret,
-          grant_type: 'authorization_code',
-          redirect_uri: this.redirectUri,
-          code,
-        }),
+        body: exchangeBody,
       });
       const tokenData = (await tokenRes.json()) as IgTokenResponse;
       if (!tokenData.access_token) {

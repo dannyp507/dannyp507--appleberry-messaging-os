@@ -28,7 +28,6 @@ import {
   MessageCircle,
   Image as ImageIcon,
   MousePointerClick,
-  Zap,
   GitBranch,
   Sparkles,
   UserCheck,

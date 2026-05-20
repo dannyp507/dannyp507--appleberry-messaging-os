@@ -45,6 +45,7 @@ import {
   ExternalLink,
   Globe,
 } from "lucide-react";
+import { MediaPicker } from "@/components/media/media-picker";
 import { cn } from "@/lib/utils";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -75,6 +76,7 @@ interface AutomationForm {
   name: string;
   actionType: FbCommentActionType;
   messageText: string;
+  dmText: string;
   buttonLabel: string;
   buttonUrl: string;
   mediaUrl: string;
@@ -97,6 +99,7 @@ const EMPTY_FORM: AutomationForm = {
   name: "",
   actionType: "PRIVATE_REPLY",
   messageText: "",
+  dmText: "",
   buttonLabel: "",
   buttonUrl: "",
   mediaUrl: "",
@@ -385,11 +388,12 @@ function AutomationDialog({
     if (initial) {
       return {
         facebookPageId: initial.facebookPageId,
-        postId: initial.postId,
+        postId: initial.postId ?? "",
         postSnippet: initial.postSnippet ?? "",
         name: initial.name,
         actionType: initial.actionType,
         messageText: initial.messageText,
+        dmText: initial.dmText ?? "",
         buttonLabel: initial.buttonLabel ?? "",
         buttonUrl: initial.buttonUrl ?? "",
         mediaUrl: initial.mediaUrl ?? "",
@@ -449,6 +453,7 @@ function AutomationDialog({
     mutationFn: async (payload: AutomationForm) => {
       const body = {
         ...payload,
+        dmText: payload.dmText || undefined,
         buttonLabel: payload.buttonLabel || undefined,
         buttonUrl: payload.buttonUrl || undefined,
         mediaUrl: payload.mediaUrl || undefined,
@@ -488,9 +493,9 @@ function AutomationDialog({
 
   const canSubmit =
     form.facebookPageId &&
-    form.postId &&
     form.name.trim() &&
     form.messageText.trim() &&
+    (form.actionType !== "BOTH" || form.dmText.trim()) &&
     form.keywords.length > 0;
 
   return (
@@ -696,19 +701,91 @@ function AutomationDialog({
             />
           </div>
 
-          {/* Message */}
-          <div className="space-y-1.5">
-            <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-              {form.aiEnabled ? "Fallback Message (if AI fails) *" : "Reply Message *"}
-            </Label>
-            <Textarea
-              value={form.messageText}
-              onChange={(e) => setField("messageText", e.target.value)}
-              placeholder="Hi! Thanks for your interest. Please DM us for pricing details."
-              rows={3}
-              className="text-sm"
-            />
-          </div>
+          {/* Reply Message fields — split when BOTH */}
+          {form.actionType === "BOTH" ? (
+            <div className="space-y-4 rounded-xl border border-[#E5E7EB] dark:border-[#1e2433] p-3.5">
+              <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                Reply Messages
+              </p>
+              {/* DM text */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-indigo-400 flex items-center gap-1.5">
+                  💬 Private DM Message *
+                </Label>
+                <Textarea
+                  value={form.dmText}
+                  onChange={(e) => setField("dmText", e.target.value)}
+                  placeholder="Hi! Thanks for your interest. We'll DM you the pricing details 👇"
+                  rows={2}
+                  className="text-sm"
+                />
+                <p className="text-[10px] text-[#9CA3AF]">
+                  Sent as a private Messenger DM to the commenter.
+                </p>
+              </div>
+              {/* Public comment text */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                  💬 Public Comment Reply *
+                </Label>
+                <Textarea
+                  value={form.messageText}
+                  onChange={(e) => setField("messageText", e.target.value)}
+                  placeholder="Thanks for your comment! Check your DMs for more info 😊"
+                  rows={2}
+                  className="text-sm"
+                />
+                <p className="text-[10px] text-[#9CA3AF]">
+                  Posted publicly as a reply under the commenter&apos;s comment.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                {form.aiEnabled
+                  ? "Fallback Message (if AI fails) *"
+                  : form.actionType === "PUBLIC_COMMENT"
+                    ? "Comment Reply Text *"
+                    : "Private DM Message *"}
+              </Label>
+              <Textarea
+                value={form.messageText}
+                onChange={(e) => setField("messageText", e.target.value)}
+                placeholder={
+                  form.actionType === "PUBLIC_COMMENT"
+                    ? "Thanks for your comment! Check your DMs for more info 😊"
+                    : "Hi! Thanks for your interest. We'll DM you the pricing details."
+                }
+                rows={3}
+                className="text-sm"
+              />
+              <p className="text-[10px] text-[#9CA3AF]">
+                {form.actionType === "PUBLIC_COMMENT"
+                  ? "Posted publicly as a reply under the commenter's comment."
+                  : "Sent as a private Messenger DM to the commenter."}
+              </p>
+            </div>
+          )}
+
+          {/* Media Attachment — only for DM actions */}
+          {(form.actionType === "PRIVATE_REPLY" || form.actionType === "BOTH") && (
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                Media Attachment
+                <span className="ml-1 text-[9px] font-normal normal-case">(optional)</span>
+              </Label>
+              <MediaPicker
+                value={form.mediaUrl}
+                onChange={(url) => setField("mediaUrl", url)}
+                label="Media Attachment"
+                placeholder="No image selected — sent before the DM text"
+              />
+              <p className="text-[10px] text-[#9CA3AF]">
+                Image sent as a DM attachment before the text message.
+              </p>
+            </div>
+          )}
 
           {/* AI toggle */}
           <div
