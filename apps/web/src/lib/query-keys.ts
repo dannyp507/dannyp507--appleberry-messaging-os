@@ -36,6 +36,11 @@ export const qk = {
   instagramAccounts: ["instagram-accounts"] as const,
   igAccountAiSettings: (id: string) => ["ig-account-ai-settings", id] as const,
   igAccountFlows: (id: string) => ["ig-account-flows", id] as const,
+  // Instagram comment automations
+  igCommentAutomations: ["ig-comment-automations"] as const,
+  igCommentAutomation: (id: string) => ["ig-comment-automation", id] as const,
+  igCommentEvents: (automationId: string) => ["ig-comment-events", automationId] as const,
+  igAccountPosts: (accountId: string) => ["ig-account-posts", accountId] as const,
   // Workspace media library
   workspaceMedia: ["workspace-media"] as const,
   // Brand settings

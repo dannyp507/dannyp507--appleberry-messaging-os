@@ -174,20 +174,49 @@ export default function InstagramAccountsPage() {
     onError: () => toast.error("Could not remove account"),
   });
 
+  const [connectingDirect, setConnectingDirect] = useState(false);
+
+  const handleDirectConnect = async () => {
+    setConnectingDirect(true);
+    try {
+      const { data } = await api.get<{ url: string }>("/instagram/accounts/auth-url");
+      window.location.href = data.url;
+    } catch {
+      toast.error("Could not start Instagram login. Please try again.");
+      setConnectingDirect(false);
+    }
+  };
+
   const ConnectButton = (
-    <Button
-      type="button"
-      className="rounded-xl shadow-sm hover:shadow-md"
-      disabled={syncFromPagesMutation.isPending || loadingPending}
-      onClick={() => syncFromPagesMutation.mutate()}
-    >
-      {syncFromPagesMutation.isPending || loadingPending ? (
-        <Loader2 className="mr-1.5 size-4 animate-spin" />
-      ) : (
-        <RefreshCw className="mr-1.5 size-4" />
-      )}
-      Find Instagram Accounts
-    </Button>
+    <div className="flex gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        className="rounded-xl shadow-sm hover:shadow-md"
+        disabled={syncFromPagesMutation.isPending || loadingPending}
+        onClick={() => syncFromPagesMutation.mutate()}
+      >
+        {syncFromPagesMutation.isPending || loadingPending ? (
+          <Loader2 className="mr-1.5 size-4 animate-spin" />
+        ) : (
+          <RefreshCw className="mr-1.5 size-4" />
+        )}
+        Find Instagram Accounts
+      </Button>
+      <Button
+        type="button"
+        className="rounded-xl shadow-sm hover:shadow-md bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600"
+        disabled={connectingDirect}
+        onClick={handleDirectConnect}
+      >
+        {connectingDirect ? (
+          <Loader2 className="mr-1.5 size-4 animate-spin" />
+        ) : (
+          <Camera className="mr-1.5 size-4" />
+        )}
+        Connect with Instagram
+      </Button>
+    </div>
   );
 
   return (

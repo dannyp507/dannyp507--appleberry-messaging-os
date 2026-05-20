@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TemplateRenderService } from '../messaging/template-render.service';
 import { InstagramAccountsService } from './instagram-accounts.service';
 import { AiService } from '../ai/ai.service';
+import { IgCommentProcessorService } from '../ig-comment-automations/ig-comment-processor.service';
 
 export interface InstagramWebhookPayload {
   object: 'instagram';
@@ -43,6 +44,7 @@ export class InstagramInboundService {
     private readonly igAccounts: InstagramAccountsService,
     private readonly templates: TemplateRenderService,
     private readonly ai: AiService,
+    private readonly igCommentProcessor: IgCommentProcessorService,
   ) {}
 
   async handleWebhook(payload: InstagramWebhookPayload): Promise<void> {
@@ -65,6 +67,37 @@ export class InstagramInboundService {
             this.logger.error(
               `Error processing IG message sender=${senderId} igUserId=${igUserId}: ${String(err)}`,
             );
+          }
+        }
+      }
+
+      if (entry.changes?.length) {
+        for (const change of entry.changes) {
+          if (change.field === 'comments') {
+            const v = change.value as {
+              id?: string;
+              text?: string;
+              media?: { id?: string };
+              from?: { id?: string; username?: string };
+            };
+            const commentId = v.id;
+            const commentText = v.text;
+            const postId = v.media?.id;
+            const commenterId = v.from?.id;
+            const commenterUsername = v.from?.username;
+            if (!commentId || !commentText || !postId || !commenterId) continue;
+            try {
+              await this.igCommentProcessor.processComment({
+                igUserId,
+                commentId,
+                postId,
+                commenterId,
+                commenterUsername,
+                commentText,
+              });
+            } catch (err) {
+              this.logger.error(`Error processing IG comment commentId=${commentId}: ${String(err)}`);
+            }
           }
         }
       }

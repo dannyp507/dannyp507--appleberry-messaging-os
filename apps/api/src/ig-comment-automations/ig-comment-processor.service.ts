@@ -1,45 +1,42 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { FbCommentActionType } from '@prisma/client';
+import { IgCommentActionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
 
-const GRAPH_VERSION = 'v21.0';
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const IG_GRAPH_BASE = 'https://graph.instagram.com/v21.0';
 
-export interface CommentWebhookEvent {
-  pageId: string;        // Facebook page ID (numeric string)
+export interface IgCommentWebhookEvent {
+  igUserId: string;      // The IG account that owns the post
   commentId: string;
-  postId: string;
-  commenterId: string;
-  commenterName?: string;
+  postId: string;        // media ID
+  commenterId: string;   // sender IGSID
+  commenterUsername?: string;
   commentText: string;
-  /** parentId equals postId for top-level comments; another commentId for replies */
-  parentId?: string;
 }
 
 @Injectable()
-export class FbCommentProcessorService {
-  private readonly logger = new Logger(FbCommentProcessorService.name);
+export class IgCommentProcessorService {
+  private readonly logger = new Logger(IgCommentProcessorService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
   ) {}
 
-  async processComment(event: CommentWebhookEvent): Promise<void> {
-    const { pageId, commentId, postId, commenterId, commenterName, commentText } = event;
+  async processComment(event: IgCommentWebhookEvent): Promise<void> {
+    const { igUserId, commentId, postId, commenterId, commenterUsername, commentText } = event;
 
-    // ── 0. Resolve the Facebook Page record ────────────────────────────────────
-    const page = await this.prisma.facebookPage.findFirst({
-      where: { pageId, isActive: true },
+    // ── 0. Resolve the Instagram Account record ────────────────────────────────
+    const account = await this.prisma.instagramAccount.findFirst({
+      where: { igUserId, isActive: true },
     });
-    if (!page) {
-      this.logger.debug(`No active page for pageId=${pageId} — comment ignored`);
+    if (!account) {
+      this.logger.debug(`No active InstagramAccount for igUserId=${igUserId} — comment ignored`);
       return;
     }
 
     // ── 1. Deduplication — skip already-processed comments ────────────────────
-    const alreadyProcessed = await this.prisma.fbCommentEvent.findUnique({
+    const alreadyProcessed = await this.prisma.igCommentEvent.findUnique({
       where: { commentId },
     });
     if (alreadyProcessed) {
@@ -47,17 +44,16 @@ export class FbCommentProcessorService {
       return;
     }
 
-    // ── 2. Skip comments made by the page itself ───────────────────────────────
-    if (commenterId === pageId) {
-      this.logger.debug(`Page's own comment — skipped (commentId=${commentId})`);
+    // ── 2. Skip comments made by the account itself ───────────────────────────
+    if (commenterId === igUserId) {
+      this.logger.debug(`Account's own comment — skipped (commentId=${commentId})`);
       return;
     }
 
     // ── 3. Find active automations for this post ───────────────────────────────
-    // Include automations that match this specific post OR have no postId (wildcard / catch-all)
-    const automations = await this.prisma.fbCommentAutomation.findMany({
+    const automations = await this.prisma.igCommentAutomation.findMany({
       where: {
-        facebookPageId: page.id,
+        instagramAccountId: account.id,
         isActive: true,
         OR: [{ postId }, { postId: null }],
       },
@@ -68,17 +64,16 @@ export class FbCommentProcessorService {
 
     if (!automations.length) {
       this.logger.debug(
-        `No active automations for postId=${postId} page=${pageId}`,
+        `No active IG automations for postId=${postId} igUserId=${igUserId}`,
       );
-      // Log the event without automation match for audit purposes
       await this.logEvent({
-        workspaceId: page.workspaceId,
-        facebookPageId: page.id,
+        workspaceId: account.workspaceId,
+        instagramAccountId: account.id,
         automationId: null,
         commentId,
         postId,
         commenterId,
-        commenterName,
+        commenterUsername,
         commentText,
         error: null,
       });
@@ -92,7 +87,7 @@ export class FbCommentProcessorService {
         if (!this.matches(commentText, kw.keyword, kw.matchType)) continue;
 
         this.logger.log(
-          `Comment matched automation "${automation.name}" keyword "${kw.keyword}" ` +
+          `IG comment matched automation "${automation.name}" keyword "${kw.keyword}" ` +
             `commentId=${commentId}`,
         );
 
@@ -100,21 +95,18 @@ export class FbCommentProcessorService {
         let publicReplySent = false;
         let error: string | null = null;
 
-        // Resolve reply texts
-        // - publicText: posted as a public comment reply (messageText)
-        // - dmText: sent as private DM (dmText if set, otherwise messageText)
         let publicText = automation.messageText;
         let dmText = automation.dmText || automation.messageText;
 
         if (automation.aiEnabled) {
           const aiReply = await this.ai.generateReply(
-            { workspaceId: page.workspaceId, contactId: commenterId },
+            { workspaceId: account.workspaceId, contactId: commenterId },
             commentText,
-            this.buildAiSystemPrompt(automation.aiSystemPrompt, page.workspaceId),
+            this.buildAiSystemPrompt(automation.aiSystemPrompt, account.workspaceId),
           );
           if (aiReply) {
             publicText = aiReply;
-            dmText = aiReply; // AI generates a single reply used for both channels
+            dmText = aiReply;
           }
         }
 
@@ -124,43 +116,38 @@ export class FbCommentProcessorService {
             automation.actionType === 'PRIVATE_REPLY' ||
             automation.actionType === 'BOTH'
           ) {
-            await this.sendPrivateReply(
-              commentId,
-              dmText,
-              page.pageAccessToken,
-              automation.mediaUrl ?? undefined,
-            );
+            await this.sendPrivateReply(commentId, dmText, account.pageAccessToken, automation.mediaUrl ?? undefined);
             privateReplySent = true;
           }
           if (
             automation.actionType === 'PUBLIC_COMMENT' ||
             automation.actionType === 'BOTH'
           ) {
-            await this.sendPublicReply(commentId, publicText, page.pageAccessToken);
+            await this.sendPublicReply(commentId, publicText, account.pageAccessToken);
             publicReplySent = true;
           }
         } catch (err) {
           error = err instanceof Error ? err.message : String(err);
           this.logger.error(
-            `Failed to send reply for commentId=${commentId}: ${error}`,
+            `Failed to send IG reply for commentId=${commentId}: ${error}`,
           );
         }
 
         // Increment automation reply counter
-        await this.prisma.fbCommentAutomation.update({
+        await this.prisma.igCommentAutomation.update({
           where: { id: automation.id },
           data: { replyCount: { increment: 1 } },
         });
 
         // Log the event
         await this.logEvent({
-          workspaceId: page.workspaceId,
-          facebookPageId: page.id,
+          workspaceId: account.workspaceId,
+          instagramAccountId: account.id,
           automationId: automation.id,
           commentId,
           postId,
           commenterId,
-          commenterName,
+          commenterUsername,
           commentText,
           matchedKeyword: kw.keyword,
           actionType: automation.actionType,
@@ -177,29 +164,29 @@ export class FbCommentProcessorService {
 
     if (!matched) {
       this.logger.debug(
-        `No keyword matched for comment="${commentText.slice(0, 40)}" postId=${postId}`,
+        `No keyword matched for IG comment="${commentText.slice(0, 40)}" postId=${postId}`,
       );
       await this.logEvent({
-        workspaceId: page.workspaceId,
-        facebookPageId: page.id,
+        workspaceId: account.workspaceId,
+        instagramAccountId: account.id,
         automationId: null,
         commentId,
         postId,
         commenterId,
-        commenterName,
+        commenterUsername,
         commentText,
         error: null,
       });
     }
   }
 
-  // ── Graph API Calls ───────────────────────────────────────────────────────────
+  // ── Instagram API Calls ───────────────────────────────────────────────────────
 
-  /** Sends a private Messenger DM to the commenter using the Messenger Send API.
-   *  Uses recipient.comment_id which works across all post types (regular, check-in, video, etc.)
-   *  Unlike the legacy /private_replies endpoint, this is not restricted by post type.
-   *  Requires pages_messaging permission.
-   *  If mediaUrl is provided, the media attachment is sent first, then the text message. */
+  /**
+   * Send a private reply (Instagram DM) to the commenter.
+   * Uses recipient.comment_id which routes the DM to the person who commented.
+   * Requires instagram_manage_messages permission.
+   */
   private async sendPrivateReply(
     commentId: string,
     message: string,
@@ -208,9 +195,12 @@ export class FbCommentProcessorService {
   ): Promise<void> {
     // Send media attachment first if provided
     if (mediaUrl) {
-      const mediaRes = await fetch(`${GRAPH_BASE}/me/messages`, {
+      const mediaRes = await fetch(`${IG_GRAPH_BASE}/me/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${pageAccessToken}`,
+        },
         body: JSON.stringify({
           recipient: { comment_id: commentId },
           message: {
@@ -219,7 +209,6 @@ export class FbCommentProcessorService {
               payload: { url: mediaUrl, is_reusable: true },
             },
           },
-          access_token: pageAccessToken,
         }),
       });
       if (!mediaRes.ok) {
@@ -228,22 +217,23 @@ export class FbCommentProcessorService {
         };
         const e = body.error;
         this.logger.error(
-          `private_reply media error — code=${e?.code} subcode=${e?.error_subcode} type=${e?.type} msg=${e?.message}`,
+          `IG private_reply media error — code=${e?.code} subcode=${e?.error_subcode} type=${e?.type} msg=${e?.message}`,
         );
         // Don't throw — fall through to send the text message anyway
       } else {
-        this.logger.log(`Private Messenger media attachment sent to comment ${commentId}`);
+        this.logger.log(`IG private DM media attachment sent to comment ${commentId}`);
       }
     }
 
-    // Send text message
-    const res = await fetch(`${GRAPH_BASE}/me/messages`, {
+    const res = await fetch(`${IG_GRAPH_BASE}/me/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${pageAccessToken}`,
+      },
       body: JSON.stringify({
         recipient: { comment_id: commentId },
         message: { text: message },
-        access_token: pageAccessToken,
       }),
     });
     if (!res.ok) {
@@ -252,20 +242,22 @@ export class FbCommentProcessorService {
       };
       const e = body.error;
       this.logger.error(
-        `private_reply error — code=${e?.code} subcode=${e?.error_subcode} type=${e?.type} msg=${e?.message}`,
+        `IG private_reply error — code=${e?.code} subcode=${e?.error_subcode} type=${e?.type} msg=${e?.message}`,
       );
       throw new Error(e?.message ?? `HTTP ${res.status}`);
     }
-    this.logger.log(`Private Messenger reply sent to comment ${commentId}`);
+    this.logger.log(`IG private DM reply sent to comment ${commentId}`);
   }
 
-  /** POST /{comment_id}/comments — posts a public reply to a comment thread. */
+  /**
+   * POST /{comment_id}/replies — posts a public reply to an Instagram comment.
+   */
   private async sendPublicReply(
     commentId: string,
     message: string,
     pageAccessToken: string,
   ): Promise<void> {
-    const res = await fetch(`${GRAPH_BASE}/${commentId}/comments`, {
+    const res = await fetch(`${IG_GRAPH_BASE}/${commentId}/replies`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, access_token: pageAccessToken }),
@@ -274,7 +266,7 @@ export class FbCommentProcessorService {
       const body = (await res.json().catch(() => ({}))) as { error?: { message: string } };
       throw new Error(body.error?.message ?? `HTTP ${res.status}`);
     }
-    this.logger.log(`Public reply posted to comment ${commentId}`);
+    this.logger.log(`IG public reply posted to comment ${commentId}`);
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -305,29 +297,29 @@ export class FbCommentProcessorService {
 
   private async logEvent(params: {
     workspaceId: string;
-    facebookPageId: string;
+    instagramAccountId: string;
     automationId: string | null;
     commentId: string;
     postId: string;
     commenterId: string;
-    commenterName?: string;
+    commenterUsername?: string;
     commentText: string;
     matchedKeyword?: string;
-    actionType?: FbCommentActionType;
+    actionType?: IgCommentActionType;
     privateReplySent?: boolean;
     publicReplySent?: boolean;
     error: string | null;
   }) {
     try {
-      await this.prisma.fbCommentEvent.create({
+      await this.prisma.igCommentEvent.create({
         data: {
           workspaceId: params.workspaceId,
-          facebookPageId: params.facebookPageId,
+          instagramAccountId: params.instagramAccountId,
           automationId: params.automationId ?? null,
           commentId: params.commentId,
           postId: params.postId,
           commenterId: params.commenterId,
-          commenterName: params.commenterName ?? null,
+          commenterUsername: params.commenterUsername ?? null,
           commentText: params.commentText,
           matchedKeyword: params.matchedKeyword ?? null,
           actionType: params.actionType ?? null,
@@ -337,8 +329,7 @@ export class FbCommentProcessorService {
         },
       });
     } catch (e) {
-      // Don't let logging failures crash the main flow
-      this.logger.error(`Failed to log comment event: ${String(e)}`);
+      this.logger.error(`Failed to log IG comment event: ${String(e)}`);
     }
   }
 }

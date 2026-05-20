@@ -490,12 +490,13 @@ export interface FbCommentAutomation {
   id: string;
   workspaceId: string;
   facebookPageId: string;
-  postId: string;
+  postId: string | null;
   postSnippet: string | null;
   name: string;
   isActive: boolean;
   actionType: FbCommentActionType;
   messageText: string;
+  dmText: string | null;
   buttonLabel: string | null;
   buttonUrl: string | null;
   mediaUrl: string | null;
@@ -528,6 +529,67 @@ export interface FbCommentEvent {
 }
 
 export interface FbPost {
+  postId: string;
+  message: string;
+  snippet: string;
+  createdTime: string | null;
+  permalinkUrl: string | null;
+  thumbnail: string | null;
+}
+
+// ─── Instagram Comment Automation ────────────────────────────────────────────
+
+export type IgCommentActionType = "PRIVATE_REPLY" | "PUBLIC_COMMENT" | "BOTH";
+
+export interface IgAutomationKeyword {
+  id: string;
+  automationId: string;
+  keyword: string;
+  matchType: "EXACT" | "CONTAINS";
+  createdAt: string;
+}
+
+export interface IgCommentAutomation {
+  id: string;
+  workspaceId: string;
+  instagramAccountId: string;
+  postId: string | null;
+  postSnippet: string | null;
+  name: string;
+  isActive: boolean;
+  actionType: IgCommentActionType;
+  messageText: string;
+  dmText: string | null;
+  mediaUrl: string | null;
+  aiEnabled: boolean;
+  aiSystemPrompt: string | null;
+  replyCount: number;
+  createdAt: string;
+  updatedAt: string;
+  igAccount: { id: string; igUserId: string; username: string | null; name: string };
+  keywords: IgAutomationKeyword[];
+  _count: { events: number };
+}
+
+export interface IgCommentEvent {
+  id: string;
+  workspaceId: string;
+  instagramAccountId: string;
+  automationId: string | null;
+  commentId: string;
+  postId: string;
+  commenterId: string;
+  commenterUsername: string | null;
+  commentText: string;
+  matchedKeyword: string | null;
+  actionType: IgCommentActionType | null;
+  privateReplySent: boolean;
+  publicReplySent: boolean;
+  error: string | null;
+  processedAt: string;
+}
+
+export interface IgPost {
   postId: string;
   message: string;
   snippet: string;

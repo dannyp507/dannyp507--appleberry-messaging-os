@@ -10,9 +10,9 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-type FbCommentActionType = 'PRIVATE_REPLY' | 'PUBLIC_COMMENT' | 'BOTH';
+type IgCommentActionType = 'PRIVATE_REPLY' | 'PUBLIC_COMMENT' | 'BOTH';
 
-export class KeywordDto {
+export class IgKeywordDto {
   @IsString()
   @IsNotEmpty()
   keyword!: string;
@@ -22,10 +22,10 @@ export class KeywordDto {
   matchType?: 'EXACT' | 'CONTAINS';
 }
 
-export class CreateFbAutomationDto {
+export class CreateIgAutomationDto {
   @IsString()
   @IsNotEmpty()
-  facebookPageId!: string;
+  instagramAccountId!: string;
 
   @IsString()
   @IsOptional()
@@ -41,7 +41,7 @@ export class CreateFbAutomationDto {
 
   @IsIn(['PRIVATE_REPLY', 'PUBLIC_COMMENT', 'BOTH'])
   @IsOptional()
-  actionType?: FbCommentActionType;
+  actionType?: IgCommentActionType;
 
   @IsString()
   @IsNotEmpty()
@@ -50,14 +50,6 @@ export class CreateFbAutomationDto {
   @IsString()
   @IsOptional()
   dmText?: string;
-
-  @IsString()
-  @IsOptional()
-  buttonLabel?: string;
-
-  @IsString()
-  @IsOptional()
-  buttonUrl?: string;
 
   @IsString()
   @IsOptional()
@@ -77,7 +69,7 @@ export class CreateFbAutomationDto {
 
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => KeywordDto)
+  @Type(() => IgKeywordDto)
   @ArrayMinSize(1)
-  keywords!: KeywordDto[];
+  keywords!: IgKeywordDto[];
 }

@@ -56,6 +56,7 @@ const automationNav = [
   { href: "/keyword-triggers",          label: "Keyword Triggers",     icon: Tag              },
   { href: "/autoresponder",             label: "Autoresponders",       icon: Bot              },
   { href: "/fb-comment-automations",    label: "FB Comments",          icon: MessageCircleMore },
+  { href: "/ig-comment-automations",    label: "IG Comments",          icon: Camera            },
 ] satisfies NavEntry[];
 
 const channelsNav = [

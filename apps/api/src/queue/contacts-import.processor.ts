@@ -96,28 +96,42 @@ export class ContactsImportProcessor extends WorkerHost {
         continue;
       }
 
-      const exists = await this.prisma.contact.findFirst({
+      const existing = await this.prisma.contact.findFirst({
         where: { workspaceId, phone: e164 },
       });
 
-      const isDuplicate = !!exists;
+      let contact: { id: string };
 
-      const contact = await this.prisma.contact.create({
-        data: {
-          workspaceId,
-          firstName: firstName || 'Unknown',
-          lastName: lastName || '',
-          phone: e164,
-          email: email || null,
-          isValid: true,
-          isDuplicate,
-        },
-      });
-
-      if (isDuplicate) {
+      if (existing) {
+        // Phone already in workspace — skip creation, still add to group below
         duplicates += 1;
+        contact = existing;
+      } else {
+        try {
+          contact = await this.prisma.contact.create({
+            data: {
+              workspaceId,
+              firstName: firstName || 'Unknown',
+              lastName: lastName || '',
+              phone: e164,
+              email: email || null,
+              isValid: true,
+              isDuplicate: false,
+            },
+          });
+          created += 1;
+        } catch (err: unknown) {
+          // P2002 = unique constraint — race condition between two concurrent imports
+          if ((err as { code?: string }).code === 'P2002') {
+            duplicates += 1;
+            const race = await this.prisma.contact.findFirst({ where: { workspaceId, phone: e164 } });
+            if (!race) continue;
+            contact = race;
+          } else {
+            throw err;
+          }
+        }
       }
-      created += 1;
 
       if (tagsRaw) {
         const tagNames = tagsRaw

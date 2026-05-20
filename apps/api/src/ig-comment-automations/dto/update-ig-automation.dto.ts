@@ -2,14 +2,16 @@ import {
   IsString,
   IsBoolean,
   IsOptional,
-  IsEnum,
+  IsIn,
   IsArray,
   ValidateNested,
   IsNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class UpdateKeywordDto {
+type IgCommentActionType = 'PRIVATE_REPLY' | 'PUBLIC_COMMENT' | 'BOTH';
+
+export class UpdateIgKeywordDto {
   @IsString()
   @IsNotEmpty()
   keyword!: string;
@@ -19,25 +21,22 @@ export class UpdateKeywordDto {
   matchType?: 'EXACT' | 'CONTAINS';
 }
 
-/** All fields optional — send only what you want to change.
- *  Providing `keywords` replaces the entire keyword list. */
-export class UpdateFbAutomationDto {
-  @IsString() @IsOptional() name?: string;
+export class UpdateIgAutomationDto {
+  @IsString() @IsOptional() instagramAccountId?: string;
   @IsString() @IsOptional() postId?: string;
   @IsString() @IsOptional() postSnippet?: string;
+  @IsString() @IsOptional() name?: string;
   @IsBoolean() @IsOptional() isActive?: boolean;
-  @IsString() @IsOptional() actionType?: string;
+  @IsIn(['PRIVATE_REPLY', 'PUBLIC_COMMENT', 'BOTH']) @IsOptional() actionType?: IgCommentActionType;
   @IsString() @IsOptional() messageText?: string;
   @IsString() @IsOptional() dmText?: string;
-  @IsString() @IsOptional() buttonLabel?: string;
-  @IsString() @IsOptional() buttonUrl?: string;
   @IsString() @IsOptional() mediaUrl?: string;
   @IsBoolean() @IsOptional() aiEnabled?: boolean;
   @IsString() @IsOptional() aiSystemPrompt?: string;
 
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => UpdateKeywordDto)
+  @Type(() => UpdateIgKeywordDto)
   @IsOptional()
-  keywords?: UpdateKeywordDto[];
+  keywords?: UpdateIgKeywordDto[];
 }

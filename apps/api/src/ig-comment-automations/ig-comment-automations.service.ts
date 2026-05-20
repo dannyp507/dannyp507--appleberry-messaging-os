@@ -1,24 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { FbCommentActionType } from '@prisma/client';
+import { IgCommentActionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreateFbAutomationDto } from './dto/create-fb-automation.dto';
-import type { UpdateFbAutomationDto } from './dto/update-fb-automation.dto';
+import type { CreateIgAutomationDto } from './dto/create-ig-automation.dto';
+import type { UpdateIgAutomationDto } from './dto/update-ig-automation.dto';
 
-const GRAPH_VERSION = 'v21.0';
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const IG_GRAPH_BASE = 'https://graph.instagram.com/v21.0';
 
 @Injectable()
-export class FbCommentAutomationsService {
+export class IgCommentAutomationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ── CRUD ────────────────────────────────────────────────────────────────────
 
   list(workspaceId: string) {
-    return this.prisma.fbCommentAutomation.findMany({
+    return this.prisma.igCommentAutomation.findMany({
       where: { workspaceId },
       orderBy: { createdAt: 'desc' },
       include: {
-        fbPage: { select: { id: true, pageId: true, name: true } },
+        igAccount: { select: { id: true, igUserId: true, username: true, name: true } },
         keywords: { orderBy: { createdAt: 'asc' } },
         _count: { select: { events: true } },
       },
@@ -26,10 +25,10 @@ export class FbCommentAutomationsService {
   }
 
   async findOne(workspaceId: string, id: string) {
-    const automation = await this.prisma.fbCommentAutomation.findFirst({
+    const automation = await this.prisma.igCommentAutomation.findFirst({
       where: { id, workspaceId },
       include: {
-        fbPage: { select: { id: true, pageId: true, name: true } },
+        igAccount: { select: { id: true, igUserId: true, username: true, name: true } },
         keywords: { orderBy: { createdAt: 'asc' } },
         _count: { select: { events: true } },
       },
@@ -38,26 +37,24 @@ export class FbCommentAutomationsService {
     return automation;
   }
 
-  async create(workspaceId: string, dto: CreateFbAutomationDto) {
-    // Verify the page belongs to this workspace
-    const page = await this.prisma.facebookPage.findFirst({
-      where: { id: dto.facebookPageId, workspaceId },
+  async create(workspaceId: string, dto: CreateIgAutomationDto) {
+    // Verify the account belongs to this workspace
+    const account = await this.prisma.instagramAccount.findFirst({
+      where: { id: dto.instagramAccountId, workspaceId },
     });
-    if (!page) throw new NotFoundException('Facebook page not found');
+    if (!account) throw new NotFoundException('Instagram account not found');
 
-    return this.prisma.fbCommentAutomation.create({
+    return this.prisma.igCommentAutomation.create({
       data: {
         workspaceId,
-        facebookPageId: dto.facebookPageId,
+        instagramAccountId: dto.instagramAccountId,
         postId: dto.postId,
         postSnippet: dto.postSnippet ?? null,
         name: dto.name,
         isActive: dto.isActive ?? true,
-        actionType: (dto.actionType ?? 'PRIVATE_REPLY') as FbCommentActionType,
+        actionType: (dto.actionType ?? 'PRIVATE_REPLY') as IgCommentActionType,
         messageText: dto.messageText,
         dmText: dto.dmText ?? null,
-        buttonLabel: dto.buttonLabel ?? null,
-        buttonUrl: dto.buttonUrl ?? null,
         mediaUrl: dto.mediaUrl ?? null,
         aiEnabled: dto.aiEnabled ?? false,
         aiSystemPrompt: dto.aiSystemPrompt ?? null,
@@ -70,35 +67,33 @@ export class FbCommentAutomationsService {
       },
       include: {
         keywords: true,
-        fbPage: { select: { id: true, pageId: true, name: true } },
+        igAccount: { select: { id: true, igUserId: true, username: true, name: true } },
       },
     });
   }
 
-  async update(workspaceId: string, id: string, dto: UpdateFbAutomationDto) {
-    const existing = await this.prisma.fbCommentAutomation.findFirst({
+  async update(workspaceId: string, id: string, dto: UpdateIgAutomationDto) {
+    const existing = await this.prisma.igCommentAutomation.findFirst({
       where: { id, workspaceId },
     });
     if (!existing) throw new NotFoundException('Automation not found');
 
     // Replace keywords if provided — delete all existing and re-insert
     if (dto.keywords !== undefined) {
-      await this.prisma.fbAutomationKeyword.deleteMany({ where: { automationId: id } });
+      await this.prisma.igAutomationKeyword.deleteMany({ where: { automationId: id } });
     }
 
-    return this.prisma.fbCommentAutomation.update({
+    return this.prisma.igCommentAutomation.update({
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.postId !== undefined && { postId: dto.postId }),
         ...(dto.postSnippet !== undefined && { postSnippet: dto.postSnippet }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-        ...(dto.actionType !== undefined && { actionType: dto.actionType as FbCommentActionType }),
+        ...(dto.actionType !== undefined && { actionType: dto.actionType as IgCommentActionType }),
         ...(dto.messageText !== undefined && { messageText: dto.messageText }),
         ...(dto.dmText !== undefined && { dmText: dto.dmText || null }),
-        ...(dto.buttonLabel !== undefined && { buttonLabel: dto.buttonLabel }),
-        ...(dto.buttonUrl !== undefined && { buttonUrl: dto.buttonUrl }),
-        ...(dto.mediaUrl !== undefined && { mediaUrl: dto.mediaUrl }),
+        ...(dto.mediaUrl !== undefined && { mediaUrl: dto.mediaUrl || null }),
         ...(dto.aiEnabled !== undefined && { aiEnabled: dto.aiEnabled }),
         ...(dto.aiSystemPrompt !== undefined && { aiSystemPrompt: dto.aiSystemPrompt }),
         ...(dto.keywords !== undefined && {
@@ -112,26 +107,26 @@ export class FbCommentAutomationsService {
       },
       include: {
         keywords: true,
-        fbPage: { select: { id: true, pageId: true, name: true } },
+        igAccount: { select: { id: true, igUserId: true, username: true, name: true } },
       },
     });
   }
 
   async remove(workspaceId: string, id: string) {
-    const existing = await this.prisma.fbCommentAutomation.findFirst({
+    const existing = await this.prisma.igCommentAutomation.findFirst({
       where: { id, workspaceId },
     });
     if (!existing) throw new NotFoundException('Automation not found');
-    await this.prisma.fbCommentAutomation.delete({ where: { id } });
+    await this.prisma.igCommentAutomation.delete({ where: { id } });
     return { deleted: true };
   }
 
   async toggle(workspaceId: string, id: string) {
-    const existing = await this.prisma.fbCommentAutomation.findFirst({
+    const existing = await this.prisma.igCommentAutomation.findFirst({
       where: { id, workspaceId },
     });
     if (!existing) throw new NotFoundException('Automation not found');
-    return this.prisma.fbCommentAutomation.update({
+    return this.prisma.igCommentAutomation.update({
       where: { id },
       data: { isActive: !existing.isActive },
       select: { id: true, isActive: true },
@@ -146,7 +141,7 @@ export class FbCommentAutomationsService {
     skip = 0,
     take = 50,
   ) {
-    return this.prisma.fbCommentEvent.findMany({
+    return this.prisma.igCommentEvent.findMany({
       where: { workspaceId, automationId },
       orderBy: { processedAt: 'desc' },
       skip,
@@ -154,45 +149,43 @@ export class FbCommentAutomationsService {
     });
   }
 
-  // ── Facebook Posts ────────────────────────────────────────────────────────────
+  // ── Instagram Media ────────────────────────────────────────────────────────────
 
-  /** Fetch recent posts for a connected Facebook Page via Graph API.
-   *  Only returns posts that belong to this workspace. */
-  async listPosts(workspaceId: string, pageDbId: string) {
-    const page = await this.prisma.facebookPage.findFirst({
-      where: { id: pageDbId, workspaceId },
+  /** Fetch recent media for a connected Instagram account via Instagram Graph API. */
+  async listPosts(workspaceId: string, accountDbId: string) {
+    const account = await this.prisma.instagramAccount.findFirst({
+      where: { id: accountDbId, workspaceId },
     });
-    if (!page) throw new NotFoundException('Facebook page not found');
+    if (!account) throw new NotFoundException('Instagram account not found');
 
     const url =
-      `${GRAPH_BASE}/${page.pageId}/posts` +
-      `?fields=id,message,story,created_time,permalink_url,full_picture` +
-      `&limit=30&access_token=${page.pageAccessToken}`;
+      `${IG_GRAPH_BASE}/me/media` +
+      `?fields=id,caption,media_type,timestamp,permalink` +
+      `&limit=20&access_token=${account.pageAccessToken}`;
 
     const res = await fetch(url);
     const json = (await res.json()) as {
       data?: Array<{
         id: string;
-        message?: string;
-        story?: string;
-        created_time?: string;
-        permalink_url?: string;
-        full_picture?: string;
+        caption?: string;
+        media_type?: string;
+        timestamp?: string;
+        permalink?: string;
       }>;
       error?: { message: string };
     };
 
     if (json.error) {
-      throw new Error(`Facebook Graph API error: ${json.error.message}`);
+      throw new Error(`Instagram Graph API error: ${json.error.message}`);
     }
 
     return (json.data ?? []).map((p) => ({
       postId: p.id,
-      message: p.message ?? p.story ?? '(no text)',
-      snippet: (p.message ?? p.story ?? '').slice(0, 120),
-      createdTime: p.created_time ?? null,
-      permalinkUrl: p.permalink_url ?? null,
-      thumbnail: p.full_picture ?? null,
+      message: p.caption ?? '(no caption)',
+      snippet: (p.caption ?? '').slice(0, 120),
+      createdTime: p.timestamp ?? null,
+      permalinkUrl: p.permalink ?? null,
+      thumbnail: null, // IG Basic Display API doesn't return thumbnails in this endpoint
     }));
   }
 }

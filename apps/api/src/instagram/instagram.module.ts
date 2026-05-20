@@ -3,13 +3,14 @@ import { CommonModule } from '../common/common.module';
 import { RedisModule } from '../redis/redis.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { AiModule } from '../ai/ai.module';
+import { IgCommentAutomationsModule } from '../ig-comment-automations/ig-comment-automations.module';
 import { InstagramAccountsController } from './instagram-accounts.controller';
 import { InstagramWebhookController } from './instagram-webhook.controller';
 import { InstagramAccountsService } from './instagram-accounts.service';
 import { InstagramInboundService } from './instagram-inbound.service';
 
 @Module({
-  imports: [CommonModule, RedisModule, MessagingModule, AiModule],
+  imports: [CommonModule, RedisModule, MessagingModule, AiModule, IgCommentAutomationsModule],
   controllers: [InstagramAccountsController, InstagramWebhookController],
   providers: [InstagramAccountsService, InstagramInboundService],
   exports: [InstagramAccountsService, InstagramInboundService],

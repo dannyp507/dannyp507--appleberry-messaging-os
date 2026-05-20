@@ -418,7 +418,7 @@ export class InstagramAccountsService {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        subscribed_fields: 'messages',
+        subscribed_fields: 'messages,comments',
         access_token: pageAccessToken,
       }).toString(),
     });

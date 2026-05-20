@@ -332,6 +332,8 @@ model Workspace {
   subscribeForms          SubscribeForm[]
   fbCommentAutomations    FbCommentAutomation[]
   fbCommentEvents         FbCommentEvent[]
+  igCommentAutomations    IgCommentAutomation[]
+  igCommentEvents         IgCommentEvent[]
   workspaceBrandSettings  WorkspaceBrandSettings?
   workspaceMedia          WorkspaceMedia[]
 
@@ -663,10 +665,12 @@ model InstagramAccount {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  workspace          Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  inboxThreads       InboxThread[]
-  autoresponderRules AutoresponderRule[]
-  aiSettings         InstagramAccountAiSettings?
+  workspace              Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inboxThreads           InboxThread[]
+  autoresponderRules     AutoresponderRule[]
+  aiSettings             InstagramAccountAiSettings?
+  igCommentAutomations   IgCommentAutomation[]
+  igCommentEvents        IgCommentEvent[]
 
   @@unique([workspaceId, igUserId])
   @@index([workspaceId])
@@ -1546,14 +1550,16 @@ model FbCommentAutomation {
   workspaceId    String              @db.Uuid
   facebookPageId String              @db.Uuid
   /// Facebook post ID (format: {pageId}_{postId} or video ID)
-  postId         String
+  postId         String?
   /// Short preview of the post shown in the UI
   postSnippet    String?
   name           String
   isActive       Boolean             @default(true)
   actionType     FbCommentActionType @default(PRIVATE_REPLY)
-  /// Message body sent as private DM or public reply
+  /// Public comment reply text (also used as DM text for PRIVATE_REPLY when dmText is not set)
   messageText    String              @db.Text
+  /// Private DM text — used instead of messageText when actionType is BOTH
+  dmText         String?             @db.Text
   /// Optional CTA button appended to the message (Messenger templates)
   buttonLabel    String?
   buttonUrl      String?
@@ -1615,6 +1621,81 @@ model FbCommentEvent {
 
   @@index([workspaceId, processedAt])
   @@index([facebookPageId])
+  @@index([automationId])
+}
+
+// ─── Instagram Comment Automation ────────────────────────────────────────────
+
+enum IgCommentActionType {
+  PRIVATE_REPLY
+  PUBLIC_COMMENT
+  BOTH
+}
+
+/// One automation = one Instagram post + keyword rules + one action config.
+model IgCommentAutomation {
+  id                 String              @id @default(uuid())
+  workspaceId        String
+  instagramAccountId String
+  postId             String?
+  postSnippet        String?
+  name               String
+  isActive           Boolean             @default(true)
+  actionType         IgCommentActionType @default(PRIVATE_REPLY)
+  messageText        String              @db.Text
+  dmText             String?             @db.Text
+  mediaUrl           String?
+  aiEnabled          Boolean             @default(false)
+  aiSystemPrompt     String?             @db.Text
+  replyCount         Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  igAccount  InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  keywords   IgAutomationKeyword[]
+  events     IgCommentEvent[]
+
+  @@index([workspaceId])
+  @@index([instagramAccountId])
+  @@index([workspaceId, isActive])
+}
+
+model IgAutomationKeyword {
+  id           String   @id @default(uuid())
+  automationId String
+  keyword      String
+  matchType    String   @default("CONTAINS")
+  createdAt    DateTime @default(now())
+
+  automation IgCommentAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+}
+
+model IgCommentEvent {
+  id                 String               @id @default(uuid())
+  workspaceId        String
+  instagramAccountId String
+  automationId       String?
+  commentId          String               @unique
+  postId             String
+  commenterId        String
+  commenterUsername  String?
+  commentText        String               @db.Text
+  matchedKeyword     String?
+  actionType         IgCommentActionType?
+  privateReplySent   Boolean              @default(false)
+  publicReplySent    Boolean              @default(false)
+  error              String?              @db.Text
+  processedAt        DateTime             @default(now())
+
+  workspace  Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  igAccount  InstagramAccount     @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  automation IgCommentAutomation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, processedAt])
+  @@index([instagramAccountId])
   @@index([automationId])
 }
 
