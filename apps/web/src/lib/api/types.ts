@@ -151,6 +151,27 @@ export interface FacebookPage {
   _count?: { inboxThreads: number };
 }
 
+export interface WhatsAppAccountAiSettings {
+  aiProvider: string | null;
+  openaiApiKey: string | null;
+  openaiModel: string | null;
+  geminiApiKey: string | null;
+  geminiModel: string | null;
+  systemPrompt: string | null;
+  openaiKeySet: boolean;
+  geminiKeySet: boolean;
+  dmAiEnabled: boolean;
+  dmAiFallbackOnly: boolean;
+  dmWelcomeEnabled: boolean;
+  dmWelcomeText: string | null;
+  dmDefaultReply: string | null;
+  dmTypingEnabled: boolean;
+  aiOffKeyword: string | null;
+  aiOffReply: string | null;
+  aiOnKeyword: string | null;
+  aiOnReply: string | null;
+}
+
 export interface FacebookPageAiSettings {
   aiProvider: string | null;
   openaiApiKey: string | null;

@@ -8,11 +8,15 @@ import { WorkspaceContextGuard } from '../common/guards/workspace-context.guard'
 import type { Workspace } from '@prisma/client';
 import { CreateWhatsAppAccountDto } from './dto/create-whatsapp-account.dto';
 import { WhatsappAccountsService } from './whatsapp-accounts.service';
+import { WorkspaceAiSettingsService } from '../workspace-ai-settings/workspace-ai-settings.service';
 
 @Controller('whatsapp/accounts')
 @UseGuards(WorkspaceContextGuard)
 export class WhatsappAccountsController {
-  constructor(private readonly accounts: WhatsappAccountsService) {}
+  constructor(
+    private readonly accounts: WhatsappAccountsService,
+    private readonly aiSettings: WorkspaceAiSettingsService,
+  ) {}
 
   @Get()
   list(@CurrentWorkspace() workspace: Workspace) {
@@ -159,5 +163,23 @@ export class WhatsappAccountsController {
     },
   ) {
     return this.accounts.embeddedSignup(workspace.id, { ...body, accountId: id });
+  }
+
+  // ── Per-account AI settings ─────────────────────────────────────────────────
+
+  @Get(':id/ai-settings')
+  getAiSettings(@Param('id', ParseUUIDPipe) id: string) {
+    return this.aiSettings.getWhatsAppAccount(id);
+  }
+
+  @Post(':id/ai-settings')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  upsertAiSettings(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: Record<string, unknown>,
+  ) {
+    return this.aiSettings.upsertWhatsAppAccount(id, dto);
   }
 }

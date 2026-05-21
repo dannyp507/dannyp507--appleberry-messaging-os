@@ -541,8 +541,47 @@ model WhatsAppAccount {
   contactSubscriptions  ContactSubscription[]
   dripEnrollments       DripEnrollment[]
   subscribeForms        SubscribeForm[]
+  aiSettings            WhatsAppAccountAiSettings?
 
   @@index([workspaceId])
+}
+
+model WhatsAppAccountAiSettings {
+  id                  String   @id @default(uuid()) @db.Uuid
+  whatsappAccountId   String   @unique @db.Uuid
+  /// Which provider to use for this account (overrides workspace default when set)
+  aiProvider          String?
+  /// OpenAI API key scoped to this account
+  openaiApiKey        String?  @db.Text
+  openaiModel         String?
+  /// Google Gemini API key scoped to this account
+  geminiApiKey        String?  @db.Text
+  geminiModel         String?
+  /// Tone/voice prompt for this account's AI
+  systemPrompt        String?  @db.Text
+
+  // ── DM Bot settings ────────────────────────────────────────────────────────
+  /// Enable AI replies for inbound WhatsApp messages
+  dmAiEnabled         Boolean  @default(false)
+  /// When true: AI only fires if no keyword/autoresponder rule matched
+  dmAiFallbackOnly    Boolean  @default(true)
+  /// Greeting sent automatically when a contact messages for the first time
+  dmWelcomeEnabled    Boolean  @default(false)
+  dmWelcomeText       String?  @db.Text
+  /// Static fallback reply when AI is off and no rule matched
+  dmDefaultReply      String?  @db.Text
+  /// Show typing indicator before bot reply (not available on Cloud API)
+  dmTypingEnabled     Boolean  @default(false)
+
+  // ── Human Takeover keywords ──────────────────────────────────────────────
+  aiOffKeyword        String?  @db.Text
+  aiOffReply          String?  @db.Text
+  aiOnKeyword         String?  @db.Text
+  aiOnReply           String?  @db.Text
+
+  updatedAt           DateTime @default(now()) @updatedAt
+
+  whatsappAccount     WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
 }
 
 model WhatsAppSession {

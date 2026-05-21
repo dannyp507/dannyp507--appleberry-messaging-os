@@ -18,6 +18,7 @@ import { SequencesService } from '../sequences/sequences.service';
 import type { IncomingMessageJob } from '../queue/queue.constants';
 import { normalizePhoneE164 } from '../contacts/phone.util';
 import { OptOutService } from '../opt-out/opt-out.service';
+import { WorkspaceAiSettingsService } from '../workspace-ai-settings/workspace-ai-settings.service';
 
 @Injectable()
 export class IncomingMessageService {
@@ -32,6 +33,7 @@ export class IncomingMessageService {
     private readonly subscribers: SubscribersService,
     private readonly sequences: SequencesService,
     private readonly optOut: OptOutService,
+    private readonly aiSettings: WorkspaceAiSettingsService,
   ) {}
 
   /** Replace Planify X / common template variables in a response string */
@@ -143,6 +145,71 @@ export class IncomingMessageService {
     if (optHandled) return;
 
     // ─────────────────────────────────────────────────────────────────────────
+    // STEP 0.5: Per-account DM bot settings (human takeover + welcome message)
+    // ─────────────────────────────────────────────────────────────────────────
+    const dmSettings = await this.aiSettings.getWhatsAppAccountRaw(account.id);
+    const msgLower = job.text.trim().toLowerCase();
+
+    // Human takeover — AI OFF keyword
+    if (dmSettings?.aiOffKeyword?.trim() && msgLower === dmSettings.aiOffKeyword.trim().toLowerCase()) {
+      await this.prisma.inboxThread.update({ where: { id: thread.id }, data: { aiPaused: true } });
+      if (dmSettings.aiOffReply?.trim()) {
+        await this.messages.enqueueOutboundText({
+          workspaceId,
+          whatsappAccountId: account.id,
+          to: replyTo,
+          message: dmSettings.aiOffReply,
+          contactId: contact.id,
+          inboxThreadId: thread.id,
+        });
+      }
+      this.logger.log(`AI paused (human takeover) for WA thread=${thread.id}`);
+      return;
+    }
+
+    // Human takeover — AI ON keyword
+    if (dmSettings?.aiOnKeyword?.trim() && msgLower === dmSettings.aiOnKeyword.trim().toLowerCase()) {
+      await this.prisma.inboxThread.update({ where: { id: thread.id }, data: { aiPaused: false } });
+      if (dmSettings.aiOnReply?.trim()) {
+        await this.messages.enqueueOutboundText({
+          workspaceId,
+          whatsappAccountId: account.id,
+          to: replyTo,
+          message: dmSettings.aiOnReply,
+          contactId: contact.id,
+          inboxThreadId: thread.id,
+        });
+      }
+      this.logger.log(`AI resumed for WA thread=${thread.id}`);
+      return;
+    }
+
+    // If a human agent has taken over, skip all bot automation
+    const freshThread = await this.prisma.inboxThread.findUnique({ where: { id: thread.id }, select: { aiPaused: true } });
+    if (freshThread?.aiPaused) {
+      this.logger.log(`AI paused — skipping WA automation for thread=${thread.id}`);
+      return;
+    }
+
+    // Welcome message — fires only on the very first inbound message from this contact.
+    // The message was just persisted above so count == 1 means it's the first.
+    const inboundCount = await this.prisma.inboxMessage.count({
+      where: { threadId: thread.id, direction: InboxMessageDirection.INBOUND },
+    });
+    if (inboundCount <= 1 && dmSettings?.dmWelcomeEnabled && dmSettings.dmWelcomeText?.trim()) {
+      await this.messages.enqueueOutboundText({
+        workspaceId,
+        whatsappAccountId: account.id,
+        to: replyTo,
+        message: dmSettings.dmWelcomeText,
+        contactId: contact.id,
+        inboxThreadId: thread.id,
+      });
+      this.logger.log(`Welcome message sent to WA thread=${thread.id}`);
+      // Continue processing — welcome is sent in addition to the normal reply
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Autoresponder rules (chatbot items) — checked FIRST so that
     // keyword triggers (e.g. "1", "2", menu options) always fire regardless of
     // whether the contact is currently inside a chatbot flow.  If a rule
@@ -193,7 +260,7 @@ export class IncomingMessageService {
           select: { direction: true, message: true },
         });
         const aiReply = await this.ai.generateReply(
-          { workspaceId, contactId: contact.id, threadId: thread.id, recentMessages: recentMessages.reverse() },
+          { workspaceId, contactId: contact.id, threadId: thread.id, recentMessages: recentMessages.reverse(), whatsappAccountId: account.id },
           job.text,
           r.response?.trim() || undefined,
         );
@@ -365,7 +432,7 @@ export class IncomingMessageService {
       if (defaultRule.useAi) {
         // Use the default rule's system prompt for AI generation
         const aiReply = await this.ai.generateReply(
-          { workspaceId, contactId: contact.id, threadId: thread.id, recentMessages: recent.reverse() },
+          { workspaceId, contactId: contact.id, threadId: thread.id, recentMessages: recent.reverse(), whatsappAccountId: account.id },
           job.text,
           defaultRule.response?.trim() || undefined,
         );
@@ -412,12 +479,19 @@ export class IncomingMessageService {
     }
 
     // ── No default rule configured → bare AI fallback (no custom system prompt) ──
+    // Only fire if per-account settings allow AI (or if no settings row exists = workspace fallback)
+    if (dmSettings && !dmSettings.dmAiEnabled) {
+      this.logger.debug(`AI disabled for WA account ${account.id} — skipping bare AI fallback`);
+      return;
+    }
+
     const reply = await this.ai.generateReply(
       {
         workspaceId,
         contactId: contact.id,
         threadId: thread.id,
         recentMessages: recent.reverse(),
+        whatsappAccountId: account.id,
       },
       job.text,
     );

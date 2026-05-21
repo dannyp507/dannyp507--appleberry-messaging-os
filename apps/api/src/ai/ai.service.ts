@@ -11,6 +11,8 @@ export type AiReplyContext = {
   facebookPageId?: string;
   /** When set, Instagram account AI settings are checked first (key + system prompt) */
   instagramAccountId?: string;
+  /** When set, WhatsApp account AI settings are checked first (key + system prompt) */
+  whatsappAccountId?: string;
 };
 
 @Injectable()
@@ -45,9 +47,11 @@ export class AiService {
       pageSettings = await this.aiSettings.getPageRaw(context.facebookPageId);
     } else if (context.instagramAccountId) {
       pageSettings = await this.aiSettings.getIgAccountRaw(context.instagramAccountId);
+    } else if (context.whatsappAccountId) {
+      pageSettings = await this.aiSettings.getWhatsAppAccountRaw(context.whatsappAccountId);
     }
 
-    const isChannelScoped = !!(context.facebookPageId || context.instagramAccountId);
+    const isChannelScoped = !!(context.facebookPageId || context.instagramAccountId || context.whatsappAccountId);
 
     // Provider: channel → workspace → default
     const provider =

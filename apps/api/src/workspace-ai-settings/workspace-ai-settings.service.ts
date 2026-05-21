@@ -115,4 +115,109 @@ export class WorkspaceAiSettingsService {
       where: { instagramAccountId },
     });
   }
+
+  /** Internal use only — returns raw (unmasked) WhatsApp account AI settings */
+  async getWhatsAppAccountRaw(whatsappAccountId: string) {
+    return this.prisma.whatsAppAccountAiSettings.findUnique({
+      where: { whatsappAccountId },
+    });
+  }
+
+  /** Public — returns masked WhatsApp account AI settings */
+  async getWhatsAppAccount(whatsappAccountId: string) {
+    const row = await this.prisma.whatsAppAccountAiSettings.findUnique({
+      where: { whatsappAccountId },
+    });
+    if (!row) {
+      return {
+        aiProvider: null, systemPrompt: null,
+        openaiApiKey: null, openaiModel: null, openaiKeySet: false,
+        geminiApiKey: null, geminiModel: null, geminiKeySet: false,
+        dmAiEnabled: false, dmAiFallbackOnly: true,
+        dmWelcomeEnabled: false, dmWelcomeText: null,
+        dmDefaultReply: null, dmTypingEnabled: false,
+        aiOffKeyword: null, aiOffReply: null,
+        aiOnKeyword: null, aiOnReply: null,
+      };
+    }
+    return {
+      aiProvider: row.aiProvider,
+      systemPrompt: row.systemPrompt,
+      openaiApiKey: maskKey(row.openaiApiKey),
+      openaiModel: row.openaiModel,
+      openaiKeySet: !!row.openaiApiKey,
+      geminiApiKey: maskKey(row.geminiApiKey),
+      geminiModel: row.geminiModel,
+      geminiKeySet: !!row.geminiApiKey,
+      dmAiEnabled: row.dmAiEnabled,
+      dmAiFallbackOnly: row.dmAiFallbackOnly,
+      dmWelcomeEnabled: row.dmWelcomeEnabled,
+      dmWelcomeText: row.dmWelcomeText,
+      dmDefaultReply: row.dmDefaultReply,
+      dmTypingEnabled: row.dmTypingEnabled,
+      aiOffKeyword: row.aiOffKeyword,
+      aiOffReply: row.aiOffReply,
+      aiOnKeyword: row.aiOnKeyword,
+      aiOnReply: row.aiOnReply,
+    };
+  }
+
+  /** Public — upserts WhatsApp account AI settings */
+  async upsertWhatsAppAccount(whatsappAccountId: string, dto: Record<string, unknown>) {
+    const existing = await this.prisma.whatsAppAccountAiSettings.findUnique({
+      where: { whatsappAccountId },
+    });
+    const openaiApiKey =
+      dto['openaiApiKey'] !== undefined && dto['openaiApiKey'] !== MASKED
+        ? (dto['openaiApiKey'] as string) || null
+        : existing?.openaiApiKey ?? null;
+    const geminiApiKey =
+      dto['geminiApiKey'] !== undefined && dto['geminiApiKey'] !== MASKED
+        ? (dto['geminiApiKey'] as string) || null
+        : existing?.geminiApiKey ?? null;
+
+    const row = await this.prisma.whatsAppAccountAiSettings.upsert({
+      where: { whatsappAccountId },
+      create: {
+        whatsappAccountId,
+        aiProvider: (dto['aiProvider'] as string) ?? null,
+        systemPrompt: (dto['systemPrompt'] as string) ?? null,
+        openaiApiKey,
+        openaiModel: (dto['openaiModel'] as string) ?? null,
+        geminiApiKey,
+        geminiModel: (dto['geminiModel'] as string) ?? null,
+        dmAiEnabled: (dto['dmAiEnabled'] as boolean) ?? false,
+        dmAiFallbackOnly: (dto['dmAiFallbackOnly'] as boolean) ?? true,
+        dmWelcomeEnabled: (dto['dmWelcomeEnabled'] as boolean) ?? false,
+        dmWelcomeText: (dto['dmWelcomeText'] as string) ?? null,
+        dmDefaultReply: (dto['dmDefaultReply'] as string) ?? null,
+        dmTypingEnabled: (dto['dmTypingEnabled'] as boolean) ?? false,
+        aiOffKeyword: (dto['aiOffKeyword'] as string) ?? null,
+        aiOffReply: (dto['aiOffReply'] as string) ?? null,
+        aiOnKeyword: (dto['aiOnKeyword'] as string) ?? null,
+        aiOnReply: (dto['aiOnReply'] as string) ?? null,
+      },
+      update: {
+        ...(dto['aiProvider'] !== undefined && { aiProvider: dto['aiProvider'] as string }),
+        ...(dto['systemPrompt'] !== undefined && { systemPrompt: dto['systemPrompt'] as string }),
+        openaiApiKey,
+        ...(dto['openaiModel'] !== undefined && { openaiModel: dto['openaiModel'] as string }),
+        geminiApiKey,
+        ...(dto['geminiModel'] !== undefined && { geminiModel: dto['geminiModel'] as string }),
+        ...(dto['dmAiEnabled'] !== undefined && { dmAiEnabled: dto['dmAiEnabled'] as boolean }),
+        ...(dto['dmAiFallbackOnly'] !== undefined && { dmAiFallbackOnly: dto['dmAiFallbackOnly'] as boolean }),
+        ...(dto['dmWelcomeEnabled'] !== undefined && { dmWelcomeEnabled: dto['dmWelcomeEnabled'] as boolean }),
+        ...(dto['dmWelcomeText'] !== undefined && { dmWelcomeText: dto['dmWelcomeText'] as string }),
+        ...(dto['dmDefaultReply'] !== undefined && { dmDefaultReply: dto['dmDefaultReply'] as string }),
+        ...(dto['dmTypingEnabled'] !== undefined && { dmTypingEnabled: dto['dmTypingEnabled'] as boolean }),
+        ...(dto['aiOffKeyword'] !== undefined && { aiOffKeyword: dto['aiOffKeyword'] as string }),
+        ...(dto['aiOffReply'] !== undefined && { aiOffReply: dto['aiOffReply'] as string }),
+        ...(dto['aiOnKeyword'] !== undefined && { aiOnKeyword: dto['aiOnKeyword'] as string }),
+        ...(dto['aiOnReply'] !== undefined && { aiOnReply: dto['aiOnReply'] as string }),
+        updatedAt: new Date(),
+      },
+    });
+
+    return this.getWhatsAppAccount(row.whatsappAccountId);
+  }
 }

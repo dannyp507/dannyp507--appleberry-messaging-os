@@ -28,6 +28,8 @@ export const qk = {
   fbCommentAutomation: (id: string) => ["fb-comment-automation", id] as const,
   fbCommentEvents: (automationId: string) => ["fb-comment-events", automationId] as const,
   fbPagePosts: (pageId: string) => ["fb-page-posts", pageId] as const,
+  // WhatsApp account AI settings
+  waAccountAiSettings: (id: string) => ["wa-account-ai-settings", id] as const,
   // Facebook Page AI settings
   fbPageAiSettings: (id: string) => ["fb-page-ai-settings", id] as const,
   // Facebook Page chatbot flows

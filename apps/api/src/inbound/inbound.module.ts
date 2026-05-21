@@ -6,6 +6,7 @@ import { MessagingModule } from '../messaging/messaging.module';
 import { MessagesModule } from '../messages/messages.module';
 import { OptOutModule } from '../opt-out/opt-out.module';
 import { QueueModule } from '../queue/queue.module';
+import { WorkspaceAiSettingsModule } from '../workspace-ai-settings/workspace-ai-settings.module';
 import { SequencesModule } from '../sequences/sequences.module';
 import { SubscribersModule } from '../subscribers/subscribers.module';
 import { IncomingMessageService } from './incoming-message.service';
@@ -19,6 +20,7 @@ import { WebhooksController } from './webhooks.controller';
     MessagingModule,
     MessagesModule,
     OptOutModule,
+    WorkspaceAiSettingsModule,
     SequencesModule,
     SubscribersModule,
     forwardRef(() => ChatbotModule),
