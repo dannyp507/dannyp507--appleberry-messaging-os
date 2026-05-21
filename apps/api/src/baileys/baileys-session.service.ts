@@ -112,6 +112,10 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
       printQRInTerminal: false,
       syncFullHistory: false,
       agent,
+      // Send WebSocket pings every 30s to prevent idle-timeout disconnections
+      keepAliveIntervalMs: 30_000,
+      // Increase connect timeout to handle slow proxy handshakes
+      connectTimeoutMs: 60_000,
     });
 
     const entry: SessionEntry = {
@@ -215,10 +219,12 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
 
       if (connection === 'close') {
         const reason = (lastDisconnect?.error as Boom)?.output?.statusCode;
+        const reasonName = Object.entries(DisconnectReason).find(([, v]) => v === reason)?.[0] ?? 'unknown';
         const loggedOut = reason === DisconnectReason.loggedOut;
         // Only reconnect if we were previously connected (have session data)
         const hasSessionData = fs.existsSync(path.join(sessionDir, 'creds.json'));
         const shouldReconnect = !loggedOut && hasSessionData;
+        this.logger.warn(`Account ${accountId} disconnected — reason: ${reasonName} (${reason ?? 'no code'})`);
 
         entry.status = 'DISCONNECTED';
         await this.prisma.whatsAppSession.updateMany({
