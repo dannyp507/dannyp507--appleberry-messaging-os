@@ -23,6 +23,7 @@ import type { LucideIcon } from "lucide-react";
 import { AppleberryIcon } from "@/components/ui/appleberry-icon";
 import {
   AlertCircle,
+  ArrowLeft,
   Camera,
   CheckCheck,
   Loader2,
@@ -165,7 +166,7 @@ function ThreadItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative w-full rounded-xl px-3 py-3 text-left transition-all duration-150",
+        "group relative w-full rounded-xl px-3 py-3.5 text-left transition-all duration-150 active:scale-[0.99]",
         active
           ? "bg-[#EEF2FF] ring-1 ring-[#C7D2FE]"
           : unread
@@ -178,12 +179,12 @@ function ThreadItem({
         <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-[#6366F1] to-[#EC4899]" />
       )}
 
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-3">
         {/* Avatar */}
         <div className="relative mt-0.5 shrink-0">
           <div
             className={cn(
-              "flex size-9 items-center justify-center rounded-full text-[11px] font-bold tracking-wide",
+              "flex size-10 items-center justify-center rounded-full text-[12px] font-bold tracking-wide",
               active
                 ? "bg-[#EEF2FF] text-[#4338CA] ring-1 ring-[#C7D2FE]"
                 : unread
@@ -195,16 +196,12 @@ function ThreadItem({
           </div>
           {/* Channel icon badge */}
           {meta && (
-            <span
-              className={cn(
-                "absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-white ring-1 ring-[#E5E7EB]",
-              )}
-            >
-              <meta.icon className={cn("size-2", meta.color)} strokeWidth={2.5} />
+            <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-white ring-1 ring-[#E5E7EB]">
+              <meta.icon className={cn("size-2.5", meta.color)} strokeWidth={2.5} />
             </span>
           )}
           {unread && !active && (
-            <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#6366F1] ring-1 ring-white" />
+            <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-[#6366F1] ring-1 ring-white" />
           )}
         </div>
 
@@ -213,14 +210,14 @@ function ThreadItem({
           <div className="flex items-baseline justify-between gap-1">
             <span
               className={cn(
-                "truncate text-[13px] font-semibold leading-tight",
+                "truncate text-[14px] font-semibold leading-tight",
                 active || unread ? "text-[#111827]" : "text-[#374151]",
               )}
             >
               {thread.contact.firstName} {thread.contact.lastName}
             </span>
             {preview?.createdAt && (
-              <span className="shrink-0 text-[10px] text-[#9CA3AF]">
+              <span className="shrink-0 text-[11px] text-[#9CA3AF]">
                 {formatTime(preview.createdAt)}
               </span>
             )}
@@ -228,7 +225,7 @@ function ThreadItem({
 
           <p
             className={cn(
-              "mt-0.5 truncate text-xs leading-relaxed",
+              "mt-0.5 truncate text-[13px] leading-relaxed",
               active  ? "text-[#6B7280]"  :
               unread  ? "text-[#6B7280]"  : "text-[#9CA3AF]",
             )}
@@ -241,13 +238,13 @@ function ThreadItem({
 
           <div className="mt-1.5 flex items-center gap-1.5">
             <span className={cn("size-1.5 shrink-0 rounded-full", status.dotClass)} />
-            <span className={cn("text-[10px] font-medium", status.textClass)}>
+            <span className={cn("text-[11px] font-medium", status.textClass)}>
               {status.label}
             </span>
             {thread.assignedTo && (
               <>
-                <span className="text-[10px] text-[#D1D5DB]">·</span>
-                <span className="truncate text-[10px] text-[#9CA3AF]">
+                <span className="text-[11px] text-[#D1D5DB]">·</span>
+                <span className="truncate text-[11px] text-[#9CA3AF]">
                   {thread.assignedTo.name ?? thread.assignedTo.email}
                 </span>
               </>
@@ -280,13 +277,14 @@ export default function InboxPage() {
   const me          = useAuthStore((s) => s.user);
 
   // ── UI state ────────────────────────────────────────────────────────────────
-  const [threadId, setThreadId]         = useState<string | null>(null);
-  const [draft, setDraft]               = useState("");
-  const [assignUserId, setAssignUserId] = useState("");
-  const [showAssign, setShowAssign]     = useState(false);
-  const [search, setSearch]             = useState("");
-  const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
-  const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [threadId, setThreadId]             = useState<string | null>(null);
+  const [mobileShowThread, setMobileShowThread] = useState(false);
+  const [draft, setDraft]                   = useState("");
+  const [assignUserId, setAssignUserId]     = useState("");
+  const [showAssign, setShowAssign]         = useState(false);
+  const [search, setSearch]                 = useState("");
+  const [activeFilter, setActiveFilter]     = useState<FilterKey>("all");
+  const [showInfoPanel, setShowInfoPanel]   = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── Data ────────────────────────────────────────────────────────────────────
@@ -307,19 +305,33 @@ export default function InboxPage() {
     },
   });
 
-  // Auto-select first conversation
+  // Auto-select first conversation on desktop only
   useEffect(() => {
-    if (!threadId && threads.length > 0) {
-      setThreadId(threads[0].id);
+    if (!threadId && threads.length > 0 && !mobileShowThread) {
+      // Only auto-select if we're on a wider screen (md+)
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        setThreadId(threads[0].id);
+      }
     }
-  }, [threads, threadId]);
+  }, [threads, threadId, mobileShowThread]);
 
   // Scroll to bottom when messages load
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, threadId]);
 
-  // ── Mutations (unchanged) ───────────────────────────────────────────────────
+  // ── Navigation helpers ──────────────────────────────────────────────────────
+  const handleSelectThread = (id: string) => {
+    setThreadId(id);
+    setMobileShowThread(true);
+    setShowInfoPanel(false);
+  };
+
+  const handleBackToList = () => {
+    setMobileShowThread(false);
+  };
+
+  // ── Mutations ───────────────────────────────────────────────────────────────
   const sendMutation = useMutation({
     mutationFn: async () => {
       if (!threadId) return;
@@ -369,8 +381,7 @@ export default function InboxPage() {
   }, [threads, activeFilter, search]);
 
   const messageGroups = useMemo(() => groupMessages(messages), [messages]);
-
-  const unreadCount = useMemo(() => threads.filter(threadHasUnread).length, [threads]);
+  const unreadCount   = useMemo(() => threads.filter(threadHasUnread).length, [threads]);
 
   const contactInitials = active
     ? getInitials(active.contact.firstName, active.contact.lastName)
@@ -378,7 +389,7 @@ export default function InboxPage() {
 
   const isMessenger = active?.channel === "MESSENGER";
 
-  // ── Build message groups with date separators ───────────────────────────────
+  // ── Timeline with date separators ──────────────────────────────────────────
   type TimelineEntry =
     | { type: "separator"; label: string; key: string }
     | { type: "group"; group: MessageGroup; index: number };
@@ -398,7 +409,6 @@ export default function InboxPage() {
     return entries;
   }, [messageGroups]);
 
-  // ── Empty filter label ──────────────────────────────────────────────────────
   const emptyLabel: Record<FilterKey, string> = {
     all:      "No conversations yet",
     unread:   "No unread conversations",
@@ -409,20 +419,29 @@ export default function InboxPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    <div className="flex h-[calc(100svh-3.5rem)] overflow-hidden">
 
       {/* ════════════════════════════════════════════════════════════════════
           LEFT PANEL — conversation list
+          Mobile: full screen when mobileShowThread is false
+          Desktop: fixed 17rem sidebar always visible
       ════════════════════════════════════════════════════════════════════ */}
-      <div className="flex w-[17rem] shrink-0 flex-col border-r border-[#E5E7EB] bg-white">
-
+      <div
+        className={cn(
+          "flex flex-col border-[#E5E7EB] bg-white",
+          // Mobile: full width, hidden when viewing a thread
+          mobileShowThread ? "hidden md:flex" : "flex w-full",
+          // Desktop: fixed sidebar
+          "md:w-[17rem] md:shrink-0 md:flex md:border-r",
+        )}
+      >
         {/* Header */}
         <div className="border-b border-[#F3F4F6] px-4 pb-3 pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-[13px] font-bold tracking-tight text-[#111827]">Inbox</h2>
+              <h2 className="text-[15px] font-bold tracking-tight text-[#111827]">Inbox</h2>
               {unreadCount > 0 && (
-                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#6366F1] px-1.5 text-[10px] font-bold text-white">
+                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#6366F1] px-1.5 text-[11px] font-bold text-white">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -431,9 +450,9 @@ export default function InboxPage() {
 
           {/* Search */}
           <div className="relative mt-3">
-            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" />
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9CA3AF]" />
             <Input
-              className="h-8 rounded-lg border-[#E5E7EB] bg-[#F9FAFB] pl-8 text-xs text-[#111827] placeholder:text-[#9CA3AF] focus-visible:ring-[#6366F1]/20"
+              className="h-10 rounded-xl border-[#E5E7EB] bg-[#F9FAFB] pl-9 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus-visible:ring-[#6366F1]/20"
               placeholder="Search conversations…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -441,14 +460,14 @@ export default function InboxPage() {
           </div>
 
           {/* Filter pills */}
-          <div className="mt-2.5 flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+          <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             {FILTER_TABS.map((f) => (
               <button
                 key={f.key}
                 type="button"
                 onClick={() => setActiveFilter(f.key)}
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all",
+                  "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-all",
                   activeFilter === f.key
                     ? "bg-[#EEF2FF] text-[#4338CA]"
                     : "text-[#9CA3AF] hover:text-[#6B7280]",
@@ -466,20 +485,20 @@ export default function InboxPage() {
           <div className="space-y-0.5 p-2">
             {isLoading
               ? Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex items-start gap-2.5 rounded-xl px-3 py-3">
-                    <Skeleton className="size-9 shrink-0 rounded-full bg-[#F3F4F6]" />
-                    <div className="flex-1 space-y-1.5">
-                      <Skeleton className="h-3 w-2/3 rounded bg-[#F3F4F6]" />
-                      <Skeleton className="h-2.5 w-full rounded bg-[#F3F4F6]" />
-                      <Skeleton className="h-2 w-1/3 rounded bg-[#F3F4F6]" />
+                  <div key={i} className="flex items-start gap-3 rounded-xl px-3 py-3.5">
+                    <Skeleton className="size-10 shrink-0 rounded-full bg-[#F3F4F6]" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3.5 w-2/3 rounded bg-[#F3F4F6]" />
+                      <Skeleton className="h-3 w-full rounded bg-[#F3F4F6]" />
+                      <Skeleton className="h-2.5 w-1/3 rounded bg-[#F3F4F6]" />
                     </div>
                   </div>
                 ))
               : filteredThreads.length === 0
               ? (
-                  <div className="flex flex-col items-center gap-4 px-2 py-10 text-center">
-                    <div className="flex size-14 items-center justify-center rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB]">
-                      <AppleberryIcon size={30} />
+                  <div className="flex flex-col items-center gap-4 px-2 py-16 text-center">
+                    <div className="flex size-16 items-center justify-center rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB]">
+                      <AppleberryIcon size={32} />
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-[#9CA3AF]">{emptyLabel[activeFilter]}</p>
@@ -496,7 +515,7 @@ export default function InboxPage() {
                     key={t.id}
                     thread={t}
                     active={t.id === threadId}
-                    onClick={() => setThreadId(t.id)}
+                    onClick={() => handleSelectThread(t.id)}
                   />
                 ))}
           </div>
@@ -504,9 +523,19 @@ export default function InboxPage() {
       </div>
 
       {/* ════════════════════════════════════════════════════════════════════
-          CENTER PANEL — conversation view
+          RIGHT PANEL — conversation view
+          Mobile: full screen when mobileShowThread is true
+          Desktop: flex-1 always visible
       ════════════════════════════════════════════════════════════════════ */}
-      <div className="flex min-w-0 flex-1 flex-col bg-[#F7F8FA]">
+      <div
+        className={cn(
+          "flex flex-col bg-[#F7F8FA]",
+          // Mobile: full width, hidden when viewing the list
+          !mobileShowThread ? "hidden md:flex" : "flex w-full",
+          // Desktop: takes remaining space
+          "md:min-w-0 md:flex-1",
+        )}
+      >
         {!threadId ? (
 
           /* Empty state */
@@ -525,12 +554,23 @@ export default function InboxPage() {
         ) : (
           <>
             {/* ── Thread header ────────────────────────────────────────────── */}
-            <div className="border-b border-[#E5E7EB] bg-white px-5 py-3">
+            <div className="border-b border-[#E5E7EB] bg-white px-4 py-3">
               {active && (
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-2">
 
-                  {/* Contact info */}
-                  <div className="flex items-center gap-3">
+                  {/* Left: back button (mobile) + contact info */}
+                  <div className="flex min-w-0 items-center gap-2">
+                    {/* Back button — mobile only */}
+                    <button
+                      type="button"
+                      onClick={handleBackToList}
+                      className="md:hidden shrink-0 flex size-9 items-center justify-center rounded-xl text-[#6B7280] hover:bg-[#F3F4F6] active:scale-95 transition-all"
+                      aria-label="Back to inbox"
+                    >
+                      <ArrowLeft className="size-5" />
+                    </button>
+
+                    {/* Avatar */}
                     <div className="relative shrink-0">
                       <div className="flex size-9 items-center justify-center rounded-full bg-[#EEF2FF] text-sm font-bold text-[#4338CA] ring-1 ring-[#C7D2FE]">
                         {contactInitials}
@@ -542,8 +582,9 @@ export default function InboxPage() {
                       )}
                     </div>
 
-                    <div>
-                      <p className="text-sm font-semibold text-[#111827]">
+                    {/* Name + badges */}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#111827]">
                         {active.contact.firstName} {active.contact.lastName}
                       </p>
                       <div className="mt-0.5 flex items-center gap-1.5">
@@ -565,19 +606,13 @@ export default function InboxPage() {
                             <span className={statusMeta.textClass}>{statusMeta.label}</span>
                           </span>
                         )}
-                        {active.assignedTo ? (
-                          <span className="text-[11px] text-[#9CA3AF]">
-                            · <span className="text-[#6366F1]">{active.assignedTo.name ?? active.assignedTo.email}</span>
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-[#D1D5DB]">· Unassigned</span>
-                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
+                  {/* Right: actions */}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {/* Status dropdown — always visible */}
                     <Select
                       value={active.status}
                       onValueChange={(v) => {
@@ -585,7 +620,7 @@ export default function InboxPage() {
                           patchMutation.mutate({ status: v });
                       }}
                     >
-                      <SelectTrigger className="h-8 w-[108px] rounded-lg border-[#E5E7EB] bg-[#F9FAFB] text-[11px] text-[#6B7280] focus:ring-0">
+                      <SelectTrigger className="h-8 w-[100px] rounded-lg border-[#E5E7EB] bg-[#F9FAFB] text-[11px] text-[#6B7280] focus:ring-0">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl border-[#E5E7EB] bg-white shadow-lg">
@@ -600,11 +635,12 @@ export default function InboxPage() {
                       </SelectContent>
                     </Select>
 
+                    {/* Assign me — desktop only */}
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 rounded-lg border-[#E5E7EB] bg-[#F9FAFB] px-3 text-[11px] text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]"
+                      className="hidden md:flex h-8 rounded-lg border-[#E5E7EB] bg-[#F9FAFB] px-3 text-[11px] text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]"
                       onClick={() => me && patchMutation.mutate({ assignedToId: me.id })}
                       disabled={!me || patchMutation.isPending}
                     >
@@ -614,11 +650,12 @@ export default function InboxPage() {
                       Assign me
                     </Button>
 
+                    {/* Unassign — desktop only */}
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-8 rounded-lg p-0 text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#6B7280]"
+                      className="hidden md:flex h-8 w-8 rounded-lg p-0 text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#6B7280]"
                       onClick={() => patchMutation.mutate({ assignedToId: null })}
                       disabled={patchMutation.isPending}
                       title="Unassign"
@@ -626,24 +663,23 @@ export default function InboxPage() {
                       <UserMinus className="size-3.5" />
                     </Button>
 
-                    <div className="h-4 w-px bg-[#E5E7EB]" />
-
+                    {/* Advanced assign toggle — desktop only */}
                     <button
                       type="button"
                       onClick={() => setShowAssign((v) => !v)}
-                      className="text-[10px] text-[#9CA3AF] transition-colors hover:text-[#6B7280]"
+                      className="hidden md:block text-[10px] text-[#9CA3AF] transition-colors hover:text-[#6B7280] px-1"
                       title="Assign to user by ID"
                     >
                       {showAssign ? "hide" : "···"}
                     </button>
 
-                    {/* Toggle info panel */}
+                    {/* Info panel toggle — desktop only */}
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       className={cn(
-                        "h-8 w-8 rounded-lg p-0 transition-colors",
+                        "hidden md:flex h-8 w-8 rounded-lg p-0 transition-colors",
                         showInfoPanel
                           ? "bg-[#EEF2FF] text-[#4338CA]"
                           : "text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#6B7280]",
@@ -659,7 +695,7 @@ export default function InboxPage() {
                 </div>
               )}
 
-              {/* UUID assign (advanced) */}
+              {/* UUID assign (advanced, desktop) */}
               {showAssign && (
                 <div className="mt-3 flex items-center gap-2 border-t border-[#F3F4F6] pt-3">
                   <Input
@@ -693,13 +729,13 @@ export default function InboxPage() {
 
                 {/* ── Messages ─────────────────────────────────────────── */}
                 <ScrollArea className="min-h-0 flex-1">
-                  <div className="flex flex-col px-6 py-5">
+                  <div className="flex flex-col px-4 py-4 md:px-6 md:py-5">
                     {messagesFetching && messages.length === 0 ? (
                       <div className="space-y-4 pt-2">
-                        <Skeleton className="ml-auto h-14 w-[58%] rounded-2xl bg-[#F3F4F6]" />
-                        <Skeleton className="h-10 w-[45%] rounded-2xl bg-[#F3F4F6]" />
-                        <Skeleton className="ml-auto h-12 w-[50%] rounded-2xl bg-[#F3F4F6]" />
-                        <Skeleton className="h-8 w-[35%] rounded-2xl bg-[#F3F4F6]" />
+                        <Skeleton className="ml-auto h-14 w-[68%] rounded-2xl bg-[#F3F4F6]" />
+                        <Skeleton className="h-10 w-[55%] rounded-2xl bg-[#F3F4F6]" />
+                        <Skeleton className="ml-auto h-12 w-[60%] rounded-2xl bg-[#F3F4F6]" />
+                        <Skeleton className="h-8 w-[45%] rounded-2xl bg-[#F3F4F6]" />
                       </div>
                     ) : timeline.length === 0 ? (
                       <div className="flex flex-1 flex-col items-center justify-center py-16">
@@ -712,14 +748,14 @@ export default function InboxPage() {
                         }
 
                         const { group, index: gi } = entry;
-                        const isOut    = group.direction === "OUTBOUND";
-                        const count    = group.messages.length;
-                        const lastMsg  = group.messages[count - 1];
+                        const isOut   = group.direction === "OUTBOUND";
+                        const count   = group.messages.length;
+                        const lastMsg = group.messages[count - 1];
 
                         return (
                           <div
                             key={gi}
-                            className={cn("mb-4 flex items-end gap-2.5", isOut ? "flex-row-reverse" : "flex-row")}
+                            className={cn("mb-3 flex items-end gap-2", isOut ? "flex-row-reverse" : "flex-row")}
                           >
                             {/* Inbound avatar */}
                             {!isOut && (
@@ -728,7 +764,7 @@ export default function InboxPage() {
                               </div>
                             )}
 
-                            <div className={cn("flex max-w-[68%] flex-col gap-0.5", isOut ? "items-end" : "items-start")}>
+                            <div className={cn("flex max-w-[78%] flex-col gap-0.5 md:max-w-[68%]", isOut ? "items-end" : "items-start")}>
                               {/* Sender label */}
                               <span className="mb-0.5 px-1 text-[10px] font-medium text-[#9CA3AF]">
                                 {isOut ? "You" : `${active?.contact.firstName ?? "Customer"}`}
@@ -742,7 +778,7 @@ export default function InboxPage() {
                                   <div
                                     key={m.id}
                                     className={cn(
-                                      "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                                      "rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed md:text-sm",
                                       isOut
                                         ? "bg-[#EEF2FF] text-[#3730A3]"
                                         : "bg-white text-[#111827] border border-[#E5E7EB] shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
@@ -779,17 +815,58 @@ export default function InboxPage() {
 
                 {/* ── Messenger 24h warning ────────────────────────────── */}
                 {isMessenger && (
-                  <div className="flex items-center gap-2.5 border-t border-amber-100 bg-amber-50 px-5 py-2.5">
+                  <div className="flex items-center gap-2.5 border-t border-amber-100 bg-amber-50 px-4 py-2.5">
                     <AlertCircle className="size-3.5 shrink-0 text-amber-500" />
                     <p className="text-xs text-amber-700">
                       <span className="font-semibold">24-hour window</span>
-                      {" "}— You can only reply within 24 hours of the customer&apos;s last message on Messenger.
+                      {" "}— You can only reply within 24 hours of the customer&apos;s last message.
                     </p>
                   </div>
                 )}
 
-                {/* ── Composer ─────────────────────────────────────────── */}
-                <div className="border-t border-[#E5E7EB] bg-white px-5 py-4">
+                {/* ── Composer — mobile ─────────────────────────────────── */}
+                <div className="flex md:hidden items-end gap-2 border-t border-[#E5E7EB] bg-white px-3 py-3">
+                  <button
+                    type="button"
+                    className="shrink-0 text-[#9CA3AF] active:text-[#6B7280] transition-colors"
+                    title="Emoji (coming soon)"
+                  >
+                    <Smile className="size-5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 text-[#9CA3AF] active:text-[#6B7280] transition-colors"
+                    title="Attach file (coming soon)"
+                  >
+                    <Paperclip className="size-5" />
+                  </button>
+                  <Textarea
+                    rows={1}
+                    className="flex-1 min-h-[40px] max-h-[120px] resize-none rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-[15px] text-[#111827] placeholder:text-[#9CA3AF] focus-visible:ring-[#6366F1]/30 leading-snug"
+                    placeholder="Message…"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (draft.trim()) sendMutation.mutate();
+                      }
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    className="shrink-0 size-10 rounded-full stitch-gradient text-white shadow-[0_1px_4px_rgba(99,102,241,0.3)] transition-all active:scale-95 disabled:opacity-40"
+                    onClick={() => sendMutation.mutate()}
+                    disabled={sendMutation.isPending || !draft.trim()}
+                  >
+                    {sendMutation.isPending
+                      ? <Loader2 className="size-4 animate-spin" />
+                      : <Send className="size-4" />}
+                  </Button>
+                </div>
+
+                {/* ── Composer — desktop ────────────────────────────────── */}
+                <div className="hidden md:block border-t border-[#E5E7EB] bg-white px-5 py-4">
                   <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white transition-all focus-within:border-[#C7D2FE] focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)]">
                     <Textarea
                       rows={3}
@@ -803,33 +880,20 @@ export default function InboxPage() {
                       }}
                     />
                     <div className="flex items-center justify-between border-t border-[#F3F4F6] px-3 py-2">
-                      {/* Left: icon actions */}
                       <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          className="text-[#9CA3AF] transition-colors hover:text-[#6B7280]"
-                          title="Emoji (coming soon)"
-                        >
+                        <button type="button" className="text-[#9CA3AF] transition-colors hover:text-[#6B7280]" title="Emoji (coming soon)">
                           <Smile className="size-4" />
                         </button>
-                        <button
-                          type="button"
-                          className="text-[#9CA3AF] transition-colors hover:text-[#6B7280]"
-                          title="Attach file (coming soon)"
-                        >
+                        <button type="button" className="text-[#9CA3AF] transition-colors hover:text-[#6B7280]" title="Attach file (coming soon)">
                           <Paperclip className="size-4" />
                         </button>
                         <div className="h-3 w-px bg-[#E5E7EB]" />
                         {draft.length > 0 ? (
-                          <span className="text-[10px] text-[#9CA3AF]">
-                            {draft.length} chars
-                          </span>
+                          <span className="text-[10px] text-[#9CA3AF]">{draft.length} chars</span>
                         ) : (
                           <span className="text-[10px] text-[#D1D5DB]">⌘↵ to send</span>
                         )}
                       </div>
-
-                      {/* Right: send button */}
                       <Button
                         size="sm"
                         className="h-8 rounded-lg px-4 text-xs font-semibold stitch-gradient text-white shadow-[0_1px_4px_rgba(99,102,241,0.3)] transition-opacity hover:opacity-90 disabled:opacity-40"
@@ -846,9 +910,9 @@ export default function InboxPage() {
                 </div>
               </div>
 
-              {/* ── Right info panel ──────────────────────────────────────── */}
+              {/* ── Right info panel (desktop only) ──────────────────────── */}
               {showInfoPanel && active && (
-                <div className="flex w-60 shrink-0 flex-col overflow-y-auto border-l border-[#E5E7EB] bg-white/90 backdrop-blur-sm">
+                <div className="hidden md:flex w-60 shrink-0 flex-col overflow-y-auto border-l border-[#E5E7EB] bg-white/90 backdrop-blur-sm">
 
                   {/* Contact card */}
                   <div className="border-b border-[#F3F4F6] px-4 pb-5 pt-4">
@@ -870,9 +934,7 @@ export default function InboxPage() {
 
                   {/* Channel info */}
                   <div className="border-b border-[#F3F4F6] px-4 py-4">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">
-                      Channel
-                    </p>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">Channel</p>
                     <div className="flex items-center gap-2">
                       {channelMeta && (
                         <channelMeta.icon className={cn("size-3.5", channelMeta.color)} strokeWidth={1.75} />
@@ -888,9 +950,7 @@ export default function InboxPage() {
 
                   {/* Status */}
                   <div className="border-b border-[#F3F4F6] px-4 py-4">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">
-                      Status
-                    </p>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">Status</p>
                     {statusMeta && (
                       <div className="flex items-center gap-2">
                         <span className={cn("size-2 rounded-full", statusMeta.dotClass)} />
@@ -903,9 +963,7 @@ export default function InboxPage() {
 
                   {/* Assignee */}
                   <div className="px-4 py-4">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">
-                      Assigned to
-                    </p>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]">Assigned to</p>
                     {active.assignedTo ? (
                       <div className="flex items-center gap-2">
                         <div className="flex size-6 items-center justify-center rounded-full bg-[#EEF2FF] text-[9px] font-bold text-[#4338CA]">
@@ -918,6 +976,32 @@ export default function InboxPage() {
                     ) : (
                       <span className="text-xs text-[#9CA3AF]">Unassigned</span>
                     )}
+                  </div>
+
+                  {/* Assign me */}
+                  <div className="border-t border-[#F3F4F6] px-4 py-4 space-y-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-8 rounded-lg border-[#E5E7EB] text-[11px] text-[#6B7280]"
+                      onClick={() => me && patchMutation.mutate({ assignedToId: me.id })}
+                      disabled={!me || patchMutation.isPending}
+                    >
+                      <UserCircle className="mr-1.5 size-3" />
+                      Assign to me
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full h-8 rounded-lg text-[11px] text-[#9CA3AF]"
+                      onClick={() => patchMutation.mutate({ assignedToId: null })}
+                      disabled={patchMutation.isPending}
+                    >
+                      <UserMinus className="mr-1.5 size-3" />
+                      Unassign
+                    </Button>
                   </div>
                 </div>
               )}
