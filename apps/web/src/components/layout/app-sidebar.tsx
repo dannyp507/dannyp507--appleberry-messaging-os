@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AppleberryIcon } from "@/components/ui/appleberry-icon";
 import type { LucideIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
 import {
   LayoutDashboard,
   Inbox,
@@ -159,10 +161,30 @@ function SectionLinkLabel({
 
 // ─── Sidebar content ──────────────────────────────────────────────────────────
 
+function usePlanFeatures() {
+  const { data } = useQuery({
+    queryKey: ["billing", "usage"],
+    queryFn: async () => {
+      const { data } = await api.get("/billing/usage");
+      return data as { plan: { slug: string }; features: { hasFacebook: boolean; hasInstagram: boolean } };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const slug = data?.plan?.slug ?? '';
+  // Beta users see the full feature set; paid plans see the clean WhatsApp-only nav
+  const isBeta = slug === 'beta' || slug === '';
+  return {
+    hasFacebook:  isBeta ? (data?.features?.hasFacebook ?? true)  : false,
+    hasInstagram: isBeta ? (data?.features?.hasInstagram ?? true) : false,
+    isBeta,
+  };
+}
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const features = usePlanFeatures();
 
   return (
     <div className="flex h-full flex-col">
@@ -211,34 +233,47 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
           {/* Automation */}
           <SectionLabel label="Automation" />
-          {automationNav.map(({ href, label, icon }) => (
-            <NavItem
-              key={href}
-              href={href}
-              label={label}
-              icon={icon}
-              active={isActive(href)}
-              onClick={onNavigate}
-            />
-          ))}
+          {automationNav
+            .filter(({ href }) => {
+              if (!features.isBeta && href === "/sequences")          return false;
+              if (!features.isBeta && href === "/subscribe-forms")    return false;
+              if (href === "/fb-comment-automations" && !features.hasFacebook) return false;
+              if (href === "/ig-comment-automations" && !features.hasInstagram) return false;
+              return true;
+            })
+            .map(({ href, label, icon }) => (
+              <NavItem
+                key={href}
+                href={href}
+                label={label}
+                icon={icon}
+                active={isActive(href)}
+                onClick={onNavigate}
+              />
+            ))}
 
-          {/* Channels — header links to /channels hub */}
-          <SectionLinkLabel
-            label="Channels"
-            href="/channels"
-            active={pathname === "/channels"}
-            onClick={onNavigate}
-          />
-          {channelsNav.map(({ href, label, icon }) => (
-            <NavItem
-              key={href}
-              href={href}
-              label={label}
-              icon={icon}
-              active={isActive(href)}
-              onClick={onNavigate}
-            />
-          ))}
+          {/* Channels */}
+          <SectionLabel label="Channels" />
+          {channelsNav
+            .filter(({ href }) => {
+              if (!features.isBeta && href === "/facebook-pages")     return false;
+              if (!features.isBeta && href === "/instagram-accounts") return false;
+              if (!features.isBeta && href === "/telegram-accounts")  return false;
+              if (!features.isBeta && href === "/link-generator")     return false;
+              if (href === "/facebook-pages"     && !features.hasFacebook)  return false;
+              if (href === "/instagram-accounts" && !features.hasInstagram) return false;
+              return true;
+            })
+            .map(({ href, label, icon }) => (
+              <NavItem
+                key={href}
+                href={href}
+                label={label}
+                icon={icon}
+                active={isActive(href)}
+                onClick={onNavigate}
+              />
+            ))}
 
           {/* Settings */}
           <SectionLabel label="Settings" />
@@ -264,6 +299,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           active={isActive("/help")}
           onClick={onNavigate}
         />
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-3 text-[11px] text-[#9CA3AF] dark:text-[#6b7280]">
+          <a href="/privacy-policy" className="hover:text-[#4338CA] dark:hover:text-[#a5b4fc] hover:underline">Privacy</a>
+          <span aria-hidden="true">·</span>
+          <a href="/terms-of-service" className="hover:text-[#4338CA] dark:hover:text-[#a5b4fc] hover:underline">Terms</a>
+          <span aria-hidden="true">·</span>
+          <a href="/data-deletion" className="hover:text-[#4338CA] dark:hover:text-[#a5b4fc] hover:underline">Data</a>
+        </div>
       </div>
     </div>
   );
