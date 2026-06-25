@@ -43,6 +43,9 @@ import { IgCommentAutomationsModule } from './ig-comment-automations/ig-comment-
 import { BrandSettingsModule } from './brand-settings/brand-settings.module';
 import { MediaModule } from './media/media.module';
 import { OptOutModule } from './opt-out/opt-out.module';
+import { PayfastModule } from './payfast/payfast.module';
+import { AdminModule } from './admin/admin.module';
+import { FollowUpModule } from './follow-up/follow-up.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -108,6 +111,9 @@ import { AppController } from './app.controller';
     BrandSettingsModule,
     MediaModule,
     OptOutModule,
+    PayfastModule,
+    AdminModule,
+    FollowUpModule,
   ],
   providers: [
     {

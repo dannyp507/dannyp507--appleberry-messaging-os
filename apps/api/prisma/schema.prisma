@@ -378,6 +378,8 @@ model Plan {
   hasApiAccess          Boolean  @default(false)
   hasWhiteLabel         Boolean  @default(false)
   hasBaileysProvider    Boolean  @default(false)
+  hasFacebook           Boolean  @default(true)
+  hasInstagram          Boolean  @default(true)
   isPublic              Boolean  @default(true)
   priceMonthlyUsd       Float?
   createdAt             DateTime @default(now())
@@ -396,6 +398,7 @@ model Subscription {
   cancelledAt        DateTime?
   trialEndsAt        DateTime?
   externalId         String?
+  payfastToken       String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -573,11 +576,18 @@ model WhatsAppAccountAiSettings {
   /// Show typing indicator before bot reply (not available on Cloud API)
   dmTypingEnabled     Boolean  @default(false)
 
-  // ── Human Takeover keywords ──────────────────────────────────────────────
+  // ── Human Takeover keywords (triggered by INBOUND customer message) ────────
   aiOffKeyword        String?  @db.Text
   aiOffReply          String?  @db.Text
   aiOnKeyword         String?  @db.Text
   aiOnReply           String?  @db.Text
+
+  // ── Agent Takeover keywords (triggered by AGENT typing on WhatsApp Business) ─
+  // AGENT FIX: when the agent types agentOffKeyword on the WA business phone,
+  // the bot pauses for that conversation. agentOnKeyword resumes it.
+  // These are the inverse of aiOffKeyword/aiOnKeyword (which are client-side).
+  agentOffKeyword     String?  @db.Text
+  agentOnKeyword      String?  @db.Text
 
   updatedAt           DateTime @default(now()) @updatedAt
 
@@ -1282,6 +1292,10 @@ model InboxThread {
   lastMessageAt       DateTime?
   lastMessagePreview  String?
   tags                String[]          @default([])
+  /// Timestamp when the next automated follow-up should fire. Cleared when customer replies.
+  followUpScheduledFor DateTime?
+  /// How many follow-ups have been sent for this thread (max 2: 2h + 24h)
+  followUpCount       Int               @default(0)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 

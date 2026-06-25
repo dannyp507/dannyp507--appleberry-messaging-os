@@ -9,6 +9,7 @@ import {
   KeywordMatchType,
 } from '@prisma/client';
 import { AiService } from '../ai/ai.service';
+import { BaileysSessionService } from '../baileys/baileys-session.service';
 import { ChatbotEngineService } from '../chatbot/chatbot-engine.service';
 import { TemplateRenderService } from '../messaging/template-render.service';
 import { MessagesService } from '../messages/messages.service';
@@ -19,6 +20,7 @@ import type { IncomingMessageJob } from '../queue/queue.constants';
 import { normalizePhoneE164 } from '../contacts/phone.util';
 import { OptOutService } from '../opt-out/opt-out.service';
 import { WorkspaceAiSettingsService } from '../workspace-ai-settings/workspace-ai-settings.service';
+import { FollowUpService } from '../follow-up/follow-up.service';
 
 @Injectable()
 export class IncomingMessageService {
@@ -34,7 +36,25 @@ export class IncomingMessageService {
     private readonly sequences: SequencesService,
     private readonly optOut: OptOutService,
     private readonly aiSettings: WorkspaceAiSettingsService,
+    private readonly baileys: BaileysSessionService,
+    private readonly followUp: FollowUpService,
   ) {}
+
+  /**
+   * Sends a WhatsApp "composing" (typing) presence update before a bot reply,
+   * then sleeps for `durationMs` ms to give a natural feel.
+   * Only fires if typing is enabled in per-account settings.
+   * Never throws.
+   */
+  private async maybeTyping(
+    accountId: string,
+    to: string,
+    durationMs: number,
+    dmSettings: { dmTypingEnabled: boolean } | null,
+  ): Promise<void> {
+    if (!dmSettings?.dmTypingEnabled) return;
+    await this.baileys.sendTyping(accountId, to, durationMs);
+  }
 
   /** Replace Planify X / common template variables in a response string */
   private substituteVars(text: string, name: string): string {
@@ -130,6 +150,9 @@ export class IncomingMessageService {
       },
     });
 
+    // Cancel any pending follow-up — the customer is now actively engaged
+    await this.followUp.cancelForThread(thread.id, !!thread.followUpScheduledFor);
+
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 0: Reserved opt-out / opt-in keywords — handled before everything else
     // ─────────────────────────────────────────────────────────────────────────
@@ -149,6 +172,23 @@ export class IncomingMessageService {
     // ─────────────────────────────────────────────────────────────────────────
     const dmSettings = await this.aiSettings.getWhatsAppAccountRaw(account.id);
     const msgLower = job.text.trim().toLowerCase();
+
+    // AGENT FIX: Agent takeover — phrase typed BY THE AGENT on WhatsApp Business.
+    // These are identified by isFromMe=true on the job (set in baileys-session.service).
+    // We flip aiPaused and return immediately — no reply is sent (the agent's own
+    // message already appears in the conversation as context for the client).
+    if (job.isFromMe) {
+      const offKw = dmSettings?.agentOffKeyword?.trim().toLowerCase() ?? '';
+      const onKw  = dmSettings?.agentOnKeyword?.trim().toLowerCase()  ?? '';
+      if (offKw && msgLower === offKw) {
+        await this.prisma.inboxThread.update({ where: { id: thread.id }, data: { aiPaused: true } });
+        this.logger.log(`[AgentTakeover] AI paused by agent for WA thread=${thread.id}`);
+      } else if (onKw && msgLower === onKw) {
+        await this.prisma.inboxThread.update({ where: { id: thread.id }, data: { aiPaused: false } });
+        this.logger.log(`[AgentTakeover] AI resumed by agent for WA thread=${thread.id}`);
+      }
+      return; // never run automation on agent-sent messages
+    }
 
     // Human takeover — AI OFF keyword
     if (dmSettings?.aiOffKeyword?.trim() && msgLower === dmSettings.aiOffKeyword.trim().toLowerCase()) {
@@ -197,6 +237,7 @@ export class IncomingMessageService {
       where: { threadId: thread.id, direction: InboxMessageDirection.INBOUND },
     });
     if (inboundCount <= 1 && dmSettings?.dmWelcomeEnabled && dmSettings.dmWelcomeText?.trim()) {
+      await this.maybeTyping(account.id, replyTo, 1200, dmSettings);
       await this.messages.enqueueOutboundText({
         workspaceId,
         whatsappAccountId: account.id,
@@ -252,7 +293,9 @@ export class IncomingMessageService {
       });
 
       if (r.useAi) {
-        // AI rule: `response` is the system prompt — generate a dynamic reply
+        // AI rule: `response` is the system prompt — generate a dynamic reply.
+        // Show typing BEFORE the AI call so the "composing" bubble is visible during processing.
+        await this.maybeTyping(account.id, replyTo, 0, dmSettings);
         const recentMessages = await this.prisma.inboxMessage.findMany({
           where: { threadId: thread.id },
           orderBy: { createdAt: 'desc' },
@@ -273,9 +316,11 @@ export class IncomingMessageService {
           contactId: contact.id,
           inboxThreadId: thread.id,
         });
+        await this.maybeScheduleFollowUp(thread.id, message);
         this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched (AI) for account ${account.id}`);
       } else if (r.mediaUrl) {
         // Media rule: send a single media message — response text becomes caption
+        await this.maybeTyping(account.id, replyTo, 1200, dmSettings);
         const caption = this.substituteVars(r.response?.trim() ?? '', senderName);
         await this.messages.enqueueOutboundText({
           workspaceId,
@@ -289,6 +334,7 @@ export class IncomingMessageService {
         this.logger.log(`Autoresponder rule "${r.name ?? r.keyword}" matched (media) for account ${account.id}`);
       } else {
         // Text-only rule: split on '\n---\n' for multi-bubble messages
+        await this.maybeTyping(account.id, replyTo, 1200, dmSettings);
         const parts = r.response
           .split(/\n---\n/)
           .map((p) => this.substituteVars(p.trim(), senderName))
@@ -430,6 +476,8 @@ export class IncomingMessageService {
 
     if (defaultRule) {
       if (defaultRule.useAi) {
+        // Show typing BEFORE the AI call so the "composing" bubble is visible during processing.
+        await this.maybeTyping(account.id, replyTo, 0, dmSettings);
         // Use the default rule's system prompt for AI generation
         const aiReply = await this.ai.generateReply(
           { workspaceId, contactId: contact.id, threadId: thread.id, recentMessages: recent.reverse(), whatsappAccountId: account.id },
@@ -445,8 +493,10 @@ export class IncomingMessageService {
           contactId: contact.id,
           inboxThreadId: thread.id,
         });
+        await this.maybeScheduleFollowUp(thread.id, message);
         this.logger.log(`Default rule fired (AI) for account ${account.id}`);
       } else if (defaultRule.mediaUrl) {
+        await this.maybeTyping(account.id, replyTo, 1200, dmSettings);
         const caption = this.substituteVars(defaultRule.response?.trim() ?? '', senderName);
         await this.messages.enqueueOutboundText({
           workspaceId,
@@ -459,6 +509,7 @@ export class IncomingMessageService {
         });
         this.logger.log(`Default rule fired (media) for account ${account.id}`);
       } else {
+        await this.maybeTyping(account.id, replyTo, 1200, dmSettings);
         const parts = defaultRule.response
           .split(/\n---\n/)
           .map((p) => this.substituteVars(p.trim(), senderName))
@@ -485,6 +536,9 @@ export class IncomingMessageService {
       return;
     }
 
+    // Show typing before the AI call — the API latency itself acts as the natural delay.
+    await this.maybeTyping(account.id, replyTo, 0, dmSettings);
+
     const reply = await this.ai.generateReply(
       {
         workspaceId,
@@ -505,6 +559,7 @@ export class IncomingMessageService {
         contactId: contact.id,
         inboxThreadId: thread.id,
       });
+      await this.maybeScheduleFollowUp(thread.id, reply.trim());
     }
   }
 
@@ -525,7 +580,7 @@ export class IncomingMessageService {
     const msg = text.trim().toLowerCase();
 
     const OPT_OUT = new Set(['stop', 'unsubscribe', 'cancel', 'end', 'quit']);
-    const OPT_IN  = new Set(['start', 'subscribe', 'yes', 'unstop', 'begin']);
+    const OPT_IN  = new Set(['start', 'subscribe', 'unstop', 'begin']);
 
     const isOptOut = OPT_OUT.has(msg);
     const isOptIn  = OPT_IN.has(msg);
@@ -591,6 +646,15 @@ export class IncomingMessageService {
 
     this.logger.log(`Contact ${contactId} opted in`);
     return true;
+  }
+
+  /** If a bot reply contains a Rand price (e.g. R999, R1 999), schedule the lead follow-up. */
+  private async maybeScheduleFollowUp(threadId: string, replyText: string): Promise<void> {
+    if (/R\s?\d{3,}/i.test(replyText)) {
+      await this.followUp.scheduleForThread(threadId).catch((e) =>
+        this.logger.warn(`[FollowUp] scheduleForThread failed: ${e?.message}`),
+      );
+    }
   }
 
   private keywordMatches(
