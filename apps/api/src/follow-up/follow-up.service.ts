@@ -4,11 +4,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 
 // How long after a price reply before we send the first nudge
-const FIRST_FOLLOW_UP_MS  = 2  * 60 * 60 * 1000; // 2 hours
-// How long after the first nudge before the second (and final) one
+const FIRST_FOLLOW_UP_MS  =  2 * 60 * 60 * 1000; // 2h after price
+// How long after the first nudge before the second
 const SECOND_FOLLOW_UP_MS = 22 * 60 * 60 * 1000; // 22h later = ~24h after price
-// Maximum follow-ups per lead (2 total: a soft nudge + a closing push)
-const MAX_FOLLOW_UPS = 2;
+// How long after the second nudge before the third (and final) one
+const THIRD_FOLLOW_UP_MS  = 24 * 60 * 60 * 1000; // 24h later = ~48h after price
+// Maximum follow-ups per lead (3 total)
+const MAX_FOLLOW_UPS = 3;
 // How often the worker checks for due follow-ups
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
 
@@ -106,15 +108,16 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
     const newCount = thread.followUpCount + 1;
 
     if (newCount < MAX_FOLLOW_UPS) {
-      // Schedule the next (final) follow-up
+      const nextDelayMs = newCount === 1 ? SECOND_FOLLOW_UP_MS : THIRD_FOLLOW_UP_MS;
+      const nextInLabel = newCount === 1 ? '22h' : '24h';
       await this.prisma.inboxThread.update({
         where: { id: thread.id },
         data: {
-          followUpScheduledFor: new Date(Date.now() + SECOND_FOLLOW_UP_MS),
+          followUpScheduledFor: new Date(Date.now() + nextDelayMs),
           followUpCount: newCount,
         },
       });
-      this.logger.log(`[FollowUp] Thread ${thread.id} — follow-up #${newCount} sent, next in 22h`);
+      this.logger.log(`[FollowUp] Thread ${thread.id} — follow-up #${newCount} sent, next in ${nextInLabel}`);
     } else {
       // All follow-ups exhausted — clear the scheduler
       await this.prisma.inboxThread.update({
@@ -140,29 +143,35 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
   private buildMessage(count: number, priceContext: string, firstName: string): string {
     const name = firstName && firstName !== 'Unknown' ? firstName : null;
     const hi = name ? `Hey ${name}!` : 'Hey!';
+    const priceRef = priceContext ? `that ${priceContext} repair` : 'the repair';
 
     if (count === 0) {
-      // First nudge — soft check-in
-      if (priceContext) {
-        return (
-          `${hi} Just checking in from AppleBerry 😊\n\n` +
-          `Still thinking about that ${priceContext} repair? We can usually get it sorted same day — ` +
-          `pop in anytime or let us know when works for you and we'll have a technician ready 🔧`
-        );
-      }
+      // 2h — soft check-in + open the door to negotiation
       return (
         `${hi} Just checking in from AppleBerry 😊\n\n` +
-        `Still thinking about the repair? We can usually get it done same day — ` +
-        `pop in anytime Mon–Fri 9am–5pm or Sat 9am–2pm 🔧`
+        `Still thinking about ${priceRef}? If the quote felt a bit steep, don't stress — ` +
+        `pop in and we can have a chat. We always try to find a way to help 💪\n\n` +
+        `We're open Mon–Fri 9am–5pm and Sat 9am–2pm 🔧`
       );
     }
 
-    // Second nudge — closing push with urgency
+    if (count === 1) {
+      // 24h — empathy + genuine negotiation offer
+      return (
+        `${hi} We'd genuinely rather help you get sorted than see your device stay broken 🙏\n\n` +
+        `Pop in and tell us your budget — our technicians will see what we can work out together. No pressure at all.\n\n` +
+        `Beacon Bay Crossing (East London) or 152 Main Road Walmer (GQ)\n` +
+        `Mon–Fri 9am–5pm · Sat 9am–2pm`
+      );
+    }
+
+    // 48h — final close with last-chance energy
     return (
-      `Last chance this week 👀\n\n` +
-      `Our technicians are ready and slots are filling up fast. ` +
-      `We're open Mon–Fri 9am–5pm and Sat 9am–2pm at Beacon Bay Crossing (East London) or 152 Main Road Walmer (GQ).\n\n` +
-      `Don't let your device get worse — come through whenever works for you 📱`
+      `Last chance to get this sorted 👀\n\n` +
+      `We still have a couple of slots left this week. Even if budget is tight — come in, let's talk. ` +
+      `We'd much rather work something out than leave you without your device 📱\n\n` +
+      `Beacon Bay Crossing (East London) or 152 Main Road Walmer (GQ)\n` +
+      `Mon–Fri 9am–5pm · Sat 9am–2pm`
     );
   }
 
