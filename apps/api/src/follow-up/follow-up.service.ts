@@ -86,6 +86,7 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
     messages: { direction: InboxMessageDirection; message: string }[];
   }): Promise<void> {
     // If the most recent message is INBOUND, the customer already replied — cancel
+    // (runs regardless of time so a reply at 2am still stops the sequence)
     const lastMsg = thread.messages[0];
     if (!lastMsg || lastMsg.direction === InboxMessageDirection.INBOUND) {
       await this.prisma.inboxThread.update({
@@ -93,6 +94,13 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
         data: { followUpScheduledFor: null, followUpCount: 0 },
       });
       this.logger.log(`[FollowUp] Thread ${thread.id} — customer replied, cancelled`);
+      return;
+    }
+
+    // Hold outside 8am–8pm SAST — don't send, don't reschedule.
+    // The worker will pick this thread up again on the next 5-min tick.
+    if (!this.isWithinSendingHours()) {
+      this.logger.log(`[FollowUp] Thread ${thread.id} — outside sending hours, holding`);
       return;
     }
 
@@ -202,6 +210,12 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
       `Beacon Bay Crossing (East London) or 152 Main Road Walmer (GQ)\n` +
       `Mon–Fri 9am–5pm · Sat 9am–2pm`
     );
+  }
+
+  /** True if the current time is within 8am–8pm SAST (UTC+2, no DST). */
+  private isWithinSendingHours(): boolean {
+    const hourSAST = (new Date().getUTCHours() + 2) % 24;
+    return hourSAST >= 8 && hourSAST < 20;
   }
 
   /**
