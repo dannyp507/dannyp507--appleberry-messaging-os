@@ -3,15 +3,18 @@ import { InboxMessageDirection } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 
-// How long after a price reply before we send the first nudge
+// ── Price-track constants ────────────────────────────────────────────────────
 const FIRST_FOLLOW_UP_MS  =  2 * 60 * 60 * 1000; // 2h after price
-// How long after the first nudge before the second
-const SECOND_FOLLOW_UP_MS = 22 * 60 * 60 * 1000; // 22h later = ~24h after price
-// How long after the second nudge before the third (and final) one
-const THIRD_FOLLOW_UP_MS  = 24 * 60 * 60 * 1000; // 24h later = ~48h after price
-// Maximum follow-ups per lead (3 total)
+const SECOND_FOLLOW_UP_MS = 22 * 60 * 60 * 1000; // 22h later ≈ 24h after price
+const THIRD_FOLLOW_UP_MS  = 24 * 60 * 60 * 1000; // 24h later ≈ 48h after price
 const MAX_FOLLOW_UPS = 3;
-// How often the worker checks for due follow-ups
+
+// ── Soft-track (location/hours lead) constants ───────────────────────────────
+// followUpCount >= SOFT_SENTINEL means this thread is on the soft track (1 msg only)
+const SOFT_SENTINEL        = 50;
+const LOCATION_FOLLOW_UP_MS = 24 * 60 * 60 * 1000; // 24h after location reply
+
+// ── Worker interval ──────────────────────────────────────────────────────────
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
 
 @Injectable()
@@ -90,6 +93,32 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
         data: { followUpScheduledFor: null, followUpCount: 0 },
       });
       this.logger.log(`[FollowUp] Thread ${thread.id} — customer replied, cancelled`);
+      return;
+    }
+
+    // ── Soft track: location/hours lead — one message then done ─────────────
+    if (thread.followUpCount >= SOFT_SENTINEL) {
+      const name = thread.contact.firstName;
+      const hi = name && name !== 'Unknown' ? `Hey ${name}!` : 'Hey!';
+      const softText =
+        `${hi} Just checking in from AppleBerry 😊\n\n` +
+        `Did you manage to pop in? If not, no stress — we're still here whenever suits you.\n\n` +
+        `Beacon Bay Crossing (East London) or 152 Main Road Walmer (GQ)\n` +
+        `Mon–Fri 9am–5pm · Sat 9am–2pm 🔧`;
+
+      await this.messages.enqueueOutboundText({
+        workspaceId: thread.workspaceId,
+        whatsappAccountId: thread.whatsappAccountId!,
+        to: thread.contact.phone,
+        message: softText,
+        contactId: thread.contact.id,
+        inboxThreadId: thread.id,
+      });
+      await this.prisma.inboxThread.update({
+        where: { id: thread.id },
+        data: { followUpScheduledFor: null, followUpCount: 0 },
+      });
+      this.logger.log(`[FollowUp] Thread ${thread.id} — soft follow-up sent (location lead), sequence complete`);
       return;
     }
 
@@ -176,8 +205,8 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Called by IncomingMessageService when the bot sends a reply containing a price.
-   * Schedules the first follow-up in 2 hours.
+   * Called when the bot sends a reply containing a price.
+   * Schedules the first follow-up in 2 hours (price track).
    */
   async scheduleForThread(threadId: string): Promise<void> {
     await this.prisma.inboxThread.update({
@@ -187,7 +216,30 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
         followUpCount: 0,
       },
     });
-    this.logger.log(`[FollowUp] Scheduled for thread ${threadId} (fires in 2h)`);
+    this.logger.log(`[FollowUp] Price track scheduled for thread ${threadId} (fires in 2h)`);
+  }
+
+  /**
+   * Called when the bot sends a location/hours reply with no price.
+   * Schedules a single soft follow-up in 24 hours.
+   * Will NOT overwrite an active price-track follow-up.
+   */
+  async scheduleSoftForThread(threadId: string): Promise<void> {
+    const thread = await this.prisma.inboxThread.findUnique({
+      where: { id: threadId },
+      select: { followUpScheduledFor: true, followUpCount: true },
+    });
+    // Don't overwrite an active price-track follow-up
+    if (thread?.followUpScheduledFor && (thread.followUpCount ?? 0) < SOFT_SENTINEL) return;
+
+    await this.prisma.inboxThread.update({
+      where: { id: threadId },
+      data: {
+        followUpScheduledFor: new Date(Date.now() + LOCATION_FOLLOW_UP_MS),
+        followUpCount: SOFT_SENTINEL,
+      },
+    });
+    this.logger.log(`[FollowUp] Soft track scheduled for thread ${threadId} (fires in 24h)`);
   }
 
   /**

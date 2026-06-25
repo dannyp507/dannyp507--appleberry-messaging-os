@@ -648,11 +648,19 @@ export class IncomingMessageService {
     return true;
   }
 
-  /** If a bot reply contains a Rand price (e.g. R999, R1 999), schedule the lead follow-up. */
+  /** Schedule a follow-up based on what the bot just replied with. */
   private async maybeScheduleFollowUp(threadId: string, replyText: string): Promise<void> {
     if (/R\s?\d{3,}/i.test(replyText)) {
+      // Price mentioned → full 3-message negotiation sequence
       await this.followUp.scheduleForThread(threadId).catch((e) =>
         this.logger.warn(`[FollowUp] scheduleForThread failed: ${e?.message}`),
+      );
+    } else if (
+      /beacon bay|walmer|main road|9am|5pm|2pm|mon.{0,5}fri|monday.{0,20}friday|our hours|we.re open|we are open|located at|our address/i.test(replyText)
+    ) {
+      // Location/hours mentioned, no price → single soft check-in at 24h
+      await this.followUp.scheduleSoftForThread(threadId).catch((e) =>
+        this.logger.warn(`[FollowUp] scheduleSoftForThread failed: ${e?.message}`),
       );
     }
   }
