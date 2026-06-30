@@ -545,6 +545,7 @@ model WhatsAppAccount {
   dripEnrollments       DripEnrollment[]
   subscribeForms        SubscribeForm[]
   aiSettings            WhatsAppAccountAiSettings?
+  followUpSettings      WhatsAppFollowUpSettings?
 
   @@index([workspaceId])
 }
@@ -592,6 +593,40 @@ model WhatsAppAccountAiSettings {
   updatedAt           DateTime @default(now()) @updatedAt
 
   whatsappAccount     WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppFollowUpSettings {
+  id                String  @id @default(uuid()) @db.Uuid
+  whatsappAccountId String  @unique @db.Uuid
+
+  // Sequence 1 — fires after price/location reply
+  seq1Enabled    Boolean @default(true)
+  seq1Message    String? @db.Text
+  seq1DelayHours Int     @default(2)
+
+  // Sequence 2 — fires after seq1
+  seq2Enabled    Boolean @default(true)
+  seq2Message    String? @db.Text
+  seq2DelayHours Int     @default(22)
+
+  // Sequence 3 (final) — fires after seq2
+  seq3Enabled    Boolean @default(true)
+  seq3Message    String? @db.Text
+  seq3DelayHours Int     @default(24)
+
+  // Soft track — location/hours lead, single message
+  softEnabled    Boolean @default(true)
+  softMessage    String? @db.Text
+  softDelayHours Int     @default(24)
+
+  // Sending window (SAST hour, 0-23)
+  sendWindowStart Int @default(8)
+  sendWindowEnd   Int @default(20)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  whatsappAccount WhatsAppAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
 }
 
 model WhatsAppSession {

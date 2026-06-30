@@ -303,4 +303,36 @@ export class WhatsappAccountsService {
       ? longJson.access_token
       : shortToken;
   }
+
+  // ── Follow-up sequence settings ──────────────────────────────────────────────
+
+  getFollowUpSettings(whatsappAccountId: string) {
+    return this.prisma.whatsAppFollowUpSettings.findUnique({ where: { whatsappAccountId } });
+  }
+
+  upsertFollowUpSettings(whatsappAccountId: string, dto: Record<string, unknown>) {
+    const data = {
+      seq1Enabled:    dto.seq1Enabled    !== undefined ? Boolean(dto.seq1Enabled)    : undefined,
+      seq1Message:    dto.seq1Message    !== undefined ? (dto.seq1Message as string | null) : undefined,
+      seq1DelayHours: dto.seq1DelayHours !== undefined ? Number(dto.seq1DelayHours)  : undefined,
+      seq2Enabled:    dto.seq2Enabled    !== undefined ? Boolean(dto.seq2Enabled)    : undefined,
+      seq2Message:    dto.seq2Message    !== undefined ? (dto.seq2Message as string | null) : undefined,
+      seq2DelayHours: dto.seq2DelayHours !== undefined ? Number(dto.seq2DelayHours)  : undefined,
+      seq3Enabled:    dto.seq3Enabled    !== undefined ? Boolean(dto.seq3Enabled)    : undefined,
+      seq3Message:    dto.seq3Message    !== undefined ? (dto.seq3Message as string | null) : undefined,
+      seq3DelayHours: dto.seq3DelayHours !== undefined ? Number(dto.seq3DelayHours)  : undefined,
+      softEnabled:    dto.softEnabled    !== undefined ? Boolean(dto.softEnabled)    : undefined,
+      softMessage:    dto.softMessage    !== undefined ? (dto.softMessage as string | null) : undefined,
+      softDelayHours: dto.softDelayHours !== undefined ? Number(dto.softDelayHours)  : undefined,
+      sendWindowStart: dto.sendWindowStart !== undefined ? Number(dto.sendWindowStart) : undefined,
+      sendWindowEnd:   dto.sendWindowEnd   !== undefined ? Number(dto.sendWindowEnd)   : undefined,
+    };
+    // Strip undefined keys so upsert only patches what was sent
+    const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+    return this.prisma.whatsAppFollowUpSettings.upsert({
+      where:  { whatsappAccountId },
+      create: { whatsappAccountId, ...clean },
+      update: clean,
+    });
+  }
 }

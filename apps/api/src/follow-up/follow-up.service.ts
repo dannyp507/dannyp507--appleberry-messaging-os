@@ -97,22 +97,37 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    // Hold outside 8am–8pm SAST — don't send, don't reschedule.
-    // The worker will pick this thread up again on the next 5-min tick.
-    if (!this.isWithinSendingHours()) {
+    // Load custom settings for this account — null means use hardcoded defaults
+    const settings = await this.prisma.whatsAppFollowUpSettings.findUnique({
+      where: { whatsappAccountId: thread.whatsappAccountId! },
+    }).catch(() => null);
+
+    // Hold outside sending window — defaults to 8am-8pm SAST, overridable per account
+    const windowStart = settings?.sendWindowStart ?? 8;
+    const windowEnd   = settings?.sendWindowEnd   ?? 20;
+    if (!this.isWithinSendingHours(windowStart, windowEnd)) {
       this.logger.log(`[FollowUp] Thread ${thread.id} — outside sending hours, holding`);
       return;
     }
 
     // ── Soft track: location/hours lead — one message then done ─────────────
     if (thread.followUpCount >= SOFT_SENTINEL) {
+      if (settings && !settings.softEnabled) {
+        await this.prisma.inboxThread.update({
+          where: { id: thread.id },
+          data: { followUpScheduledFor: null, followUpCount: 0 },
+        });
+        return;
+      }
       const name = thread.contact.firstName;
       const hi = name && name !== 'Unknown' ? `Hey ${name}!` : 'Hey!';
-      const softText =
+      const defaultSoft =
         `${hi} Just checking in from AppleBerry 😊\n\n` +
         `Did you manage to pop in? If not, no stress — we're still here whenever suits you.\n\n` +
         `Beacon Bay Crossing (East London) or 152 Main Road Walmer (GQ)\n` +
         `Mon–Fri 9am–5pm · Sat 9am–2pm 🔧`;
+
+      const softText = this.interpolate(settings?.softMessage || defaultSoft, { name, price: '' });
 
       await this.messages.enqueueOutboundText({
         workspaceId: thread.workspaceId,
@@ -130,8 +145,19 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // Check if this specific sequence step is disabled
+    const seqEnabled = [settings?.seq1Enabled, settings?.seq2Enabled, settings?.seq3Enabled];
+    if (seqEnabled[thread.followUpCount] === false) {
+      await this.prisma.inboxThread.update({
+        where: { id: thread.id },
+        data: { followUpScheduledFor: null, followUpCount: 0 },
+      });
+      this.logger.log(`[FollowUp] Thread ${thread.id} — seq${thread.followUpCount + 1} disabled, skipping`);
+      return;
+    }
+
     const priceContext = this.extractPriceContext(thread.messages);
-    const followUpText = this.buildMessage(thread.followUpCount, priceContext, thread.contact.firstName);
+    const followUpText = this.buildMessage(thread.followUpCount, priceContext, thread.contact.firstName, settings);
 
     await this.messages.enqueueOutboundText({
       workspaceId: thread.workspaceId,
@@ -144,9 +170,13 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
 
     const newCount = thread.followUpCount + 1;
 
+    // Resolve delays: use settings if set, otherwise hardcoded constants
+    const delay2Ms = ((settings?.seq2DelayHours ?? 22)) * 60 * 60 * 1000;
+    const delay3Ms = ((settings?.seq3DelayHours ?? 24)) * 60 * 60 * 1000;
+
     if (newCount < MAX_FOLLOW_UPS) {
-      const nextDelayMs = newCount === 1 ? SECOND_FOLLOW_UP_MS : THIRD_FOLLOW_UP_MS;
-      const nextInLabel = newCount === 1 ? '22h' : '24h';
+      const nextDelayMs = newCount === 1 ? delay2Ms : delay3Ms;
+      const nextInLabel = newCount === 1 ? `${settings?.seq2DelayHours ?? 22}h` : `${settings?.seq3DelayHours ?? 24}h`;
       await this.prisma.inboxThread.update({
         where: { id: thread.id },
         data: {
@@ -177,13 +207,19 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
     return '';
   }
 
-  private buildMessage(count: number, priceContext: string, firstName: string): string {
+  private buildMessage(count: number, priceContext: string, firstName: string, settings?: { seq1Message?: string | null; seq2Message?: string | null; seq3Message?: string | null } | null): string {
     const name = firstName && firstName !== 'Unknown' ? firstName : null;
     const hi = name ? `Hey ${name}!` : 'Hey!';
     const priceRef = priceContext ? `that ${priceContext} repair` : 'the repair';
+    const vars = { name: name ?? '', price: priceContext };
 
+    // If a custom message is saved for this step, use it (with {{name}}/{{price}} interpolation)
+    if (count === 0 && settings?.seq1Message) return this.interpolate(settings.seq1Message, vars);
+    if (count === 1 && settings?.seq2Message) return this.interpolate(settings.seq2Message, vars);
+    if (count === 2 && settings?.seq3Message) return this.interpolate(settings.seq3Message, vars);
+
+    // ── Hardcoded defaults (used when no custom message is configured) ────────
     if (count === 0) {
-      // 2h — soft check-in + open the door to negotiation
       return (
         `${hi} Just checking in from AppleBerry 😊\n\n` +
         `Still thinking about ${priceRef}? If the quote felt a bit steep, don't stress — ` +
@@ -193,7 +229,6 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (count === 1) {
-      // 24h — empathy + genuine negotiation offer
       return (
         `${hi} We'd genuinely rather help you get sorted than see your device stay broken 🙏\n\n` +
         `Pop in and tell us your budget — our technicians will see what we can work out together. No pressure at all.\n\n` +
@@ -202,7 +237,6 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    // 48h — final close with last-chance energy
     return (
       `Last chance to get this sorted 👀\n\n` +
       `We still have a couple of slots left this week. Even if budget is tight — come in, let's talk. ` +
@@ -212,10 +246,17 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  /** True if the current time is within 8am–8pm SAST (UTC+2, no DST). */
-  private isWithinSendingHours(): boolean {
+  /** True if the current time is within the given SAST window (UTC+2, no DST). */
+  private isWithinSendingHours(start = 8, end = 20): boolean {
     const hourSAST = (new Date().getUTCHours() + 2) % 24;
-    return hourSAST >= 8 && hourSAST < 20;
+    return hourSAST >= start && hourSAST < end;
+  }
+
+  /** Replace {{name}} and {{price}} placeholders in a custom message template. */
+  private interpolate(template: string, vars: { name: string; price: string }): string {
+    return template
+      .replace(/\{\{name\}\}/gi, vars.name || '')
+      .replace(/\{\{price\}\}/gi, vars.price || '');
   }
 
   /**
@@ -223,14 +264,18 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
    * Schedules the first follow-up in 2 hours (price track).
    */
   async scheduleForThread(threadId: string): Promise<void> {
+    // Respect custom seq1 delay if configured, otherwise default 2h
+    const thread = await this.prisma.inboxThread.findUnique({ where: { id: threadId }, select: { whatsappAccountId: true } });
+    const settings = thread?.whatsappAccountId
+      ? await this.prisma.whatsAppFollowUpSettings.findUnique({ where: { whatsappAccountId: thread.whatsappAccountId } }).catch(() => null)
+      : null;
+    const delayMs = ((settings?.seq1DelayHours ?? 2)) * 60 * 60 * 1000;
+
     await this.prisma.inboxThread.update({
       where: { id: threadId },
-      data: {
-        followUpScheduledFor: new Date(Date.now() + FIRST_FOLLOW_UP_MS),
-        followUpCount: 0,
-      },
+      data: { followUpScheduledFor: new Date(Date.now() + delayMs), followUpCount: 0 },
     });
-    this.logger.log(`[FollowUp] Price track scheduled for thread ${threadId} (fires in 2h)`);
+    this.logger.log(`[FollowUp] Price track scheduled for thread ${threadId} (fires in ${settings?.seq1DelayHours ?? 2}h)`);
   }
 
   /**

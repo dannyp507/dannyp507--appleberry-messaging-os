@@ -182,4 +182,22 @@ export class WhatsappAccountsController {
   ) {
     return this.aiSettings.upsertWhatsAppAccount(id, dto);
   }
+
+  // ── Follow-up sequence settings ───────────────────────────────────────────
+
+  @Get(':id/follow-up-settings')
+  getFollowUpSettings(@Param('id', ParseUUIDPipe) id: string) {
+    return this.accounts.getFollowUpSettings(id);
+  }
+
+  @Post(':id/follow-up-settings')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  upsertFollowUpSettings(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: Record<string, unknown>,
+  ) {
+    return this.accounts.upsertFollowUpSettings(id, dto);
+  }
 }

@@ -24,7 +24,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-type Tab = "ai-training" | "dm-bot";
+type Tab = "ai-training" | "dm-bot" | "follow-up";
 
 export default function WhatsAppAccountDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -70,6 +70,9 @@ export default function WhatsAppAccountDetailPage() {
   const [aiOffReply, setAiOffReply] = useState("");
   const [aiOnKeyword, setAiOnKeyword] = useState("");
   const [aiOnReply, setAiOnReply] = useState("");
+  // AGENT FIX: agent-side takeover phrases (typed by agent on WA Business phone)
+  const [agentOffKeyword, setAgentOffKeyword] = useState("");
+  const [agentOnKeyword, setAgentOnKeyword] = useState("");
 
   useEffect(() => {
     if (!aiSettings) return;
@@ -89,6 +92,9 @@ export default function WhatsAppAccountDetailPage() {
     setAiOffReply(aiSettings.aiOffReply ?? "");
     setAiOnKeyword(aiSettings.aiOnKeyword ?? "");
     setAiOnReply(aiSettings.aiOnReply ?? "");
+    // AGENT FIX: load agent takeover phrases
+    setAgentOffKeyword((aiSettings as any).agentOffKeyword ?? "");
+    setAgentOnKeyword((aiSettings as any).agentOnKeyword ?? "");
   }, [aiSettings]);
 
   // ── Save AI Training ───────────────────────────────────────────────────────
@@ -124,6 +130,9 @@ export default function WhatsAppAccountDetailPage() {
         aiOffReply: aiOffReply || null,
         aiOnKeyword: aiOnKeyword || null,
         aiOnReply: aiOnReply || null,
+        // AGENT FIX: agent-side takeover phrases
+        agentOffKeyword: agentOffKeyword || null,
+        agentOnKeyword: agentOnKeyword || null,
       });
     },
     onSuccess: () => {
@@ -131,6 +140,75 @@ export default function WhatsAppAccountDetailPage() {
       void queryClient.invalidateQueries({ queryKey: qk.waAccountAiSettings(id) });
     },
     onError: () => toast.error("Failed to save DM Bot settings"),
+  });
+
+  // ── Follow-up sequence state ───────────────────────────────────────────────
+  const [fuSeq1Enabled, setFuSeq1Enabled] = useState(true);
+  const [fuSeq1Message, setFuSeq1Message] = useState("");
+  const [fuSeq1DelayHours, setFuSeq1DelayHours] = useState(2);
+  const [fuSeq2Enabled, setFuSeq2Enabled] = useState(true);
+  const [fuSeq2Message, setFuSeq2Message] = useState("");
+  const [fuSeq2DelayHours, setFuSeq2DelayHours] = useState(22);
+  const [fuSeq3Enabled, setFuSeq3Enabled] = useState(true);
+  const [fuSeq3Message, setFuSeq3Message] = useState("");
+  const [fuSeq3DelayHours, setFuSeq3DelayHours] = useState(24);
+  const [fuSoftEnabled, setFuSoftEnabled] = useState(true);
+  const [fuSoftMessage, setFuSoftMessage] = useState("");
+  const [fuSoftDelayHours, setFuSoftDelayHours] = useState(24);
+  const [fuSendWindowStart, setFuSendWindowStart] = useState(8);
+  const [fuSendWindowEnd, setFuSendWindowEnd] = useState(20);
+
+  const { data: fuSettings } = useQuery({
+    queryKey: ["waFollowUpSettings", id],
+    queryFn: async () => {
+      const { data } = await api.get(`/whatsapp/accounts/${id}/follow-up-settings`);
+      return data as Record<string, unknown> | null;
+    },
+    enabled: !!id,
+  });
+
+  useEffect(() => {
+    if (!fuSettings) return;
+    setFuSeq1Enabled((fuSettings.seq1Enabled as boolean) ?? true);
+    setFuSeq1Message((fuSettings.seq1Message as string) ?? "");
+    setFuSeq1DelayHours((fuSettings.seq1DelayHours as number) ?? 2);
+    setFuSeq2Enabled((fuSettings.seq2Enabled as boolean) ?? true);
+    setFuSeq2Message((fuSettings.seq2Message as string) ?? "");
+    setFuSeq2DelayHours((fuSettings.seq2DelayHours as number) ?? 22);
+    setFuSeq3Enabled((fuSettings.seq3Enabled as boolean) ?? true);
+    setFuSeq3Message((fuSettings.seq3Message as string) ?? "");
+    setFuSeq3DelayHours((fuSettings.seq3DelayHours as number) ?? 24);
+    setFuSoftEnabled((fuSettings.softEnabled as boolean) ?? true);
+    setFuSoftMessage((fuSettings.softMessage as string) ?? "");
+    setFuSoftDelayHours((fuSettings.softDelayHours as number) ?? 24);
+    setFuSendWindowStart((fuSettings.sendWindowStart as number) ?? 8);
+    setFuSendWindowEnd((fuSettings.sendWindowEnd as number) ?? 20);
+  }, [fuSettings]);
+
+  const saveFuMutation = useMutation({
+    mutationFn: async () => {
+      await api.post(`/whatsapp/accounts/${id}/follow-up-settings`, {
+        seq1Enabled: fuSeq1Enabled,
+        seq1Message: fuSeq1Message || null,
+        seq1DelayHours: fuSeq1DelayHours,
+        seq2Enabled: fuSeq2Enabled,
+        seq2Message: fuSeq2Message || null,
+        seq2DelayHours: fuSeq2DelayHours,
+        seq3Enabled: fuSeq3Enabled,
+        seq3Message: fuSeq3Message || null,
+        seq3DelayHours: fuSeq3DelayHours,
+        softEnabled: fuSoftEnabled,
+        softMessage: fuSoftMessage || null,
+        softDelayHours: fuSoftDelayHours,
+        sendWindowStart: fuSendWindowStart,
+        sendWindowEnd: fuSendWindowEnd,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Follow-up sequences saved");
+      void queryClient.invalidateQueries({ queryKey: ["waFollowUpSettings", id] });
+    },
+    onError: () => toast.error("Failed to save follow-up settings"),
   });
 
   const isConnected =
@@ -141,6 +219,7 @@ export default function WhatsAppAccountDetailPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: "ai-training", label: "AI Training" },
     { key: "dm-bot", label: "DM Bot" },
+    { key: "follow-up", label: "Follow-up Sequences" },
   ];
 
   return (
@@ -576,6 +655,48 @@ Rules:
             )}
           </div>
 
+          {/* AGENT FIX: Agent Takeover — phrases typed BY the agent on WhatsApp Business */}
+          <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm space-y-5">
+            <div className="flex items-center gap-2">
+              <Bot className="size-4 text-purple-400" />
+              <span className="text-sm font-semibold">Agent Takeover</span>
+              <span className="ml-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-semibold text-purple-400 uppercase tracking-wide">You type this</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Type the <strong>Pause phrase</strong> on your WhatsApp Business phone to silently switch off the bot for that conversation only — the client sees your message. Type the <strong>Resume phrase</strong> to bring the bot back. Both phrases are case-insensitive exact matches.
+            </p>
+
+            {/* Pause phrase */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pause phrase (bot OFF)</label>
+              <input
+                type="text"
+                className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                placeholder='e.g. "you are now speaking to an agent"'
+                value={agentOffKeyword}
+                onChange={(e) => setAgentOffKeyword(e.target.value)}
+              />
+            </div>
+
+            {/* Resume phrase */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Resume phrase (bot ON)</label>
+              <input
+                type="text"
+                className="w-full rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                placeholder='e.g. "you are now back on with a bot"'
+                value={agentOnKeyword}
+                onChange={(e) => setAgentOnKeyword(e.target.value)}
+              />
+            </div>
+
+            {(agentOffKeyword || agentOnKeyword) && (
+              <p className="text-xs text-purple-400/80">
+                ✓ Saved — type these exact phrases on your WhatsApp Business phone to control the bot per conversation.
+              </p>
+            )}
+          </div>
+
           <Button
             className="rounded-xl w-fit"
             disabled={saveDmMutation.isPending}
@@ -583,6 +704,135 @@ Rules:
           >
             {saveDmMutation.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
             Save DM Bot settings
+          </Button>
+        </div>
+      )}
+
+      {/* ── Follow-up Sequences tab ─────────────────────────────────────────── */}
+      {tab === "follow-up" && (
+        <div className="space-y-6">
+
+          {/* Info banner */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 p-4 text-sm text-blue-700 dark:text-blue-300">
+            <p className="font-medium mb-1">How follow-up sequences work</p>
+            <p>After the bot mentions a price, it automatically sends up to 3 follow-up messages if the client goes quiet. Leave a message blank to use the built-in default. Use <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{"{{name}}"}</code> for the client's name and <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{"{{price}}"}</code> for the quoted price.</p>
+          </div>
+
+          {/* Sending window */}
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+            <h3 className="font-semibold text-sm">Sending Window (SAST)</h3>
+            <p className="text-xs text-muted-foreground">Follow-ups are held outside this window and sent at the next available time.</p>
+            <div className="flex items-center gap-4">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">From (hour)</label>
+                <input
+                  type="number" min={0} max={23} value={fuSendWindowStart}
+                  onChange={(e) => setFuSendWindowStart(Number(e.target.value))}
+                  className="w-20 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <span className="text-muted-foreground mt-5">–</span>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">To (hour)</label>
+                <input
+                  type="number" min={0} max={23} value={fuSendWindowEnd}
+                  onChange={(e) => setFuSendWindowEnd(Number(e.target.value))}
+                  className="w-20 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-5">Default: 8 – 20 (8am–8pm)</p>
+            </div>
+          </div>
+
+          {/* Price-track sequences */}
+          <div className="rounded-xl border border-border bg-card p-5 space-y-6">
+            <h3 className="font-semibold text-sm">Price-track Sequences</h3>
+            <p className="text-xs text-muted-foreground">Fires when the bot quotes a price and the client doesn't reply.</p>
+
+            {([
+              { label: "Sequence 1", enabled: fuSeq1Enabled, setEnabled: setFuSeq1Enabled, msg: fuSeq1Message, setMsg: setFuSeq1Message, delay: fuSeq1DelayHours, setDelay: setFuSeq1DelayHours, delayLabel: "hours after price reply", placeholder: "Hey {{name}}! Still thinking about that {{price}} repair? If the quote felt steep, pop in — we always find a way to help 💪" },
+              { label: "Sequence 2", enabled: fuSeq2Enabled, setEnabled: setFuSeq2Enabled, msg: fuSeq2Message, setMsg: setFuSeq2Message, delay: fuSeq2DelayHours, setDelay: setFuSeq2DelayHours, delayLabel: "hours after sequence 1", placeholder: "Hey {{name}}! We'd genuinely rather help you get sorted 🙏 Pop in and tell us your budget — our techs will see what we can work out." },
+              { label: "Sequence 3 (final)", enabled: fuSeq3Enabled, setEnabled: setFuSeq3Enabled, msg: fuSeq3Message, setMsg: setFuSeq3Message, delay: fuSeq3DelayHours, setDelay: setFuSeq3DelayHours, delayLabel: "hours after sequence 2", placeholder: "Last chance 👀 We'd much rather work something out than leave you without your device. Come in, let's talk." },
+            ] as const).map((seq) => (
+              <div key={seq.label} className="space-y-3 border-t border-border pt-5 first:border-t-0 first:pt-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{seq.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => seq.setEnabled(!seq.enabled)}
+                    className={cn("relative inline-flex h-5 w-9 items-center rounded-full transition-colors", seq.enabled ? "bg-primary" : "bg-muted")}
+                  >
+                    <span className={cn("inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform", seq.enabled ? "translate-x-4" : "translate-x-1")} />
+                  </button>
+                </div>
+                {seq.enabled && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min={1} max={168} value={seq.delay}
+                        onChange={(e) => seq.setDelay(Number(e.target.value))}
+                        className="w-20 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">{seq.delayLabel}</span>
+                    </div>
+                    <textarea
+                      rows={4}
+                      value={seq.msg}
+                      onChange={(e) => seq.setMsg(e.target.value)}
+                      placeholder={seq.placeholder}
+                      className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <p className="text-xs text-muted-foreground">Leave blank to use the built-in default message.</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Soft track */}
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-sm">Location / Hours Check-in</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Single follow-up when the bot shares your address or hours but no price.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFuSoftEnabled(!fuSoftEnabled)}
+                className={cn("relative inline-flex h-5 w-9 items-center rounded-full transition-colors", fuSoftEnabled ? "bg-primary" : "bg-muted")}
+              >
+                <span className={cn("inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform", fuSoftEnabled ? "translate-x-4" : "translate-x-1")} />
+              </button>
+            </div>
+            {fuSoftEnabled && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min={1} max={168} value={fuSoftDelayHours}
+                    onChange={(e) => setFuSoftDelayHours(Number(e.target.value))}
+                    className="w-20 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground">hours after reply</span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={fuSoftMessage}
+                  onChange={(e) => setFuSoftMessage(e.target.value)}
+                  placeholder="Hey {{name}}! Just checking in 😊 Did you manage to pop in? We're still here whenever suits you."
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p className="text-xs text-muted-foreground">Leave blank to use the built-in default message.</p>
+              </div>
+            )}
+          </div>
+
+          <Button
+            className="rounded-xl w-fit"
+            disabled={saveFuMutation.isPending}
+            onClick={() => saveFuMutation.mutate()}
+          >
+            {saveFuMutation.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+            Save Follow-up Sequences
           </Button>
         </div>
       )}
