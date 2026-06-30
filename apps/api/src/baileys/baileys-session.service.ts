@@ -358,18 +358,22 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`Account ${accountId} disconnected — reason: ${reasonName} (${reason ?? 'no code'})`);
 
         entry.status = 'DISCONNECTED';
-        await this.prisma.whatsAppSession.updateMany({
-          where: { whatsappAccountId: accountId },
-          data: {
-            status: 'DISCONNECTED',
-            disconnectedAt: new Date(),
-            errorMessage: String(lastDisconnect?.error ?? ''),
-          },
-        });
-        await this.prisma.whatsAppAccount.updateMany({
-          where: { id: accountId },
-          data: { sessionStatus: 'DISCONNECTED' },
-        });
+        try {
+          await this.prisma.whatsAppSession.updateMany({
+            where: { whatsappAccountId: accountId },
+            data: {
+              status: 'DISCONNECTED',
+              disconnectedAt: new Date(),
+              errorMessage: String(lastDisconnect?.error ?? ''),
+            },
+          });
+          await this.prisma.whatsAppAccount.updateMany({
+            where: { id: accountId },
+            data: { sessionStatus: 'DISCONNECTED' },
+          });
+        } catch (dbErr) {
+          this.logger.error(`[BaileysSession] DB update failed on disconnect for ${accountId}: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`);
+        }
 
         this.sessions.delete(accountId);
 
