@@ -15,6 +15,8 @@ export interface Campaign {
   templateId: string;
   contactGroupId: string;
   whatsappAccountId: string | null;
+  minDelayMs: number;
+  maxDelayMs: number;
   createdAt: string;
   updatedAt: string;
   template?: { id: string; name: string };
@@ -170,6 +172,8 @@ export interface WhatsAppAccountAiSettings {
   aiOffReply: string | null;
   aiOnKeyword: string | null;
   aiOnReply: string | null;
+  agentOffKeyword: string | null;
+  agentOnKeyword: string | null;
 }
 
 export interface FacebookPageAiSettings {

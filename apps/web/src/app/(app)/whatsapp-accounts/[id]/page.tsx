@@ -93,8 +93,8 @@ export default function WhatsAppAccountDetailPage() {
     setAiOnKeyword(aiSettings.aiOnKeyword ?? "");
     setAiOnReply(aiSettings.aiOnReply ?? "");
     // AGENT FIX: load agent takeover phrases
-    setAgentOffKeyword((aiSettings as any).agentOffKeyword ?? "");
-    setAgentOnKeyword((aiSettings as any).agentOnKeyword ?? "");
+    setAgentOffKeyword(aiSettings.agentOffKeyword ?? "");
+    setAgentOnKeyword(aiSettings.agentOnKeyword ?? "");
   }, [aiSettings]);
 
   // ── Save AI Training ───────────────────────────────────────────────────────
@@ -715,7 +715,7 @@ Rules:
           {/* Info banner */}
           <div className="rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 p-4 text-sm text-blue-700 dark:text-blue-300">
             <p className="font-medium mb-1">How follow-up sequences work</p>
-            <p>After the bot mentions a price, it automatically sends up to 3 follow-up messages if the client goes quiet. Leave a message blank to use the built-in default. Use <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{"{{name}}"}</code> for the client's name and <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{"{{price}}"}</code> for the quoted price.</p>
+            <p>After the bot mentions a price, it automatically sends up to 3 follow-up messages if the client goes quiet. Leave a message blank to use the built-in default. Use <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{"{{name}}"}</code> for the client&apos;s name and <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{"{{price}}"}</code> for the quoted price.</p>
           </div>
 
           {/* Sending window */}
@@ -747,7 +747,7 @@ Rules:
           {/* Price-track sequences */}
           <div className="rounded-xl border border-border bg-card p-5 space-y-6">
             <h3 className="font-semibold text-sm">Price-track Sequences</h3>
-            <p className="text-xs text-muted-foreground">Fires when the bot quotes a price and the client doesn't reply.</p>
+            <p className="text-xs text-muted-foreground">Fires when the bot quotes a price and the client doesn&apos;t reply.</p>
 
             {([
               { label: "Sequence 1", enabled: fuSeq1Enabled, setEnabled: setFuSeq1Enabled, msg: fuSeq1Message, setMsg: setFuSeq1Message, delay: fuSeq1DelayHours, setDelay: setFuSeq1DelayHours, delayLabel: "hours after price reply", placeholder: "Hey {{name}}! Still thinking about that {{price}} repair? If the quote felt steep, pop in — we always find a way to help 💪" },
