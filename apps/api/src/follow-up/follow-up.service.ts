@@ -119,8 +119,9 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
         });
         return;
       }
-      const name = thread.contact.firstName;
-      const hi = name && name !== 'Unknown' ? `Hey ${name}!` : 'Hey!';
+      const rawName = thread.contact.firstName;
+      const name = rawName && rawName !== 'Unknown' && !/^\d{6,}$/.test(rawName) ? rawName : null;
+      const hi = name ? `Hey ${name}!` : 'Hey!';
       const defaultSoft =
         `${hi} Just checking in from AppleBerry 😊\n\n` +
         `Did you manage to pop in? If not, no stress — we're still here whenever suits you.\n\n` +
@@ -208,7 +209,9 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildMessage(count: number, priceContext: string, firstName: string, settings?: { seq1Message?: string | null; seq2Message?: string | null; seq3Message?: string | null } | null): string {
-    const name = firstName && firstName !== 'Unknown' ? firstName : null;
+    // Reject numeric-only strings (raw JID fragments like "229197020696605") as names
+    const isNumericJid = /^\d{6,}$/.test(firstName ?? '');
+    const name = firstName && firstName !== 'Unknown' && !isNumericJid ? firstName : null;
     const hi = name ? `Hey ${name}!` : 'Hey!';
     const priceRef = priceContext ? `that ${priceContext} repair` : 'the repair';
     const vars = { name: name ?? '', price: priceContext };

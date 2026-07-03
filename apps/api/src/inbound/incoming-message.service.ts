@@ -83,10 +83,11 @@ export class IncomingMessageService {
       ? { e164: rawFrom, isValid: false }
       : normalizePhoneE164(rawFrom, 'ZA');
 
-    // Prefer sender's WhatsApp push name; fall back to phone/JID digits
-    const senderName =
-      job.senderName?.trim() ||
-      (isJid ? rawFrom.replace(/@.*/, '') : e164.replace(/\D/g, ''));
+    // Prefer sender's WhatsApp push name. Never use a raw JID number as a name
+    // (e.g. "229197020696605@lid" → stripping "@lid" gives a numeric string
+    // that is meaningless as a display name).
+    const rawFallback = isJid ? '' : e164.replace(/\D/g, '');
+    const senderName = job.senderName?.trim() || rawFallback || '';
 
     // Use remoteJid for replies so @lid accounts are reached correctly
     const replyTo = job.remoteJid ?? e164;
