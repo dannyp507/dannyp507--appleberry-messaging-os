@@ -127,6 +127,8 @@ export class IncomingMessageService {
     let thread = await this.prisma.inboxThread.findFirst({
       where: { workspaceId, contactId: contact.id, whatsappAccountId: account.id },
     });
+    const preview = job.text.slice(0, 120);
+    const now = new Date();
     if (!thread) {
       thread = await this.prisma.inboxThread.create({
         data: {
@@ -134,12 +136,20 @@ export class IncomingMessageService {
           contactId: contact.id,
           whatsappAccountId: account.id,
           status: InboxThreadStatus.OPEN,
+          lastMessagePreview: preview,
+          lastMessageAt: now,
+          unreadCount: 1,
         },
       });
     } else {
       thread = await this.prisma.inboxThread.update({
         where: { id: thread.id },
-        data: { status: InboxThreadStatus.OPEN },
+        data: {
+          status: InboxThreadStatus.OPEN,
+          lastMessagePreview: preview,
+          lastMessageAt: now,
+          unreadCount: { increment: 1 },
+        },
       });
     }
 
