@@ -20,6 +20,10 @@ export type IncomingMessageJob = {
   text: string;
   senderName?: string; // WhatsApp pushName (display name)
   externalMessageId?: string;
+  // AGENT FIX: true when the message was sent FROM the business WA number (fromMe).
+  // Only set when the text exactly matched an agent takeover keyword — the normal
+  // fromMe skip is still in place for all other outbound messages.
+  isFromMe?: boolean;
 };
 
 export type SendMessageJob = {

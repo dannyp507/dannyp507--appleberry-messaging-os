@@ -138,6 +138,8 @@ export class WorkspaceAiSettingsService {
         dmDefaultReply: null, dmTypingEnabled: false,
         aiOffKeyword: null, aiOffReply: null,
         aiOnKeyword: null, aiOnReply: null,
+        // AGENT FIX: agent-side takeover keywords (new fields)
+        agentOffKeyword: null, agentOnKeyword: null,
       };
     }
     return {
@@ -159,6 +161,9 @@ export class WorkspaceAiSettingsService {
       aiOffReply: row.aiOffReply,
       aiOnKeyword: row.aiOnKeyword,
       aiOnReply: row.aiOnReply,
+      // AGENT FIX: agent-side takeover keywords
+      agentOffKeyword: row.agentOffKeyword,
+      agentOnKeyword: row.agentOnKeyword,
     };
   }
 
@@ -196,6 +201,9 @@ export class WorkspaceAiSettingsService {
         aiOffReply: (dto['aiOffReply'] as string) ?? null,
         aiOnKeyword: (dto['aiOnKeyword'] as string) ?? null,
         aiOnReply: (dto['aiOnReply'] as string) ?? null,
+        // AGENT FIX: agent-side takeover keywords
+        agentOffKeyword: (dto['agentOffKeyword'] as string) ?? null,
+        agentOnKeyword: (dto['agentOnKeyword'] as string) ?? null,
       },
       update: {
         ...(dto['aiProvider'] !== undefined && { aiProvider: dto['aiProvider'] as string }),
@@ -214,6 +222,9 @@ export class WorkspaceAiSettingsService {
         ...(dto['aiOffReply'] !== undefined && { aiOffReply: dto['aiOffReply'] as string }),
         ...(dto['aiOnKeyword'] !== undefined && { aiOnKeyword: dto['aiOnKeyword'] as string }),
         ...(dto['aiOnReply'] !== undefined && { aiOnReply: dto['aiOnReply'] as string }),
+        // AGENT FIX: agent-side takeover keywords
+        ...(dto['agentOffKeyword'] !== undefined && { agentOffKeyword: dto['agentOffKeyword'] as string }),
+        ...(dto['agentOnKeyword'] !== undefined && { agentOnKeyword: dto['agentOnKeyword'] as string }),
         updatedAt: new Date(),
       },
     });

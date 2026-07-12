@@ -64,10 +64,18 @@ export class MessageSendProcessor extends WorkerHost {
       const campaign = await this.prisma.campaign.findUnique({
         where: { id: campaignId },
       });
-      if (!campaign || campaign.status !== CampaignStatus.RUNNING) {
-        await this.skipRecipient(
-          campaignRecipientId,
-          'Campaign not running',
+      if (!campaign) {
+        // Campaign was deleted — mark skipped and bail.
+        await this.skipRecipient(campaignRecipientId, 'Campaign not found');
+        return;
+      }
+      if (campaign.status !== CampaignStatus.RUNNING) {
+        // Campaign was paused or completed while this job was in flight.
+        // The pause handler already reset QUEUED → PENDING, so just discard
+        // this job without touching the recipient row — it will be re-queued
+        // on the next Start.
+        this.logger.log(
+          `Discarding send job for recipient ${campaignRecipientId} — campaign ${campaignId} is ${campaign.status}`,
         );
         return;
       }
@@ -127,11 +135,21 @@ export class MessageSendProcessor extends WorkerHost {
           await provider.sendText(to, interactive.body.text ?? message, accountId);
         }
       } else if (mediaUrl) {
-        const uploadsBase = this.config.get<string>('UPLOADS_BASE_DIR') ?? '/app/uploads';
-        const relPath = mediaUrl.replace(/^\/uploads/, '');
-        const absPath = path.join(uploadsBase, relPath);
+        // If mediaUrl is a full HTTP(S) URL pass it straight through — the provider
+        // (Baileys) will download it directly.  Only do the local-path resolution
+        // for legacy relative paths that start with /uploads/.
+        let resolvedMedia: string;
+        if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
+          resolvedMedia = mediaUrl;
+        } else {
+          const uploadsBase = this.config.get<string>('UPLOADS_BASE_DIR') ?? '/app/uploads';
+          const relPath = mediaUrl.startsWith('/uploads')
+            ? mediaUrl.slice('/uploads'.length)
+            : mediaUrl;
+          resolvedMedia = path.join(uploadsBase, relPath);
+        }
         if (provider.sendMedia) {
-          await provider.sendMedia(to, absPath, message || undefined, accountId);
+          await provider.sendMedia(to, resolvedMedia, message || undefined, accountId);
         } else {
           // Provider doesn't support media — fall back to text caption
           if (message) await provider.sendText(to, message, accountId);
@@ -164,6 +182,13 @@ export class MessageSendProcessor extends WorkerHost {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Send failed for log ${messageLogId}: ${msg}`);
+
+      // Only count this as a campaign failure on the FINAL attempt.
+      // BullMQ's job.attemptsMade is 0-indexed before the current attempt fires,
+      // so when attemptsMade + 1 >= maxAttempts we've exhausted all retries.
+      const maxAttempts = job.opts.attempts ?? 1;
+      const isFinalAttempt = (job.attemptsMade + 1) >= maxAttempts;
+
       await this.prisma.$transaction(async (tx) => {
         await tx.messageLog.update({
           where: { id: messageLogId },
@@ -182,13 +207,17 @@ export class MessageSendProcessor extends WorkerHost {
               error: msg,
             },
           });
-          await tx.campaign.update({
-            where: { id: campaignId },
-            data: { failed: { increment: 1 } },
-          });
+          // Only increment the campaign failed counter on the last attempt —
+          // retries would otherwise inflate the count far beyond the recipient total.
+          if (isFinalAttempt) {
+            await tx.campaign.update({
+              where: { id: campaignId },
+              data: { failed: { increment: 1 } },
+            });
+          }
         }
       });
-      if (campaignId) {
+      if (campaignId && isFinalAttempt) {
         await this.tryMarkCampaignCompleted(campaignId);
       }
       throw err;

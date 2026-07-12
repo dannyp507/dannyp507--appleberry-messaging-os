@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { WorkspaceContextGuard } from '../common/guards/workspace-context.guard';
 import type { Workspace } from '@prisma/client';
 import { CreateTemplateDto } from './dto/create-template.dto';
+import { UpdateTemplateDto } from './dto/update-template.dto';
 import { TemplatesService } from './templates.service';
 
 @Controller('templates')
@@ -36,6 +38,15 @@ export class TemplatesController {
     @Body() dto: CreateTemplateDto,
   ) {
     return this.templates.create(workspace.id, dto);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTemplateDto,
+  ) {
+    return this.templates.update(workspace.id, id, dto);
   }
 
   @Delete(':id')

@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -446,12 +447,25 @@ export default function ContactsPage() {
               </TableRow>
             ) : !data?.items.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                  {filter === "opted-out"
-                    ? "No opted-out contacts."
-                    : typeof filter === "object"
-                    ? "No contacts in this group."
-                    : "No contacts yet. Import a CSV or add one manually."}
+                <TableCell colSpan={6} className="p-0">
+                  <EmptyState
+                    icon={Users}
+                    className="border-0 bg-transparent py-12"
+                    title={
+                      filter === "opted-out"
+                        ? "No opted-out contacts"
+                        : typeof filter === "object"
+                        ? "No contacts in this group"
+                        : "No contacts yet"
+                    }
+                    description={
+                      filter === "opted-out"
+                        ? "Contacts who have opted out will appear here."
+                        : typeof filter === "object"
+                        ? "Add contacts to this group to see them listed here."
+                        : "Import a CSV or add a contact manually to get started."
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ) : (

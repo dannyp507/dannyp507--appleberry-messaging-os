@@ -2,14 +2,16 @@ import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { CampaignStatus } from '@prisma/client';
+import { CampaignRecipientStatus, CampaignStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
 import {
   CAMPAIGN_ORCHESTRATE_QUEUE,
+  MESSAGES_SEND_QUEUE,
   type CampaignOrchestrateJob,
 } from '../queue/queue.constants';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
@@ -18,11 +20,15 @@ import type { StartCampaignDto } from './dto/start-campaign.dto';
 
 @Injectable()
 export class CampaignsService {
+  private readonly logger = new Logger(CampaignsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly billing: BillingService,
     @InjectQueue(CAMPAIGN_ORCHESTRATE_QUEUE)
     private readonly orchestrateQueue: Queue,
+    @InjectQueue(MESSAGES_SEND_QUEUE)
+    private readonly sendQueue: Queue,
   ) {}
 
   list(workspaceId: string) {
@@ -152,6 +158,19 @@ export class CampaignsService {
     const minDelayMs = dto.minDelayMs ?? campaign.minDelayMs ?? 1000;
     const maxDelayMs = dto.maxDelayMs ?? campaign.maxDelayMs ?? 5000;
 
+    // When resuming a PAUSED campaign, reset any QUEUED recipients back to
+    // PENDING so the orchestrator can re-queue them.  QUEUED means "a BullMQ
+    // job exists for this recipient" — but the pause handler drains those jobs,
+    // so QUEUED recipients are orphaned until reset here.  Doing this in start()
+    // (rather than only in pause()) handles campaigns that were paused before
+    // this logic existed.
+    if (campaign.status === CampaignStatus.PAUSED) {
+      await this.prisma.campaignRecipient.updateMany({
+        where: { campaignId: id, status: CampaignRecipientStatus.QUEUED },
+        data: { status: CampaignRecipientStatus.PENDING },
+      });
+    }
+
     await this.prisma.campaign.update({
       where: { id },
       data: { status: CampaignStatus.RUNNING },
@@ -184,10 +203,42 @@ export class CampaignsService {
     if (campaign.status !== CampaignStatus.RUNNING) {
       throw new BadRequestException('Campaign is not running');
     }
+
+    // 1. Mark campaign PAUSED first so the orchestrator won't add more jobs
+    //    if it happens to run between now and step 2.
     await this.prisma.campaign.update({
       where: { id },
       data: { status: CampaignStatus.PAUSED },
     });
+
+    // 2. Reset all QUEUED recipients back to PENDING so the next Start
+    //    re-queues them rather than treating them as already-in-flight.
+    await this.prisma.campaignRecipient.updateMany({
+      where: { campaignId: id, status: CampaignRecipientStatus.QUEUED },
+      data: { status: CampaignRecipientStatus.PENDING },
+    });
+
+    // 3. Drain any delayed/waiting send jobs for this campaign from BullMQ
+    //    so they don't fire while the campaign is paused.
+    try {
+      const pending = await this.sendQueue.getJobs(['delayed', 'waiting']);
+      const campaignJobs = pending.filter((j) =>
+        (j.id ?? '').startsWith(`cmp-${id}-`),
+      );
+      if (campaignJobs.length > 0) {
+        await Promise.all(campaignJobs.map((j) => j.remove()));
+        this.logger.log(
+          `Campaign ${id} paused — removed ${campaignJobs.length} pending send jobs`,
+        );
+      }
+    } catch (err) {
+      // Non-fatal — log and continue; worst case some jobs fire but
+      // the send processor checks campaign status before sending.
+      this.logger.warn(
+        `Campaign ${id}: failed to drain BullMQ jobs on pause: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     return { campaignId: id, status: CampaignStatus.PAUSED };
   }
 

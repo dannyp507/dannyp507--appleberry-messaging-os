@@ -20,13 +20,17 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { WorkspaceContextGuard } from '../common/guards/workspace-context.guard';
 import type { Workspace } from '@prisma/client';
 import { FacebookPagesService } from './facebook-pages.service';
+import { BillingService } from '../billing/billing.service';
 
 @Controller('facebook/pages')
 @UseGuards(WorkspaceContextGuard, RolesGuard, PermissionsGuard)
 @Roles('owner', 'admin')
 @Permissions('manage_facebook')
 export class FacebookPagesController {
-  constructor(private readonly service: FacebookPagesService) {}
+  constructor(
+    private readonly service: FacebookPagesService,
+    private readonly billing: BillingService,
+  ) {}
 
   /** List all connected Facebook pages for this workspace */
   @Get()
@@ -41,6 +45,7 @@ export class FacebookPagesController {
    */
   @Get('auth-url')
   async getAuthUrl(@CurrentWorkspace() workspace: Workspace) {
+    await this.billing.assertHasFacebook(workspace.id);
     const url = await this.service.buildAuthUrl(workspace.id);
     return { url };
   }
@@ -64,7 +69,11 @@ export class FacebookPagesController {
    * Saves only the selected pages and subscribes them to webhooks.
    */
   @Post('confirm')
-  async confirmPages(@Body() body: { token: string; pageIds: string[] }) {
+  async confirmPages(
+    @CurrentWorkspace() workspace: Workspace,
+    @Body() body: { token: string; pageIds: string[] },
+  ) {
+    await this.billing.assertHasFacebook(workspace.id);
     if (!body?.token) throw new BadRequestException('token required');
     if (!Array.isArray(body.pageIds) || body.pageIds.length === 0) {
       throw new BadRequestException('pageIds array required');

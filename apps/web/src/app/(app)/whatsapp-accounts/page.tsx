@@ -865,15 +865,13 @@ export default function WhatsAppAccountsPage() {
                       Rules{accountTotalItems(a.id) > 0 ? ` (${accountTotalItems(a.id)})` : ""}
                     </Button>
                   </Link>
-                  <Link href={`/whatsapp-accounts/${a.id}`}>
+                  <Link href={`/whatsapp-accounts/${a.id}`} title="AI Settings">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="rounded-xl border-[#E5E7EB] bg-[#F9FAFB] text-xs text-[#6B7280] gap-1.5 hover:border-violet-400/40 hover:bg-violet-500/5 hover:text-violet-500"
-                      title="AI Settings"
+                      className="rounded-xl border-[#E5E7EB] bg-[#F9FAFB] text-[#6B7280] hover:border-violet-400/40 hover:bg-violet-500/5 hover:text-violet-500 px-2"
                     >
                       <Key className="size-3.5" />
-                      AI
                     </Button>
                   </Link>
                   {isCloud && (

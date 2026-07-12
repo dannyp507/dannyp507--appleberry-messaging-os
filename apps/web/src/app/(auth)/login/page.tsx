@@ -424,7 +424,14 @@ export default function LoginPage() {
           </Link>
 
           {/* Footer */}
-          <p className="mt-10 text-center text-xs text-[#D1D5DB] dark:text-[#374151]">
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-[#9CA3AF] dark:text-[#4b5563]">
+            <Link href="/privacy-policy" className="hover:text-[#6366f1] dark:hover:text-[#a5b4fc] hover:underline">Privacy Policy</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/terms-of-service" className="hover:text-[#6366f1] dark:hover:text-[#a5b4fc] hover:underline">Terms of Service</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/data-deletion" className="hover:text-[#6366f1] dark:hover:text-[#a5b4fc] hover:underline">Data Deletion</Link>
+          </div>
+          <p className="mt-3 text-center text-xs text-[#D1D5DB] dark:text-[#374151]">
             © 2025 Appleberry · All rights reserved
           </p>
         </div>

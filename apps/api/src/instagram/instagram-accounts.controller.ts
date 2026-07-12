@@ -20,13 +20,17 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { WorkspaceContextGuard } from '../common/guards/workspace-context.guard';
 import type { Workspace } from '@prisma/client';
 import { InstagramAccountsService, UpsertIgAiSettingsDto } from './instagram-accounts.service';
+import { BillingService } from '../billing/billing.service';
 
 @Controller('instagram/accounts')
 @UseGuards(WorkspaceContextGuard, RolesGuard, PermissionsGuard)
 @Roles('owner', 'admin')
 @Permissions('manage_facebook')
 export class InstagramAccountsController {
-  constructor(private readonly service: InstagramAccountsService) {}
+  constructor(
+    private readonly service: InstagramAccountsService,
+    private readonly billing: BillingService,
+  ) {}
 
   /** List all connected Instagram accounts for this workspace */
   @Get()
@@ -40,6 +44,7 @@ export class InstagramAccountsController {
    */
   @Get('auth-url')
   async getAuthUrl(@CurrentWorkspace() workspace: Workspace) {
+    await this.billing.assertHasInstagram(workspace.id);
     const url = await this.service.buildAuthUrl(workspace.id);
     return { url };
   }
@@ -65,7 +70,8 @@ export class InstagramAccountsController {
    * account-picker dialog.
    */
   @Post('sync-from-pages')
-  syncFromPages(@CurrentWorkspace() workspace: Workspace) {
+  async syncFromPages(@CurrentWorkspace() workspace: Workspace) {
+    await this.billing.assertHasInstagram(workspace.id);
     return this.service.syncFromPages(workspace.id);
   }
 
@@ -75,7 +81,11 @@ export class InstagramAccountsController {
    * Saves only the selected accounts and subscribes them to webhooks.
    */
   @Post('confirm')
-  async confirmAccounts(@Body() body: { token: string; igUserIds: string[] }) {
+  async confirmAccounts(
+    @CurrentWorkspace() workspace: Workspace,
+    @Body() body: { token: string; igUserIds: string[] },
+  ) {
+    await this.billing.assertHasInstagram(workspace.id);
     if (!body?.token) throw new BadRequestException('token required');
     if (!Array.isArray(body.igUserIds) || body.igUserIds.length === 0) {
       throw new BadRequestException('igUserIds array required');

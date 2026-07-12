@@ -15,6 +15,8 @@ export interface PlanLimits {
   hasApiAccess: boolean;
   hasWhiteLabel: boolean;
   hasBaileysProvider: boolean;
+  hasFacebook: boolean;
+  hasInstagram: boolean;
 }
 
 @Injectable()
@@ -60,6 +62,7 @@ export class BillingService {
         maxContacts: -1, maxChatbotFlows: -1, maxApiRequestsPerDay: -1,
         maxTeamMembers: -1, hasAdvancedAnalytics: true, hasAiFeatures: true,
         hasApiAccess: true, hasWhiteLabel: true, hasBaileysProvider: true,
+        hasFacebook: true, hasInstagram: true,
       };
     }
     return {
@@ -75,6 +78,8 @@ export class BillingService {
       hasApiAccess: plan.hasApiAccess,
       hasWhiteLabel: plan.hasWhiteLabel,
       hasBaileysProvider: plan.hasBaileysProvider,
+      hasFacebook: plan.hasFacebook,
+      hasInstagram: plan.hasInstagram,
     };
   }
 
@@ -229,6 +234,20 @@ export class BillingService {
     }
   }
 
+  async assertHasFacebook(workspaceId: string): Promise<void> {
+    const limits = await this.getPlanLimits(workspaceId);
+    if (!limits.hasFacebook) {
+      throw new ForbiddenException('Facebook Pages require a plan that includes this channel. Please upgrade.');
+    }
+  }
+
+  async assertHasInstagram(workspaceId: string): Promise<void> {
+    const limits = await this.getPlanLimits(workspaceId);
+    if (!limits.hasInstagram) {
+      throw new ForbiddenException('Instagram requires a plan that includes this channel. Please upgrade.');
+    }
+  }
+
   // ─── API requests ──────────────────────────────────────────────────────────
 
   async recordApiRequest(workspaceId: string): Promise<void> {
@@ -264,9 +283,15 @@ export class BillingService {
   async getUsageSummary(workspaceId: string) {
     const limits = await this.getPlanLimits(workspaceId);
     const pk = this.periodKey();
-    const usage = await this.prisma.workspaceUsage.findUnique({
-      where: { workspaceId_periodKey: { workspaceId, periodKey: pk } },
-    });
+    const [usage, sub] = await Promise.all([
+      this.prisma.workspaceUsage.findUnique({
+        where: { workspaceId_periodKey: { workspaceId, periodKey: pk } },
+      }),
+      this.prisma.subscription.findUnique({
+        where: { workspaceId },
+        include: { plan: { select: { slug: true, name: true } } },
+      }),
+    ]);
     const [contacts, whatsappAccounts, chatbotFlows, teamMembers] = await Promise.all([
       this.prisma.contact.count({ where: { workspaceId } }),
       this.prisma.whatsAppAccount.count({ where: { workspaceId, isArchived: false } }),
@@ -274,6 +299,7 @@ export class BillingService {
       this.prisma.workspaceMembership.count({ where: { workspaceId } }),
     ]);
     return {
+      plan: { slug: sub?.plan?.slug ?? 'free', name: sub?.plan?.name ?? 'Free', status: sub?.status ?? 'ACTIVE' },
       period: pk,
       messages: { used: usage?.outboundMessages ?? 0, limit: limits.messagesPerMonth },
       campaigns: { used: usage?.campaignsRun ?? 0, limit: limits.maxCampaignsPerMonth },
@@ -288,6 +314,8 @@ export class BillingService {
         hasApiAccess: limits.hasApiAccess,
         hasWhiteLabel: limits.hasWhiteLabel,
         hasBaileysProvider: limits.hasBaileysProvider,
+        hasFacebook: limits.hasFacebook,
+        hasInstagram: limits.hasInstagram,
       },
     };
   }

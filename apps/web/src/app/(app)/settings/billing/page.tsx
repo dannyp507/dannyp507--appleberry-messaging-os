@@ -5,9 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 interface UsageSummary {
+  plan: { slug: string; name: string; status: string };
   period: string;
   messages: { used: number; limit: number };
   campaigns: { used: number; limit: number };
@@ -22,6 +24,8 @@ interface UsageSummary {
     hasApiAccess: boolean;
     hasWhiteLabel: boolean;
     hasBaileysProvider: boolean;
+    hasFacebook: boolean;
+    hasInstagram: boolean;
   };
 }
 
@@ -86,6 +90,10 @@ export default function BillingPage() {
     return <div className="text-sm text-muted-foreground">Loading usage…</div>;
   }
 
+  const isActive = data.plan.status === "ACTIVE" || data.plan.status === "TRIALING";
+  const isCancelled = data.plan.status === "CANCELED";
+  const isPaid = data.plan.slug !== "free" && data.plan.slug !== "beta";
+
   return (
     <div className="space-y-6">
       <div>
@@ -97,6 +105,58 @@ export default function BillingPage() {
           </Badge>
         </p>
       </div>
+
+      {/* Current plan + manage */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Current Plan</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">{data.plan.name}</span>
+              {isActive && (
+                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                  Active
+                </Badge>
+              )}
+              {isCancelled && (
+                <Badge variant="destructive" className="text-xs">Cancelled</Badge>
+              )}
+            </div>
+            {isPaid && isActive && (
+              <a
+                href="https://www.payfast.co.za/eng/account"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Manage / Cancel on PayFast
+                <ExternalLink className="size-3" />
+              </a>
+            )}
+            {!isActive && (
+              <Link
+                href="/subscribe"
+                className="rounded-lg bg-[#6366F1] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+              >
+                Resubscribe
+              </Link>
+            )}
+          </div>
+          {isCancelled && (
+            <p className="text-xs text-muted-foreground rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2">
+              Your subscription was cancelled. Resubscribe above to restore full access.
+            </p>
+          )}
+          {isPaid && isActive && (
+            <p className="text-xs text-muted-foreground">
+              To cancel, go to your PayFast account → My Subscriptions → Cancel.
+              You will retain access until the end of your current billing period.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -118,10 +178,12 @@ export default function BillingPage() {
           <CardTitle className="text-base">Plan Features</CardTitle>
         </CardHeader>
         <CardContent>
-          <FeatureRow label="Advanced Analytics" enabled={data.features.hasAdvancedAnalytics} />
-          <FeatureRow label="AI Features (Campaign assistant, smart replies)" enabled={data.features.hasAiFeatures} />
-          <FeatureRow label="API Access" enabled={data.features.hasApiAccess} />
+          <FeatureRow label="Facebook Pages" enabled={data.features.hasFacebook} />
+          <FeatureRow label="Instagram" enabled={data.features.hasInstagram} />
           <FeatureRow label="WhatsApp Unofficial Sessions (Baileys)" enabled={data.features.hasBaileysProvider} />
+          <FeatureRow label="AI Features (Campaign assistant, smart replies)" enabled={data.features.hasAiFeatures} />
+          <FeatureRow label="Advanced Analytics" enabled={data.features.hasAdvancedAnalytics} />
+          <FeatureRow label="API Access" enabled={data.features.hasApiAccess} />
           <FeatureRow label="White-label Branding" enabled={data.features.hasWhiteLabel} />
         </CardContent>
       </Card>

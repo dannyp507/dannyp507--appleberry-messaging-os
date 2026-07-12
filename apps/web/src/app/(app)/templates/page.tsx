@@ -7,6 +7,8 @@ import type { Template, TemplateButton, TemplateSection } from "@/lib/api/types"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { MediaPicker } from "@/components/media/media-picker";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LayoutTemplate } from "lucide-react";
 
 type TemplateType = "TEXT" | "MEDIA" | "BUTTON" | "LIST";
 
@@ -27,8 +29,13 @@ function emptySection(): TemplateSection {
 
 export default function TemplatesPage() {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+
+  // modal mode: null = closed, "create" = new, "edit" = editing existing
+  const [modalMode, setModalMode] = useState<null | "create" | "edit">(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
+
+  // form state
   const [name, setName] = useState("");
   const [type, setType] = useState<TemplateType>("TEXT");
   const [header, setHeader] = useState("");
@@ -41,7 +48,32 @@ export default function TemplatesPage() {
   const resetForm = () => {
     setName(""); setType("TEXT"); setHeader(""); setContent("");
     setFooter(""); setButtons([emptyButton()]); setSections([emptySection()]);
-    setMediaUrl("");
+    setMediaUrl(""); setEditId(null);
+  };
+
+  const closeModal = () => { setModalMode(null); resetForm(); };
+
+  const openCreate = () => { resetForm(); setModalMode("create"); };
+
+  const openEdit = (t: Template) => {
+    setEditId(t.id);
+    setName(t.name);
+    setType((t.type as TemplateType) ?? "TEXT");
+    setHeader(t.header ?? "");
+    setContent(t.content);
+    setFooter(t.footer ?? "");
+    setMediaUrl(t.mediaUrl ?? "");
+    setButtons(
+      t.buttons && t.buttons.length > 0
+        ? (t.buttons as TemplateButton[])
+        : [emptyButton()]
+    );
+    setSections(
+      t.sections && t.sections.length > 0
+        ? (t.sections as TemplateSection[])
+        : [emptySection()]
+    );
+    setModalMode("edit");
   };
 
   const { data: templates = [], isLoading } = useQuery({
@@ -65,10 +97,29 @@ export default function TemplatesPage() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.templates });
-      setOpen(false); resetForm();
+      closeModal();
       toast.success("Template created");
     },
     onError: (e) => toast.error("Could not create template", getApiErrorMessage(e)),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      await api.patch(`/templates/${editId}`, {
+        name, content, type,
+        header: header || null,
+        footer: footer || null,
+        buttons: type === "BUTTON" ? buttons : [],
+        sections: type === "LIST" ? sections : [],
+        mediaUrl: type === "MEDIA" && mediaUrl ? mediaUrl : null,
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.templates });
+      closeModal();
+      toast.success("Template updated");
+    },
+    onError: (e) => toast.error("Could not update template", getApiErrorMessage(e)),
   });
 
   const deleteMutation = useMutation({
@@ -94,6 +145,8 @@ export default function TemplatesPage() {
     setSections((s) => s.map((sec, idx) => idx === si
       ? { ...sec, rows: sec.rows.filter((_, rIdx) => rIdx !== ri) } : sec));
 
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
   return (
     <div className="page-container space-y-6">
       <div className="flex items-center justify-between">
@@ -101,7 +154,7 @@ export default function TemplatesPage() {
           <h2 className="text-2xl font-bold text-[#111827]">Templates</h2>
           <p className="text-sm text-[#6B7280] mt-1">Message templates used in campaigns</p>
         </div>
-        <button onClick={() => setOpen(true)}
+        <button onClick={openCreate}
           className="px-4 py-2 stitch-gradient rounded-lg text-sm font-semibold text-white shadow-[0_0_15px_rgba(99,102,241,0.25)] hover:opacity-90 transition-all flex items-center gap-2">
           <span className="material-symbols-outlined text-sm">add</span>New Template
         </button>
@@ -112,10 +165,19 @@ export default function TemplatesPage() {
           {[...Array(6)].map((_, i) => <div key={i} className="h-40 bg-[#F9FAFB] rounded-xl" />)}
         </div>
       ) : templates.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <span className="material-symbols-outlined text-5xl text-[#262B33] mb-4">layers</span>
-          <p className="text-[#6B7280]">No templates yet. Create your first one.</p>
-        </div>
+        <EmptyState
+          icon={LayoutTemplate}
+          title="No templates yet"
+          description="Create your first template to reuse in campaigns and autoresponders. Use placeholders like {{name}} to personalize each message."
+          action={
+            <button
+              onClick={openCreate}
+              className="px-4 py-2 stitch-gradient rounded-lg text-sm font-semibold text-white shadow-[0_0_15px_rgba(99,102,241,0.25)] hover:opacity-90 transition-all flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-sm">add</span>New Template
+            </button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {templates.map((t) => (
@@ -138,34 +200,44 @@ export default function TemplatesPage() {
               {t.footer && <p className="text-[10px] text-[#9CA3AF]/70 italic">{t.footer}</p>}
               {t.buttons && t.buttons.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {t.buttons.map((btn, i) => (
+                  {(t.buttons as TemplateButton[]).map((btn, i) => (
                     <span key={i} className="px-2.5 py-1 border border-[#6366F1]/40 rounded-full text-[10px] font-medium text-[#6366F1]">{btn.text}</span>
                   ))}
                 </div>
               )}
-              {t.sections && t.sections.length > 0 && (
+              {t.sections && (t.sections as TemplateSection[]).length > 0 && (
                 <div className="text-[10px] text-[#9CA3AF]">
-                  {t.sections.length} section{t.sections.length > 1 ? "s" : ""} · {t.sections.reduce((a, s) => a + s.rows.length, 0)} items
+                  {(t.sections as TemplateSection[]).length} section{(t.sections as TemplateSection[]).length > 1 ? "s" : ""} · {(t.sections as TemplateSection[]).reduce((a, s) => a + s.rows.length, 0)} items
                 </div>
               )}
               <div className="flex gap-2 mt-auto pt-2 border-t border-[#F3F4F6]">
                 <button onClick={() => setPreviewId(t.id)}
-                  className="flex-1 py-1.5 rounded-lg bg-[#F3F4F6] text-xs text-[#6B7280] hover:text-[#111827] transition-colors">Preview</button>
+                  className="flex-1 py-1.5 rounded-lg bg-[#F3F4F6] text-xs text-[#6B7280] hover:text-[#111827] transition-colors">
+                  Preview
+                </button>
+                <button onClick={() => openEdit(t)}
+                  className="flex-1 py-1.5 rounded-lg bg-[#6366F1]/10 text-xs text-[#6366F1] hover:bg-[#6366F1]/20 transition-colors">
+                  Edit
+                </button>
                 <button onClick={() => { if (confirm("Delete this template?")) deleteMutation.mutate(t.id); }}
-                  className="flex-1 py-1.5 rounded-lg bg-[#ff6e84]/10 text-xs text-[#ff6e84] hover:bg-[#ff6e84]/20 transition-colors">Delete</button>
+                  className="flex-1 py-1.5 rounded-lg bg-[#ff6e84]/10 text-xs text-[#ff6e84] hover:bg-[#ff6e84]/20 transition-colors">
+                  Delete
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Create Modal */}
-      {open && (
+      {/* Create / Edit Modal */}
+      {modalMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between p-6 border-b border-[#F3F4F6] sticky top-0 bg-[#F9FAFB] z-10">
-              <h3 className="text-lg font-bold text-[#111827]">Create Template</h3>
-              <button onClick={() => { setOpen(false); resetForm(); }} className="text-[#6B7280] hover:text-[#111827]">
+              <h3 className="text-lg font-bold text-[#111827]">
+                {modalMode === "edit" ? "Edit Template" : "Create Template"}
+              </h3>
+              <button onClick={closeModal} className="text-[#6B7280] hover:text-[#111827]">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -284,11 +356,15 @@ export default function TemplatesPage() {
               )}
             </div>
             <div className="px-6 pb-6 flex justify-end gap-3">
-              <button onClick={() => { setOpen(false); resetForm(); }}
+              <button onClick={closeModal}
                 className="px-4 py-2 rounded-lg text-sm text-[#6B7280] hover:text-[#111827] bg-[#F3F4F6] transition-colors">Cancel</button>
-              <button disabled={createMutation.isPending || !name || !content} onClick={() => createMutation.mutate()}
+              <button
+                disabled={isSubmitting || !name || !content}
+                onClick={() => modalMode === "edit" ? updateMutation.mutate() : createMutation.mutate()}
                 className="px-6 py-2 rounded-lg stitch-gradient text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50">
-                {createMutation.isPending ? "Saving…" : "Save Template"}
+                {isSubmitting
+                  ? "Saving…"
+                  : modalMode === "edit" ? "Save Changes" : "Save Template"}
               </button>
             </div>
           </div>
@@ -316,9 +392,9 @@ export default function TemplatesPage() {
               {previewTemplate.header && <p className="font-bold text-[#111827] text-xs">{previewTemplate.header}</p>}
               <p className="text-[#111827] whitespace-pre-wrap">{previewTemplate.content}</p>
               {previewTemplate.footer && <p className="text-[10px] text-[#9CA3AF] italic">{previewTemplate.footer}</p>}
-              {previewTemplate.buttons && previewTemplate.buttons.length > 0 && (
+              {previewTemplate.buttons && (previewTemplate.buttons as TemplateButton[]).length > 0 && (
                 <div className="pt-2 border-t border-[#F3F4F6] space-y-1.5">
-                  {previewTemplate.buttons.map((btn, i) => (
+                  {(previewTemplate.buttons as TemplateButton[]).map((btn, i) => (
                     <div key={i} className="text-center py-1.5 border border-[#6366F1]/40 rounded-lg text-xs font-medium text-[#6366F1]">
                       {btn.type === "URL" && <span className="material-symbols-outlined text-[12px] mr-1">open_in_new</span>}
                       {btn.type === "PHONE" && <span className="material-symbols-outlined text-[12px] mr-1">call</span>}
@@ -327,7 +403,7 @@ export default function TemplatesPage() {
                   ))}
                 </div>
               )}
-              {previewTemplate.sections && previewTemplate.sections.length > 0 && (
+              {previewTemplate.sections && (previewTemplate.sections as TemplateSection[]).length > 0 && (
                 <div className="pt-2 border-t border-[#F3F4F6]">
                   <div className="text-center py-1.5 border border-[#6366F1]/40 rounded-lg text-xs font-medium text-[#6366F1] flex items-center justify-center gap-1">
                     <span className="material-symbols-outlined text-[12px]">list</span>View options

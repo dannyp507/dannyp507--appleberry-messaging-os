@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OPT_OUT_DELETE_QUEUE } from '../queue/queue.constants';
 
 const OPT_OUT_KEYWORDS = new Set(['stop', 'unsubscribe', 'cancel', 'end', 'quit']);
-const OPT_IN_KEYWORDS = new Set(['start', 'subscribe', 'yes', 'unstop', 'begin']);
+const OPT_IN_KEYWORDS = new Set(['start', 'subscribe', 'unstop', 'begin']);
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 

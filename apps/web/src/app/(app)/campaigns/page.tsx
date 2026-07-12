@@ -59,6 +59,8 @@ export default function CampaignsPage() {
   const [editTemplateId, setEditTemplateId] = useState("");
   const [editGroupId, setEditGroupId] = useState("");
   const [editAccountId, setEditAccountId] = useState("");
+  const [editMinDelaySec, setEditMinDelaySec] = useState(1);
+  const [editMaxDelaySec, setEditMaxDelaySec] = useState(5);
 
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: qk.campaigns,
@@ -174,11 +176,15 @@ export default function CampaignsPage() {
     setEditTemplateId(c.templateId);
     setEditGroupId(c.contactGroupId);
     setEditAccountId(c.whatsappAccountId ?? "");
+    setEditMinDelaySec(Math.round((c.minDelayMs ?? 1000) / 1000));
+    setEditMaxDelaySec(Math.round((c.maxDelayMs ?? 5000) / 1000));
     setEditOpen(true);
   };
 
   const handleEditSave = () => {
     if (!editing) return;
+    const minMs = Math.max(0, editMinDelaySec) * 1000;
+    const maxMs = Math.max(minMs, editMaxDelaySec * 1000);
     editMutation.mutate({
       id: editing.id,
       payload: {
@@ -186,6 +192,8 @@ export default function CampaignsPage() {
         templateId: editTemplateId,
         contactGroupId: editGroupId,
         whatsappAccountId: editAccountId || undefined,
+        minDelayMs: minMs,
+        maxDelayMs: maxMs,
       },
     });
   };
@@ -196,7 +204,7 @@ export default function CampaignsPage() {
     <div className="page-container space-y-8">
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={(o) => !editMutation.isPending && setEditOpen(o)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Campaign</DialogTitle>
             <DialogDescription>
@@ -256,6 +264,37 @@ export default function CampaignsPage() {
                   <option key={a.id} value={a.id}>{a.name ?? a.phoneNumber ?? a.id}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Delay between messages */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Delay Between Messages</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Min (seconds)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editMinDelaySec}
+                    onChange={(e) => setEditMinDelaySec(Math.max(0, Number(e.target.value)))}
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Max (seconds)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editMaxDelaySec}
+                    onChange={(e) => setEditMaxDelaySec(Math.max(0, Number(e.target.value)))}
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Random pause of {editMinDelaySec}–{editMaxDelaySec}s between each message.
+                {editMinDelaySec === 0 && editMaxDelaySec === 0 ? " ⚠️ Zero delay may trigger spam filters." : ""}
+              </p>
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
