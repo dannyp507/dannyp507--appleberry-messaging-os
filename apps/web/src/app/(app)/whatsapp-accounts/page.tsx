@@ -40,6 +40,7 @@ import {
   Plus,
   QrCode,
   Smartphone,
+  Trash2,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -76,6 +77,9 @@ export default function WhatsAppAccountsPage() {
   // Embedded signup state
   const embeddedDataRef = useRef<{ phoneNumberId: string; wabaId: string } | null>(null);
   const [fbSdkReady, setFbSdkReady] = useState(false);
+
+  // ── Delete confirmation ────────────────────────────────────────────────────
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // ── Cloud connect success modal ────────────────────────────────────────────
   const [cloudSuccess, setCloudSuccess] = useState<{
@@ -327,6 +331,18 @@ export default function WhatsAppAccountsPage() {
       toast.success("Disconnected");
     },
     onError: () => toast.error("Could not disconnect"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/whatsapp/accounts/${id}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.whatsappAccounts });
+      setDeleteConfirmId(null);
+      toast.success("Account removed");
+    },
+    onError: () => toast.error("Could not remove account"),
   });
 
   const { data: statusData } = useQuery({
@@ -908,6 +924,15 @@ export default function WhatsAppAccountsPage() {
                         : "Disconnect"}
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Delete account"
+                    className="rounded-xl px-2 text-[#9CA3AF] hover:bg-red-500/10 hover:text-red-500"
+                    onClick={() => setDeleteConfirmId(a.id)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
 
                 {/* Cloud: webhook info strip */}
@@ -937,6 +962,38 @@ export default function WhatsAppAccountsPage() {
           </p>
         </div>
       )}
+
+      {/* ── Delete confirmation dialog ─────────────────────────────────────── */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(o) => { if (!o) setDeleteConfirmId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove WhatsApp account?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[#6B7280]">
+            This will remove the account from your workspace. Any inbox threads and
+            autoresponder rules linked to this number will remain but the number will
+            stop receiving messages.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setDeleteConfirmId(null)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="rounded-xl"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
+            >
+              {deleteMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

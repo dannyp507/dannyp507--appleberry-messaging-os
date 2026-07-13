@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentWorkspace } from '../common/decorators/current-workspace.decorator';
@@ -163,6 +163,17 @@ export class WhatsappAccountsController {
     },
   ) {
     return this.accounts.embeddedSignup(workspace.id, { ...body, accountId: id });
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard, PermissionsGuard)
+  @Roles('owner', 'admin')
+  @Permissions('manage_whatsapp')
+  archive(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.accounts.archive(workspace.id, id);
   }
 
   // ── Per-account AI settings ─────────────────────────────────────────────────
