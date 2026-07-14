@@ -10,6 +10,7 @@ import { WorkspaceAiSettingsModule } from '../workspace-ai-settings/workspace-ai
 import { SequencesModule } from '../sequences/sequences.module';
 import { SubscribersModule } from '../subscribers/subscribers.module';
 import { FollowUpModule } from '../follow-up/follow-up.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { IncomingMessageService } from './incoming-message.service';
 import { WebhookSecretGuard } from './guards/webhook-secret.guard';
 import { WebhooksController } from './webhooks.controller';
@@ -25,6 +26,7 @@ import { WebhooksController } from './webhooks.controller';
     SequencesModule,
     SubscribersModule,
     FollowUpModule,
+    NotificationsModule,
     forwardRef(() => ChatbotModule),
     forwardRef(() => QueueModule),
   ],

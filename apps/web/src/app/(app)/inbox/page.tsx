@@ -24,6 +24,7 @@ import { AppleberryIcon } from "@/components/ui/appleberry-icon";
 import {
   AlertCircle,
   ArrowLeft,
+  Bell,
   Camera,
   CheckCheck,
   Loader2,
@@ -39,6 +40,7 @@ import {
   UserCircle,
   UserMinus,
 } from "lucide-react";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -276,6 +278,9 @@ export default function InboxPage() {
   const queryClient = useQueryClient();
   const me          = useAuthStore((s) => s.user);
 
+  // ── Push notifications ──────────────────────────────────────────────────────
+  const { permission: pushPermission, loading: pushLoading, subscribe: subscribePush } = usePushNotifications();
+
   // ── UI state ────────────────────────────────────────────────────────────────
   const [threadId, setThreadId]             = useState<string | null>(null);
   const [mobileShowThread, setMobileShowThread] = useState(false);
@@ -446,6 +451,22 @@ export default function InboxPage() {
                 </span>
               )}
             </div>
+            {pushPermission === 'subscribed' ? (
+              <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+                <Bell className="size-3" /> On
+              </span>
+            ) : pushPermission !== 'unsupported' && pushPermission !== 'denied' ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 rounded-lg gap-1 text-[11px] border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 px-2"
+                disabled={pushLoading}
+                onClick={subscribePush}
+              >
+                <Bell className="size-3" />
+                Enable notifications
+              </Button>
+            ) : null}
           </div>
 
           {/* Search */}

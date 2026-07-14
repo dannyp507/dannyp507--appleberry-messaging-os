@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { RegisterServiceWorker } from "@/components/RegisterServiceWorker";
 import "./globals.css";
 
 const inter = Inter({
@@ -37,6 +38,11 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
           rel="stylesheet"
         />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="AppleBerry" />
+        <link rel="apple-touch-icon" href="/appleberry-logo.png" />
       </head>
       <body
         className={`${inter.variable} ${geistMono.variable} min-h-screen antialiased`}
@@ -45,6 +51,7 @@ export default function RootLayout({
           {children}
         </ThemeProvider>
         <Toaster />
+        <RegisterServiceWorker />
       </body>
     </html>
   );

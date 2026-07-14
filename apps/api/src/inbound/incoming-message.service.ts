@@ -21,6 +21,7 @@ import { normalizePhoneE164 } from '../contacts/phone.util';
 import { OptOutService } from '../opt-out/opt-out.service';
 import { WorkspaceAiSettingsService } from '../workspace-ai-settings/workspace-ai-settings.service';
 import { FollowUpService } from '../follow-up/follow-up.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class IncomingMessageService {
@@ -38,6 +39,7 @@ export class IncomingMessageService {
     private readonly aiSettings: WorkspaceAiSettingsService,
     private readonly baileys: BaileysSessionService,
     private readonly followUp: FollowUpService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -160,6 +162,20 @@ export class IncomingMessageService {
         message: job.text,
       },
     });
+
+    // Push notification — fire-and-forget, never blocks message delivery
+    const pushName =
+      contact.firstName && contact.firstName !== 'Unknown' && !/^\d{6,}$/.test(contact.firstName)
+        ? contact.firstName
+        : 'New message';
+    void this.notifications
+      .sendPush(workspaceId, {
+        title: pushName,
+        body: job.text.slice(0, 100),
+        url: '/inbox',
+        tag: `inbox-${thread.id}`,
+      })
+      .catch(() => {});
 
     // Cancel any pending follow-up — the customer is now actively engaged
     await this.followUp.cancelForThread(thread.id, !!thread.followUpScheduledFor);
