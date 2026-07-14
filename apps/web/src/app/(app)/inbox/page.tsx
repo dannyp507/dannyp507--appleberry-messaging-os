@@ -633,6 +633,23 @@ export default function InboxPage() {
 
                   {/* Right: actions */}
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {/* Bell — mobile only, shown in conversation header */}
+                    {pushPermission !== 'subscribed' && pushPermission !== 'unsupported' && pushPermission !== 'denied' && (
+                      <button
+                        type="button"
+                        onClick={subscribePush}
+                        disabled={pushLoading}
+                        className="md:hidden flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 active:bg-amber-100"
+                      >
+                        <Bell className="size-3.5" />
+                        Notify
+                      </button>
+                    )}
+                    {pushPermission === 'subscribed' && (
+                      <span className="md:hidden flex items-center gap-1 text-[11px] text-emerald-600 pr-1">
+                        <Bell className="size-3.5" /> On
+                      </span>
+                    )}
                     {/* Status dropdown — always visible */}
                     <Select
                       value={active.status}
@@ -801,7 +818,7 @@ export default function InboxPage() {
                                     className={cn(
                                       "rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed md:text-sm",
                                       isOut
-                                        ? "bg-[#EEF2FF] text-[#3730A3]"
+                                        ? "bg-[#6366F1] text-white"
                                         : "bg-white text-[#111827] border border-[#E5E7EB] shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
                                       count > 1 && isFirst && !isLast && (isOut ? "rounded-br-[6px]" : "rounded-bl-[6px]"),
                                       count > 1 && !isFirst && !isLast && (isOut ? "rounded-r-[6px]"  : "rounded-l-[6px]"),
