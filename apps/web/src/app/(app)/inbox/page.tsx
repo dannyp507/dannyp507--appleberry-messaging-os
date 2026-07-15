@@ -17,7 +17,7 @@ import type { InboxMessage, InboxThread } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
 import { qk } from "@/lib/query-keys";
 import { useAuthStore } from "@/stores/auth-store";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import { AppleberryIcon } from "@/components/ui/appleberry-icon";
@@ -299,6 +299,9 @@ export default function InboxPage() {
       const { data } = await api.get<InboxThread[]>("/inbox/threads");
       return data;
     },
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: messages = [], isFetching: messagesFetching } = useQuery({
@@ -308,6 +311,10 @@ export default function InboxPage() {
       const { data } = await api.get<InboxMessage[]>(`/inbox/threads/${threadId}/messages`);
       return data;
     },
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 
   // Auto-select first conversation on desktop only
