@@ -35,6 +35,11 @@ export function usePushNotifications() {
   const subscribe = useCallback(async () => {
     setLoading(true);
     try {
+      // iOS Safari PWA requires explicit requestPermission() from a user gesture
+      const perm = await Notification.requestPermission();
+      if (perm === 'denied') { setPermission('denied'); return; }
+      if (perm !== 'granted') return;
+
       const reg = await navigator.serviceWorker.ready;
       const { data } = await api.get<{ publicKey: string | null }>('/notifications/push/vapid-key');
       if (!data.publicKey) throw new Error('Push not configured on server');
