@@ -41,7 +41,7 @@ import {
   UserMinus,
 } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -151,10 +151,12 @@ function ThreadItem({
   thread,
   active,
   onClick,
+  onPrefetch,
 }: {
   thread: InboxThread;
   active: boolean;
   onClick: () => void;
+  onPrefetch: () => void;
 }) {
   const unread   = threadHasUnread(thread);
   const preview  = thread.messages?.[0];
@@ -166,6 +168,7 @@ function ThreadItem({
   return (
     <button
       type="button"
+      onPointerDown={onPrefetch}
       onClick={onClick}
       className={cn(
         "group relative w-full rounded-xl px-3 py-3.5 text-left transition-all duration-150 active:scale-[0.99]",
@@ -333,6 +336,17 @@ export default function InboxPage() {
   }, [messages, threadId]);
 
   // ── Navigation helpers ──────────────────────────────────────────────────────
+  const prefetchMessages = useCallback((id: string) => {
+    void queryClient.prefetchQuery({
+      queryKey: qk.inboxMessages(id),
+      queryFn: async () => {
+        const { data } = await api.get<InboxMessage[]>(`/inbox/threads/${id}/messages`);
+        return data;
+      },
+      staleTime: 10_000,
+    });
+  }, [queryClient]);
+
   const handleSelectThread = (id: string) => {
     setThreadId(id);
     setMobileShowThread(true);
@@ -543,6 +557,7 @@ export default function InboxPage() {
                     key={t.id}
                     thread={t}
                     active={t.id === threadId}
+                    onPrefetch={() => prefetchMessages(t.id)}
                     onClick={() => handleSelectThread(t.id)}
                   />
                 ))}

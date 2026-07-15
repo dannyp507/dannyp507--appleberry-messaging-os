@@ -36,14 +36,10 @@ export class InboxService {
   async listMessages(workspaceId: string, threadId: string) {
     const thread = await this.prisma.inboxThread.findFirst({
       where: { id: threadId, workspaceId },
+      include: { messages: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!thread) {
-      throw new NotFoundException('Thread not found');
-    }
-    return this.prisma.inboxMessage.findMany({
-      where: { threadId },
-      orderBy: { createdAt: 'asc' },
-    });
+    if (!thread) throw new NotFoundException('Thread not found');
+    return thread.messages;
   }
 
   async send(workspaceId: string, dto: SendInboxMessageDto) {
