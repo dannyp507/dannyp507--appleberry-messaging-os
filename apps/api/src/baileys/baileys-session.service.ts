@@ -533,7 +533,11 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
           senderName: msg.pushName ?? undefined,
           externalMessageId: msg.key.id ?? undefined,
         };
+        // Deduplicate: same WA message ID should never trigger automation twice
+        // (Baileys can fire both notify + append for the same message on reconnect).
+        const inboundJobId = msg.key.id ? `wa-in-${accountId}-${msg.key.id}` : undefined;
         await this.incomingQueue.add('incoming', job, {
+          jobId: inboundJobId,
           attempts: 3,
           backoff: { type: 'exponential', delay: 1500 },
           removeOnComplete: 2000,
@@ -725,8 +729,8 @@ export class BaileysSessionService implements OnModuleInit, OnModuleDestroy {
     // Start fresh session with pairing phone — pairing code will be generated on qr event
     await this.startSession(accountId, phone);
 
-    // Wait up to 20s for the pairing code to appear
-    for (let i = 0; i < 40; i++) {
+    // Wait up to 60s for the pairing code to appear
+    for (let i = 0; i < 120; i++) {
       await new Promise((r) => setTimeout(r, 500));
       const code = this.sessions.get(accountId)?.pairingCode;
       if (code) return code;

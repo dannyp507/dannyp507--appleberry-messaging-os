@@ -46,6 +46,7 @@ import { OptOutModule } from './opt-out/opt-out.module';
 import { PayfastModule } from './payfast/payfast.module';
 import { AdminModule } from './admin/admin.module';
 import { FollowUpModule } from './follow-up/follow-up.module';
+import { VoucherModule } from './vouchers/voucher.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -114,6 +115,7 @@ import { AppController } from './app.controller';
     PayfastModule,
     AdminModule,
     FollowUpModule,
+    VoucherModule,
   ],
   providers: [
     {

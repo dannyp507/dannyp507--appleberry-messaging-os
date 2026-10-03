@@ -62,6 +62,7 @@ export class WhatsAppCloudInboundService {
 
       await this.incomingQueue.add('incoming', job, {
         attempts: 3,
+        jobId: `cloud-in-${account.id}-${msg.id}`,
         backoff: { type: 'exponential', delay: 1500 },
         removeOnComplete: 2000,
         removeOnFail: false,

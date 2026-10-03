@@ -289,19 +289,27 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
   async scheduleSoftForThread(threadId: string): Promise<void> {
     const thread = await this.prisma.inboxThread.findUnique({
       where: { id: threadId },
-      select: { followUpScheduledFor: true, followUpCount: true },
+      select: { followUpScheduledFor: true, followUpCount: true, whatsappAccountId: true },
     });
     // Don't overwrite an active price-track follow-up
     if (thread?.followUpScheduledFor && (thread.followUpCount ?? 0) < SOFT_SENTINEL) return;
 
+    // Respect softDelayHours from per-account settings (previously was always hardcoded 24h)
+    const settings = thread?.whatsappAccountId
+      ? await this.prisma.whatsAppFollowUpSettings.findUnique({
+          where: { whatsappAccountId: thread.whatsappAccountId },
+        }).catch(() => null)
+      : null;
+    const softDelayMs = ((settings?.softDelayHours ?? 24)) * 60 * 60 * 1000;
+
     await this.prisma.inboxThread.update({
       where: { id: threadId },
       data: {
-        followUpScheduledFor: new Date(Date.now() + LOCATION_FOLLOW_UP_MS),
+        followUpScheduledFor: new Date(Date.now() + softDelayMs),
         followUpCount: SOFT_SENTINEL,
       },
     });
-    this.logger.log(`[FollowUp] Soft track scheduled for thread ${threadId} (fires in 24h)`);
+    this.logger.log(`[FollowUp] Soft track scheduled for thread ${threadId} (fires in ${settings?.softDelayHours ?? 24}h)`);
   }
 
   /**

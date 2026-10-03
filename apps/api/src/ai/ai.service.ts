@@ -63,7 +63,7 @@ export class AiService {
     // - For channel-scoped (FB/IG): channel prompt only (never leak workspace/WhatsApp prompt)
     // - For other channels: workspace prompt → built-in default
     const CHANNEL_DEFAULT =
-      'You are a helpful customer support assistant. Reply concisely and professionally. If you cannot help, ask the customer to contact the team directly.';
+      'You are a friendly and professional customer support assistant. Reply clearly and concisely. After every answer, always end your message by asking if there is anything else you can help the customer with (e.g. "Is there anything else I can help you with?"). Keep the tone warm and approachable. If you cannot help with something, let them know and invite them to ask anything else or contact the team directly.';
     const systemPrompt =
       overrideSystemPrompt ??
       pageSettings?.systemPrompt ??
