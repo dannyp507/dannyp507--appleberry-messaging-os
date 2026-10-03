@@ -21,6 +21,7 @@ import { normalizePhoneE164 } from '../contacts/phone.util';
 import { OptOutService } from '../opt-out/opt-out.service';
 import { WorkspaceAiSettingsService } from '../workspace-ai-settings/workspace-ai-settings.service';
 import { FollowUpService } from '../follow-up/follow-up.service';
+import { VoucherService } from '../vouchers/voucher.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -40,6 +41,7 @@ export class IncomingMessageService {
     private readonly baileys: BaileysSessionService,
     private readonly followUp: FollowUpService,
     private readonly notifications: NotificationsService,
+    private readonly voucherService: VoucherService,
   ) {}
 
   /**
@@ -155,11 +157,25 @@ export class IncomingMessageService {
       });
     }
 
+    // Idempotency guard — if this externalMessageId was already persisted,
+    // a previous job run already sent a reply; bail to prevent duplicates.
+    if (job.externalMessageId) {
+      const existing = await this.prisma.inboxMessage.findFirst({
+        where: { providerMessageId: job.externalMessageId },
+        select: { id: true },
+      });
+      if (existing) {
+        this.logger.warn("[Dedup] Already processed messageId=" + job.externalMessageId + " — skipping");
+        return;
+      }
+    }
+
     await this.prisma.inboxMessage.create({
       data: {
         threadId: thread.id,
         direction: InboxMessageDirection.INBOUND,
         message: job.text,
+        providerMessageId: job.externalMessageId ?? null,
       },
     });
 
@@ -193,6 +209,36 @@ export class IncomingMessageService {
       job.text,
     );
     if (optHandled) return;
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 0A: Voucher intercepts — must run BEFORE all other automation so no
+    // AI / autoresponder / sequence can interfere with voucher messages.
+    // ─────────────────────────────────────────────────────────────────────────
+    const msgTrimmed = job.text.trim();
+
+    // Detect button-reply tap (Cloud API) — button_reply.id === 'claim_voucher'
+    // The inbound service receives this as the resolved text already set by whatsapp-cloud-inbound.
+    const msgNorm = msgTrimmed.toLowerCase().replace(/\s+/g, '_');
+    if (msgNorm === 'claim_voucher') {
+      const handled = await this.voucherService.claimVoucher({
+        workspaceId,
+        contactId: contact.id,
+        whatsappAccountId: account.id,
+        to: replyTo,
+        inboxThreadId: thread.id,
+      });
+      if (handled) {
+        this.logger.log(`[Voucher] Button tap handled for contact ${contact.id}`);
+        return;
+      }
+    }
+
+    // Detect if the message IS a voucher code pattern (AB26-4FAB) — gentle ack, no AI
+    const VOUCHER_CODE_RE = /^[A-Z]{2}\d{2}-[A-Z0-9]{4}$/i;
+    if (VOUCHER_CODE_RE.test(msgTrimmed)) {
+      // Acknowledge silently — staff might just be confirming, or contact typed it by mistake
+      this.logger.log(`[Voucher] Received voucher code text from contact ${contact.id} — no bot reply`);
+      return;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 0.5: Per-account DM bot settings (human takeover + welcome message)
@@ -501,6 +547,25 @@ export class IncomingMessageService {
       select: { direction: true, message: true },
     });
 
+    // Closing-intent detection: client says goodbye/done, so send farewell and close thread.
+    if (this.isClosingIntent(job.text)) {
+      await this.maybeTyping(account.id, replyTo, 1000, dmSettings);
+      await this.messages.enqueueOutboundText({
+        workspaceId,
+        whatsappAccountId: account.id,
+        to: replyTo,
+        message: "Thank you for chatting with us! Have a wonderful day 😊 Feel free to reach out anytime if you need anything.",
+        contactId: contact.id,
+        inboxThreadId: thread.id,
+      });
+      await this.prisma.inboxThread.update({
+        where: { id: thread.id },
+        data: { status: InboxThreadStatus.CLOSED },
+      });
+      this.logger.log("[ClosingIntent] thread " + thread.id + " closed after client sign-off");
+      return;
+    }
+
     if (defaultRule) {
       if (defaultRule.useAi) {
         // Show typing BEFORE the AI call so the "composing" bubble is visible during processing.
@@ -677,19 +742,28 @@ export class IncomingMessageService {
 
   /** Schedule a follow-up based on what the bot just replied with. */
   private async maybeScheduleFollowUp(threadId: string, replyText: string): Promise<void> {
-    if (/R\s?\d{3,}/i.test(replyText)) {
-      // Price mentioned → full 3-message negotiation sequence
-      await this.followUp.scheduleForThread(threadId).catch((e) =>
-        this.logger.warn(`[FollowUp] scheduleForThread failed: ${e?.message}`),
-      );
-    } else if (
-      /beacon bay|walmer|main road|9am|5pm|2pm|mon.{0,5}fri|monday.{0,20}friday|our hours|we.re open|we are open|located at|our address/i.test(replyText)
-    ) {
-      // Location/hours mentioned, no price → single soft check-in at 24h
+    const hasLocation = /beacon bay|walmer|main road|9am|5pm|2pm|mon.{0,5}fri|monday.{0,20}friday|our hours|we.?re open|we are open|located at|our address/i.test(replyText);
+
+    // Voucher replies mention "R200" / "voucher" — must not trigger the repair follow-up
+    // sequence (which would send nonsensical "Still thinking about that R200 repair?" messages).
+    const hasVoucher = /voucher|your R\s?200|R\s?200 voucher/i.test(replyText);
+
+    // Only treat as a price reply if a Rxxx amount appears AND it's not a voucher message.
+    const hasPrice = !hasVoucher && /R\s?\d{3,}/i.test(replyText);
+
+    if (hasLocation) {
+      // Location/hours reply takes priority — schedule single soft check-in even if a
+      // price also appears in the message (bot often bundles both; customer intent was WHERE)
       await this.followUp.scheduleSoftForThread(threadId).catch((e) =>
         this.logger.warn(`[FollowUp] scheduleSoftForThread failed: ${e?.message}`),
       );
+    } else if (hasPrice) {
+      // Repair price mentioned with no location → full 3-message negotiation sequence
+      await this.followUp.scheduleForThread(threadId).catch((e) =>
+        this.logger.warn(`[FollowUp] scheduleForThread failed: ${e?.message}`),
+      );
     }
+    // Voucher replies and unclassified replies get no follow-up scheduled
   }
 
   private keywordMatches(
@@ -712,4 +786,22 @@ export class IncomingMessageService {
     }
     return t.includes(k);
   }
+  /**
+   * Returns true if the customer message signals they are done and want to close the conversation.
+   */
+  private isClosingIntent(text: string): boolean {
+    const t = text.trim().toLowerCase().replace(/[!.,?]+$/, "");
+    const CLOSING = [
+      "no thank you", "no thanks", "nope no", "thanks no",
+      "thats all", "that is all", "thats all thanks",
+      "nothing else", "nothing more", "no more questions",
+      "im done", "all done", "i am done",
+      "goodbye", "good bye", "bye", "bye bye", "later", "cya", "see ya", "see you",
+      "thanks bye", "thank you bye", "thanks goodbye", "thank you goodbye",
+      "no need", "no worries", "nope", "nah",
+      "im good", "i am good", "all good",
+    ];
+    return CLOSING.some((phrase) => t === phrase || t.startsWith(phrase + " ") || t.endsWith(" " + phrase));
+  }
+
 }

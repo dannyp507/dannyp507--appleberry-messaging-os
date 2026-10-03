@@ -289,8 +289,8 @@ export default function DashboardPage() {
   const { data: threads = [] } = useQuery({
     queryKey: qk.inboxThreads,
     queryFn: async () => {
-      const { data } = await api.get<InboxThread[]>("/inbox/threads");
-      return data;
+      const { data } = await api.get<{ threads: InboxThread[]; nextCursor: string | null; hasMore: boolean }>("/inbox/threads");
+      return data.threads;
     },
   });
 

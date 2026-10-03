@@ -28,7 +28,7 @@ export const prefetchFetchers = {
     return data;
   },
   inboxThreads: async () => {
-    const { data } = await api.get<InboxThread[]>("/inbox/threads");
-    return data;
+    const { data } = await api.get<{ threads: InboxThread[]; nextCursor: string | null; hasMore: boolean }>("/inbox/threads");
+    return data.threads;
   },
 };
