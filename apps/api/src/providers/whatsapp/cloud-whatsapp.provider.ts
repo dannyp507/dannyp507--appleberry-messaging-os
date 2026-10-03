@@ -144,4 +144,38 @@ export class CloudWhatsAppProvider implements WhatsAppProvider {
     );
     if (caption) await this.sendText(to, caption, accountId);
   }
+
+  /**
+   * Send an approved Meta template message.
+   * @param to   recipient phone (digits only or E.164)
+   * @param templateName  the metaName stored on the Template record (already sanitized)
+   * @param language      language code, e.g. "en_US"
+   * @param components    positional parameter values e.g. [{type:'body',parameters:[{type:'text',text:'John'}]}]
+   * @param accountId     optional WhatsApp account UUID
+   */
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    language: string,
+    components: unknown[],
+    accountId?: string,
+  ): Promise<void> {
+    const { phoneNumberId, accessToken, graphVersion } =
+      await this.resolveCredentials(accountId);
+    const recipient = to.replace(/\D/g, '');
+    if (!recipient) throw new Error('Invalid recipient phone number');
+
+    await this.callMessagesApi(phoneNumberId, accessToken, graphVersion, {
+      to: recipient,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: language },
+        components,
+      },
+    });
+    this.logger.log(
+      `Cloud API template(${templateName}) → ${recipient} (account=${accountId ?? 'env'})`,
+    );
+  }
 }

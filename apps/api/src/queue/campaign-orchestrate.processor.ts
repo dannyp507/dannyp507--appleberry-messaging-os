@@ -205,7 +205,49 @@ export class CampaignOrchestrateProcessor extends WorkerHost {
         },
       });
 
-      const jobPayload: SendMessageJob = {
+      // ── Voucher record creation for voucher templates ───────────────────────
+      const templateMetaName = (campaign.template as any)?.metaName as string | undefined;
+      if (templateMetaName && /voucher/i.test(templateMetaName)) {
+        try {
+          const existingVoucher = await (this.prisma as any).voucher.findFirst({
+            where: {
+              workspaceId: campaign.workspaceId,
+              contactId: contact.id,
+              status: { in: ['PENDING', 'SENT', 'CLAIMED'] },
+            },
+          }).catch(() => null);
+
+          if (!existingVoucher) {
+            let code = '';
+            for (let attempt = 0; attempt < 5; attempt++) {
+              const candidate = this.generateVoucherCode(contact.firstName, contact.lastName ?? '');
+              const taken = await (this.prisma as any).voucher.findUnique({ where: { code: candidate } }).catch(() => null);
+              if (!taken) { code = candidate; break; }
+            }
+            if (code) {
+              const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+              await (this.prisma as any).voucher.create({
+                data: {
+                  workspaceId: campaign.workspaceId,
+                  contactId: contact.id,
+                  whatsappAccountId: account.id,
+                  code,
+                  campaignName: campaign.name,
+                  valueZar: 200,
+                  status: 'SENT',
+                  sentAt: new Date(),
+                  expiresAt,
+                },
+              });
+              this.logger.log(`[Voucher] Created voucher ${code} for contact ${contact.id}`);
+            }
+          }
+        } catch (e) {
+          this.logger.error(`[Voucher] Failed to create voucher record for contact ${contact.id}: ${(e as Error)?.message}`);
+        }
+      }
+
+            const jobPayload: SendMessageJob = {
         messageLogId,
         to: contact.phone,
         message: body,
@@ -214,6 +256,10 @@ export class CampaignOrchestrateProcessor extends WorkerHost {
         campaignId,
         campaignRecipientId: rec.id,
         mediaUrl: (campaign.template as { mediaUrl?: string }).mediaUrl ?? undefined,
+        // Pass templateId so the send processor can use Cloud sendTemplate when APPROVED
+        templateId: account.providerType === 'CLOUD' && (campaign.template as any).metaStatus === 'APPROVED'
+          ? campaign.template.id
+          : undefined,
       };
 
       const step =
@@ -249,5 +295,13 @@ export class CampaignOrchestrateProcessor extends WorkerHost {
         data: { status: CampaignStatus.COMPLETED },
       });
     }
+  }
+
+  private generateVoucherCode(firstName: string, lastName: string): string {
+    const year = new Date().getFullYear().toString().slice(-2);
+    const i1 = (firstName?.[0] ?? 'X').toUpperCase().replace(/[^A-Z]/, 'X');
+    const i2 = (lastName?.[0] ?? 'X').toUpperCase().replace(/[^A-Z]/, 'X');
+    const hex = Math.floor(Math.random() * 0xffff).toString(16).toUpperCase().padStart(4, '0');
+    return `${i1}${i2}${year}-${hex}`;
   }
 }

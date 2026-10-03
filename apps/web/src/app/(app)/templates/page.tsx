@@ -22,6 +22,22 @@ const TYPE_COLORS: Record<TemplateType, string> = {
   LIST: "bg-amber-500/10 text-amber-400",
 };
 
+const META_STATUS_COLORS: Record<string, string> = {
+  APPROVED: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/30",
+  PENDING: "bg-amber-500/10 text-amber-500 border border-amber-500/30",
+  REJECTED: "bg-red-500/10 text-red-500 border border-red-500/30",
+  PAUSED: "bg-gray-400/10 text-gray-400 border border-gray-400/30",
+  NONE: "",
+};
+
+const META_STATUS_LABEL: Record<string, string> = {
+  APPROVED: "✓ Approved",
+  PENDING: "⏳ Pending",
+  REJECTED: "✗ Rejected",
+  PAUSED: "⏸ Paused",
+  NONE: "",
+};
+
 function emptyButton(): TemplateButton { return { type: "QUICK_REPLY", text: "" }; }
 function emptySection(): TemplateSection {
   return { title: "", rows: [{ id: crypto.randomUUID(), title: "", description: "" }] };
@@ -30,12 +46,10 @@ function emptySection(): TemplateSection {
 export default function TemplatesPage() {
   const queryClient = useQueryClient();
 
-  // modal mode: null = closed, "create" = new, "edit" = editing existing
   const [modalMode, setModalMode] = useState<null | "create" | "edit">(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
 
-  // form state
   const [name, setName] = useState("");
   const [type, setType] = useState<TemplateType>("TEXT");
   const [header, setHeader] = useState("");
@@ -52,7 +66,6 @@ export default function TemplatesPage() {
   };
 
   const closeModal = () => { setModalMode(null); resetForm(); };
-
   const openCreate = () => { resetForm(); setModalMode("create"); };
 
   const openEdit = (t: Template) => {
@@ -63,16 +76,8 @@ export default function TemplatesPage() {
     setContent(t.content);
     setFooter(t.footer ?? "");
     setMediaUrl(t.mediaUrl ?? "");
-    setButtons(
-      t.buttons && t.buttons.length > 0
-        ? (t.buttons as TemplateButton[])
-        : [emptyButton()]
-    );
-    setSections(
-      t.sections && t.sections.length > 0
-        ? (t.sections as TemplateSection[])
-        : [emptySection()]
-    );
+    setButtons(t.buttons && t.buttons.length > 0 ? (t.buttons as TemplateButton[]) : [emptyButton()]);
+    setSections(t.sections && t.sections.length > 0 ? (t.sections as TemplateSection[]) : [emptySection()]);
     setModalMode("edit");
   };
 
@@ -92,7 +97,7 @@ export default function TemplatesPage() {
         footer: footer || undefined,
         buttons: type === "BUTTON" ? buttons : undefined,
         sections: type === "LIST" ? sections : undefined,
-        mediaUrl: type === "MEDIA" && mediaUrl ? mediaUrl : undefined,
+        mediaUrl: (type === "MEDIA" || type === "BUTTON") && mediaUrl ? mediaUrl : undefined,
       });
     },
     onSuccess: () => {
@@ -111,7 +116,7 @@ export default function TemplatesPage() {
         footer: footer || null,
         buttons: type === "BUTTON" ? buttons : [],
         sections: type === "LIST" ? sections : [],
-        mediaUrl: type === "MEDIA" && mediaUrl ? mediaUrl : null,
+        mediaUrl: (type === "MEDIA" || type === "BUTTON") && mediaUrl ? mediaUrl : null,
       });
     },
     onSuccess: () => {
@@ -126,6 +131,29 @@ export default function TemplatesPage() {
     mutationFn: (id: string) => api.delete(`/templates/${id}`),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: qk.templates }),
     onError: (e) => toast.error("Could not delete template", getApiErrorMessage(e)),
+  });
+
+  const submitMetaMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.post(`/templates/${id}/submit-meta`, {});
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.templates });
+      toast.success("Template submitted to Meta for approval");
+    },
+    onError: (e) => toast.error("Meta submission failed", getApiErrorMessage(e)),
+  });
+
+  const syncMetaMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{ synced: number; metaTotal: number }>("/templates/sync-meta", {});
+      return data;
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: qk.templates });
+      toast.success(`Synced ${data.synced} templates from Meta`);
+    },
+    onError: (e) => toast.error("Sync failed", getApiErrorMessage(e)),
   });
 
   const previewTemplate = templates.find((t) => t.id === previewId);
@@ -146,6 +174,7 @@ export default function TemplatesPage() {
       ? { ...sec, rows: sec.rows.filter((_, rIdx) => rIdx !== ri) } : sec));
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const hasMetaTemplates = templates.some((t) => t.metaId);
 
   return (
     <div className="page-container space-y-6">
@@ -154,10 +183,22 @@ export default function TemplatesPage() {
           <h2 className="text-2xl font-bold text-[#111827]">Templates</h2>
           <p className="text-sm text-[#6B7280] mt-1">Message templates used in campaigns</p>
         </div>
-        <button onClick={openCreate}
-          className="px-4 py-2 stitch-gradient rounded-lg text-sm font-semibold text-white shadow-[0_0_15px_rgba(99,102,241,0.25)] hover:opacity-90 transition-all flex items-center gap-2">
-          <span className="material-symbols-outlined text-sm">add</span>New Template
-        </button>
+        <div className="flex gap-2">
+          {hasMetaTemplates && (
+            <button
+              onClick={() => syncMetaMutation.mutate()}
+              disabled={syncMetaMutation.isPending}
+              className="px-3 py-2 rounded-lg text-sm font-medium text-[#6366F1] bg-[#6366F1]/10 hover:bg-[#6366F1]/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-sm">sync</span>
+              {syncMetaMutation.isPending ? "Syncing…" : "Sync Status"}
+            </button>
+          )}
+          <button onClick={openCreate}
+            className="px-4 py-2 stitch-gradient rounded-lg text-sm font-semibold text-white shadow-[0_0_15px_rgba(99,102,241,0.25)] hover:opacity-90 transition-all flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm">add</span>New Template
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -170,62 +211,91 @@ export default function TemplatesPage() {
           title="No templates yet"
           description="Create your first template to reuse in campaigns and autoresponders. Use placeholders like {{name}} to personalize each message."
           action={
-            <button
-              onClick={openCreate}
-              className="px-4 py-2 stitch-gradient rounded-lg text-sm font-semibold text-white shadow-[0_0_15px_rgba(99,102,241,0.25)] hover:opacity-90 transition-all flex items-center gap-2"
-            >
+            <button onClick={openCreate} className="px-4 py-2 stitch-gradient rounded-lg text-sm font-semibold text-white shadow-[0_0_15px_rgba(99,102,241,0.25)] hover:opacity-90 transition-all flex items-center gap-2">
               <span className="material-symbols-outlined text-sm">add</span>New Template
             </button>
           }
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((t) => (
-            <div key={t.id} className="bg-[#F9FAFB] border border-[#F3F4F6] rounded-xl p-5 flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold text-[#111827] text-sm leading-snug">{t.name}</p>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${TYPE_COLORS[t.type as TemplateType] ?? "bg-[#F3F4F6] text-[#6B7280]"}`}>
-                  {TYPE_LABELS[t.type as TemplateType] ?? t.type}
-                </span>
-              </div>
-              {t.mediaUrl && (
-                <img
-                  src={t.mediaUrl}
-                  alt="media"
-                  className="w-full h-28 rounded-lg object-cover"
-                />
-              )}
-              {t.header && <p className="text-xs font-semibold text-[#6B7280] truncate">{t.header}</p>}
-              <p className="text-xs text-[#9CA3AF] line-clamp-3">{t.content}</p>
-              {t.footer && <p className="text-[10px] text-[#9CA3AF]/70 italic">{t.footer}</p>}
-              {t.buttons && t.buttons.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {(t.buttons as TemplateButton[]).map((btn, i) => (
-                    <span key={i} className="px-2.5 py-1 border border-[#6366F1]/40 rounded-full text-[10px] font-medium text-[#6366F1]">{btn.text}</span>
-                  ))}
+          {templates.map((t) => {
+            const metaStatus = t.metaStatus ?? "NONE";
+            const isApproved = metaStatus === "APPROVED";
+            const hasSubmitted = metaStatus !== "NONE";
+            return (
+              <div key={t.id} className="bg-[#F9FAFB] border border-[#F3F4F6] rounded-xl p-5 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-[#111827] text-sm leading-snug">{t.name}</p>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${TYPE_COLORS[t.type as TemplateType] ?? "bg-[#F3F4F6] text-[#6B7280]"}`}>
+                      {TYPE_LABELS[t.type as TemplateType] ?? t.type}
+                    </span>
+                    {hasSubmitted && META_STATUS_COLORS[metaStatus] && (
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${META_STATUS_COLORS[metaStatus]}`}>
+                        {META_STATUS_LABEL[metaStatus] ?? metaStatus}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              )}
-              {t.sections && (t.sections as TemplateSection[]).length > 0 && (
-                <div className="text-[10px] text-[#9CA3AF]">
-                  {(t.sections as TemplateSection[]).length} section{(t.sections as TemplateSection[]).length > 1 ? "s" : ""} · {(t.sections as TemplateSection[]).reduce((a, s) => a + s.rows.length, 0)} items
+                {t.mediaUrl && (
+                  <img src={t.mediaUrl} alt="media" className="w-full h-28 rounded-lg object-cover" />
+                )}
+                {t.header && <p className="text-xs font-semibold text-[#6B7280] truncate">{t.header}</p>}
+                <p className="text-xs text-[#9CA3AF] line-clamp-3">{t.content}</p>
+                {t.footer && <p className="text-[10px] text-[#9CA3AF]/70 italic">{t.footer}</p>}
+                {t.buttons && t.buttons.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {(t.buttons as TemplateButton[]).map((btn, i) => (
+                      <span key={i} className="px-2.5 py-1 border border-[#6366F1]/40 rounded-full text-[10px] font-medium text-[#6366F1]">{btn.text}</span>
+                    ))}
+                  </div>
+                )}
+                {t.sections && (t.sections as TemplateSection[]).length > 0 && (
+                  <div className="text-[10px] text-[#9CA3AF]">
+                    {(t.sections as TemplateSection[]).length} section{(t.sections as TemplateSection[]).length > 1 ? "s" : ""} · {(t.sections as TemplateSection[]).reduce((a, s) => a + s.rows.length, 0)} items
+                  </div>
+                )}
+                {/* Meta WhatsApp status info */}
+                {isApproved && t.metaName && (
+                  <div className="text-[10px] text-emerald-500/80 bg-emerald-500/5 px-2 py-1 rounded-lg">
+                    WhatsApp ID: <span className="font-mono">{t.metaName}</span>
+                  </div>
+                )}
+                <div className="flex gap-2 mt-auto pt-2 border-t border-[#F3F4F6] flex-wrap">
+                  <button onClick={() => setPreviewId(t.id)}
+                    className="flex-1 py-1.5 rounded-lg bg-[#F3F4F6] text-xs text-[#6B7280] hover:text-[#111827] transition-colors">
+                    Preview
+                  </button>
+                  <button onClick={() => openEdit(t)}
+                    className="flex-1 py-1.5 rounded-lg bg-[#6366F1]/10 text-xs text-[#6366F1] hover:bg-[#6366F1]/20 transition-colors">
+                    Edit
+                  </button>
+                  {!hasSubmitted && (
+                    <button
+                      onClick={() => submitMetaMutation.mutate(t.id)}
+                      disabled={submitMetaMutation.isPending}
+                      className="flex-1 py-1.5 rounded-lg bg-emerald-500/10 text-xs text-emerald-600 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">send</span>Submit
+                    </button>
+                  )}
+                  {hasSubmitted && !isApproved && (
+                    <button
+                      onClick={() => submitMetaMutation.mutate(t.id)}
+                      disabled={submitMetaMutation.isPending}
+                      className="flex-1 py-1.5 rounded-lg bg-amber-500/10 text-xs text-amber-600 hover:bg-amber-500/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">refresh</span>Resubmit
+                    </button>
+                  )}
+                  <button onClick={() => { if (confirm("Delete this template?")) deleteMutation.mutate(t.id); }}
+                    className="flex-1 py-1.5 rounded-lg bg-[#ff6e84]/10 text-xs text-[#ff6e84] hover:bg-[#ff6e84]/20 transition-colors">
+                    Delete
+                  </button>
                 </div>
-              )}
-              <div className="flex gap-2 mt-auto pt-2 border-t border-[#F3F4F6]">
-                <button onClick={() => setPreviewId(t.id)}
-                  className="flex-1 py-1.5 rounded-lg bg-[#F3F4F6] text-xs text-[#6B7280] hover:text-[#111827] transition-colors">
-                  Preview
-                </button>
-                <button onClick={() => openEdit(t)}
-                  className="flex-1 py-1.5 rounded-lg bg-[#6366F1]/10 text-xs text-[#6366F1] hover:bg-[#6366F1]/20 transition-colors">
-                  Edit
-                </button>
-                <button onClick={() => { if (confirm("Delete this template?")) deleteMutation.mutate(t.id); }}
-                  className="flex-1 py-1.5 rounded-lg bg-[#ff6e84]/10 text-xs text-[#ff6e84] hover:bg-[#ff6e84]/20 transition-colors">
-                  Delete
-                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -265,23 +335,19 @@ export default function TemplatesPage() {
                     className="w-full bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg px-3 py-2.5 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#6366F1]/60" />
                 </div>
               )}
-              {type === "MEDIA" && (
+              {(type === "MEDIA" || type === "BUTTON") && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-[#9CA3AF] uppercase tracking-widest">
-                    Media <span className="normal-case font-normal">(image)</span>
+                    Media <span className="normal-case font-normal">(image — optional for Button type)</span>
                   </label>
-                  <MediaPicker
-                    value={mediaUrl}
-                    onChange={setMediaUrl}
-                    label="Template Image"
-                    placeholder="No image selected"
-                  />
+                  <MediaPicker value={mediaUrl} onChange={setMediaUrl} label="Template Image" placeholder="No image selected" />
                 </div>
               )}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-[#9CA3AF] uppercase tracking-widest">Body</label>
-                <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder="Message body... use {{1}} for variables"
+                <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder="Message body... use {{firstName}} for variables"
                   className="w-full bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg px-3 py-2.5 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#6366F1]/60 resize-none" />
+                <p className="text-[10px] text-[#9CA3AF]">Variables like <code className="bg-[#F3F4F6] px-1 py-0.5 rounded text-[#6366F1]">{"{{firstName}}"}</code> will be auto-numbered when submitted to WhatsApp.</p>
               </div>
               {(type === "BUTTON" || type === "LIST") && (
                 <div className="space-y-1.5">
@@ -356,15 +422,12 @@ export default function TemplatesPage() {
               )}
             </div>
             <div className="px-6 pb-6 flex justify-end gap-3">
-              <button onClick={closeModal}
-                className="px-4 py-2 rounded-lg text-sm text-[#6B7280] hover:text-[#111827] bg-[#F3F4F6] transition-colors">Cancel</button>
+              <button onClick={closeModal} className="px-4 py-2 rounded-lg text-sm text-[#6B7280] hover:text-[#111827] bg-[#F3F4F6] transition-colors">Cancel</button>
               <button
                 disabled={isSubmitting || !name || !content}
                 onClick={() => modalMode === "edit" ? updateMutation.mutate() : createMutation.mutate()}
                 className="px-6 py-2 rounded-lg stitch-gradient text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50">
-                {isSubmitting
-                  ? "Saving…"
-                  : modalMode === "edit" ? "Save Changes" : "Save Template"}
+                {isSubmitting ? "Saving…" : modalMode === "edit" ? "Save Changes" : "Save Template"}
               </button>
             </div>
           </div>
@@ -383,11 +446,7 @@ export default function TemplatesPage() {
             </div>
             <div className="bg-[#F3F4F6] rounded-xl rounded-tl-none p-4 space-y-2 text-sm">
               {previewTemplate.mediaUrl && (
-                <img
-                  src={previewTemplate.mediaUrl}
-                  alt="media"
-                  className="w-full rounded-lg object-cover max-h-48"
-                />
+                <img src={previewTemplate.mediaUrl} alt="media" className="w-full rounded-lg object-cover max-h-48" />
               )}
               {previewTemplate.header && <p className="font-bold text-[#111827] text-xs">{previewTemplate.header}</p>}
               <p className="text-[#111827] whitespace-pre-wrap">{previewTemplate.content}</p>
@@ -411,6 +470,12 @@ export default function TemplatesPage() {
                 </div>
               )}
             </div>
+            {/* Meta status in preview */}
+            {previewTemplate.metaStatus && previewTemplate.metaStatus !== "NONE" && (
+              <div className={`mt-3 text-center text-[10px] font-bold px-3 py-1.5 rounded-lg ${META_STATUS_COLORS[previewTemplate.metaStatus] ?? ""}`}>
+                WhatsApp Business: {META_STATUS_LABEL[previewTemplate.metaStatus] ?? previewTemplate.metaStatus}
+              </div>
+            )}
           </div>
         </div>
       )}

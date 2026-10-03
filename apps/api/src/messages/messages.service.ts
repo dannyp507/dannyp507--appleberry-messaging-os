@@ -84,6 +84,7 @@ export class MessagesService {
     contactId?: string | null;
     inboxThreadId?: string | null;
     mediaUrl?: string | null;
+    templateId?: string | null;
   }) {
     if (!params.whatsappAccountId) {
       throw new NotFoundException(
@@ -112,7 +113,12 @@ export class MessagesService {
       },
     });
 
-    if (params.inboxThreadId) {
+    // For Baileys accounts: create the InboxMessage immediately (Baileys does not
+    // fire events for the bot's own outgoing messages, so this is the only recording point).
+    // For Cloud API accounts: the processor creates the record AFTER confirming delivery
+    // to avoid double recording (processor code handles inboxThreadId from the job).
+    const isCloudProvider = account.providerType === WhatsAppProviderType.CLOUD;
+    if (params.inboxThreadId && !isCloudProvider) {
       await this.prisma.inboxMessage.create({
         data: {
           threadId: params.inboxThreadId,
@@ -129,6 +135,8 @@ export class MessagesService {
       workspaceId: params.workspaceId,
       accountId: account.id,
       ...(params.mediaUrl ? { mediaUrl: params.mediaUrl } : {}),
+      ...(params.inboxThreadId ? { inboxThreadId: params.inboxThreadId } : {}),
+      ...(params.templateId ? { templateId: params.templateId } : {}),
     };
 
     await this.sendQueue.add('send-text', job, {

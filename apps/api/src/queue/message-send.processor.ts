@@ -48,6 +48,8 @@ export class MessageSendProcessor extends WorkerHost {
       campaignId,
       mediaUrl,
       interactive,
+      templateId,
+      inboxThreadId: jobInboxThreadId,
     } = job.data;
 
     const log = await this.prisma.messageLog.findUnique({
@@ -126,7 +128,73 @@ export class MessageSendProcessor extends WorkerHost {
         throw err;
       }
 
-      if (interactive) {
+      if (templateId) {
+        // ── Cloud API approved template send ──────────────────────────────────
+        const dbTmpl = await this.prisma.template.findUnique({ where: { id: templateId } });
+        const metaName = (dbTmpl as any)?.metaName as string | undefined;
+        const metaLang = ((dbTmpl as any)?.metaLanguage as string | undefined) ?? 'en_US';
+        const metaStatus = (dbTmpl as any)?.metaStatus as string | undefined;
+
+        if (dbTmpl && metaName && metaStatus === 'APPROVED' && (provider as any).sendTemplate) {
+          // Build positional body parameters from varMap
+          const varMap: Record<string, number> =
+            ((dbTmpl.variables as any)?.__metaVarMap as Record<string, number>) ?? {};
+          const sortedVarNames = Object.entries(varMap)
+            .sort((a, b) => a[1] - b[1])
+            .map(([name]) => name);
+
+          // Extract per-variable values by matching template pattern against rendered message
+          const extractedValues: string[] = [];
+          if (sortedVarNames.length > 0) {
+            try {
+              const tmplContent = (dbTmpl as any).content as string;
+              // Build regex: use string concat escape (avoids the template-literal \${c} pitfall),
+              // and normalise literal \n so the pattern matches the rendered message.
+              const normalContent = tmplContent.replace(/\\n/g, '\n');
+              const normalMessage = message.replace(/\\n/g, '\n');
+              let pattern = normalContent.replace(/[-+^$|[\]{}().?*\\]/g, (c) => '\\' + c);
+              sortedVarNames.forEach((name) => {
+                pattern = pattern.split('\\{\\{' + name + '\\}\\}').join('(.+?)');
+              });
+              const m = normalMessage.match(new RegExp('^' + pattern + '$', 's'));
+              if (m) {
+                for (let i = 0; i < sortedVarNames.length; i++) {
+                  extractedValues.push(m[i + 1] ?? '');
+                }
+              }
+            } catch {
+              // regex failed — leave values empty
+            }
+          }
+
+          const bodyParams = sortedVarNames.map((_, i) => ({
+            type: 'text',
+            text: extractedValues[i] ?? '',
+          }));
+          const components: Record<string, unknown>[] =
+            bodyParams.length > 0 ? [{ type: 'body', parameters: bodyParams }] : [];
+
+          // If the template was submitted with an IMAGE header, include it at send time.
+          // Only send a header component if the Meta-approved template actually has one
+          // (indicated by __metaImageHeader flag in the variables JSON). Without this guard
+          // Meta rejects with #132018 when the template has no header.
+          const dbVars = (dbTmpl.variables as any) ?? {};
+          const tmplMediaUrl = (dbTmpl as any).mediaUrl as string | null | undefined;
+          if (dbVars.__metaImageHeader && tmplMediaUrl) {
+            components.unshift({
+              type: 'header',
+              parameters: [{ type: 'image', image: { link: tmplMediaUrl } }],
+            });
+          }
+
+          await (provider as any).sendTemplate(to, metaName, metaLang, components, accountId);
+        } else {
+          this.logger.warn(
+            `Template ${templateId} not APPROVED or provider lacks sendTemplate — falling back to text`,
+          );
+          await provider.sendText(to, message, accountId);
+        }
+      } else if (interactive) {
         // Interactive message (buttons / list) — Cloud API only; fall back to text on others
         if (provider.sendInteractive) {
           await provider.sendInteractive(to, interactive, accountId);
@@ -175,6 +243,60 @@ export class MessageSendProcessor extends WorkerHost {
           await tx.campaign.update({
             where: { id: campaignId },
             data: { sent: { increment: 1 } },
+          });
+        }
+
+        // Cloud API: record outbound message in inbox after successful send.
+        // If jobInboxThreadId is set, enqueueOutboundText already created an InboxMessage
+        // for Baileys accounts — for Cloud API it deliberately skips that so we do it here.
+        // If jobInboxThreadId is absent (campaign send), we find/create the thread first.
+        if (providerType === WhatsAppProviderType.CLOUD && log.contactId) {
+          const now = new Date();
+          const preview = message.slice(0, 200);
+          let threadId = jobInboxThreadId;
+          if (!threadId) {
+            // Campaign send: no thread pre-exists — find or create one.
+            let thread = await tx.inboxThread.findFirst({
+              where: {
+                workspaceId: log.workspaceId,
+                contactId: log.contactId,
+                whatsappAccountId: accountId,
+              },
+              select: { id: true },
+            });
+            if (!thread) {
+              thread = await tx.inboxThread.create({
+                data: {
+                  workspaceId: log.workspaceId,
+                  contactId: log.contactId,
+                  whatsappAccountId: accountId,
+                  channel: 'WHATSAPP',
+                  lastMessageAt: now,
+                  lastMessagePreview: preview,
+                },
+                select: { id: true },
+              });
+            } else {
+              await tx.inboxThread.update({
+                where: { id: thread.id },
+                data: { lastMessageAt: now, lastMessagePreview: preview },
+              });
+            }
+            threadId = thread.id;
+          } else {
+            // Conversational send: thread already exists — just update the preview.
+            await tx.inboxThread.update({
+              where: { id: threadId },
+              data: { lastMessageAt: now, lastMessagePreview: preview },
+            });
+          }
+          await tx.inboxMessage.create({
+            data: {
+              threadId,
+              direction: 'OUTBOUND',
+              message,
+              mediaUrl: mediaUrl ?? null,
+            },
           });
         }
       });

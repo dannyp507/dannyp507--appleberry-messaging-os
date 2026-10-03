@@ -36,7 +36,7 @@ export class CampaignsService {
       where: { workspaceId },
       orderBy: { createdAt: 'desc' },
       include: {
-        template: { select: { id: true, name: true } },
+        template: { select: { id: true, name: true, metaId: true, metaName: true, metaStatus: true, metaLanguage: true, metaCategory: true } },
         contactGroup: { select: { id: true, name: true } },
       },
     });

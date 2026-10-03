@@ -27,7 +27,7 @@ import type { Campaign, CampaignStatus, Template } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
 import { qk } from "@/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Megaphone, Pause, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Loader2, Megaphone, Pause, Pencil, Plus, RefreshCw, Send, ShieldCheck, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -168,6 +168,25 @@ export default function CampaignsPage() {
       toast.success("Campaign updated");
     },
     onError: (e) => toast.error("Could not update campaign", getApiErrorMessage(e)),
+  });
+
+  const submitMetaMutation = useMutation({
+    mutationFn: async (templateId: string) => { await api.post(`/templates/${templateId}/submit-meta`, {}); },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.campaigns });
+      void queryClient.invalidateQueries({ queryKey: qk.templates });
+      toast.success("Template submitted to Meta for approval");
+    },
+    onError: (e) => toast.error("Meta submission failed", getApiErrorMessage(e)),
+  });
+
+  const syncMetaMutation = useMutation({
+    mutationFn: async () => { await api.post("/templates/sync-meta", {}); },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.campaigns });
+      toast.success("Template statuses refreshed");
+    },
+    onError: (e) => toast.error("Sync failed", getApiErrorMessage(e)),
   });
 
   const openEdit = (c: Campaign) => {
@@ -343,6 +362,7 @@ export default function CampaignsPage() {
                 <TableHead className="font-semibold">Status</TableHead>
                 <TableHead className="min-w-[200px] font-semibold">Progress</TableHead>
                 <TableHead className="font-semibold">Template</TableHead>
+                <TableHead className="font-semibold">WhatsApp</TableHead>
                 <TableHead className="font-semibold">Group</TableHead>
                 <TableHead className="text-right font-semibold">Actions</TableHead>
               </TableRow>
@@ -371,6 +391,35 @@ export default function CampaignsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{c.template?.name ?? "—"}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const ms = c.template?.metaStatus ?? "NONE";
+                        if (ms === "APPROVED") return (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-500">
+                            <ShieldCheck className="size-3" /> Approved
+                          </span>
+                        );
+                        if (ms === "PENDING") return (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-500">
+                            <Loader2 className="size-3 animate-spin" /> Pending
+                          </span>
+                        );
+                        if (ms === "REJECTED") return (
+                          <span className="text-[10px] font-bold text-red-500">✗ Rejected</span>
+                        );
+                        if (c.template?.id) return (
+                          <button
+                            className="flex items-center gap-1 text-[10px] font-bold text-primary/60 hover:text-primary transition-colors"
+                            onClick={() => c.template?.id && submitMetaMutation.mutate(c.template.id)}
+                            disabled={submitMetaMutation.isPending}
+                            title="Submit to Meta for approval"
+                          >
+                            <Send className="size-3" /> Submit
+                          </button>
+                        );
+                        return <span className="text-[10px] text-muted-foreground">—</span>;
+                      })()}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{c.contactGroup?.name ?? "—"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1.5">

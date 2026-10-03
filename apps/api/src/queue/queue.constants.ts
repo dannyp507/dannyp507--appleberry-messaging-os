@@ -41,6 +41,14 @@ export type SendMessageJob = {
   /** When set, sends a WhatsApp Cloud API interactive message (buttons / list).
    *  Only works with Cloud API accounts — Baileys/Mock fall back to plain text. */
   interactive?: WaInteractive;
+  /** When the campaign template has metaStatus=APPROVED on a Cloud account,
+   *  carry the Template DB id so the processor can route to sendTemplate
+   *  instead of sendText.  Optional — omit for non-template / non-Cloud sends. */
+  templateId?: string;
+  /** When set, the InboxMessage record was already created by enqueueOutboundText
+   *  and the processor must NOT create a second one. Only absent for campaign sends
+   *  (no thread exists yet) — in that case the processor creates thread + message. */
+  inboxThreadId?: string;
 };
 
 export type ContactsImportJob = {

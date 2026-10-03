@@ -19,13 +19,17 @@ import type { Workspace } from '@prisma/client';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { TemplatesService } from './templates.service';
+import { MetaTemplateService } from './meta-template.service';
 
 @Controller('templates')
 @UseGuards(WorkspaceContextGuard, RolesGuard, PermissionsGuard)
 @Roles('owner', 'admin', 'agent')
 @Permissions('manage_templates')
 export class TemplatesController {
-  constructor(private readonly templates: TemplatesService) {}
+  constructor(
+    private readonly templates: TemplatesService,
+    private readonly metaTemplates: MetaTemplateService,
+  ) {}
 
   @Get()
   list(@CurrentWorkspace() workspace: Workspace) {
@@ -55,5 +59,27 @@ export class TemplatesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.templates.remove(workspace.id, id);
+  }
+
+  @Post(':id/submit-meta')
+  submitToMeta(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { language?: string },
+  ) {
+    return this.metaTemplates.submitToMeta(workspace.id, id, body.language);
+  }
+
+  @Post('sync-meta')
+  syncFromMeta(@CurrentWorkspace() workspace: Workspace) {
+    return this.metaTemplates.syncFromMeta(workspace.id);
+  }
+
+  @Delete(':id/meta')
+  deleteFromMeta(
+    @CurrentWorkspace() workspace: Workspace,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.metaTemplates.deleteFromMeta(workspace.id, id);
   }
 }

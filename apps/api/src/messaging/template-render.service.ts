@@ -68,6 +68,7 @@ export class TemplateRenderService {
     contact: Pick<Contact, 'firstName' | 'lastName' | 'phone' | 'email'>,
   ): string | undefined {
     switch (name) {
+      case 'name':       // alias used by r200_voucher_btn and similar templates
       case 'firstName':
         return contact.firstName;
       case 'lastName':

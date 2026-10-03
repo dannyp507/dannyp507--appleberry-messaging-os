@@ -239,6 +239,15 @@ enum NotificationType {
   HUMAN_REQUESTED
 }
 
+
+enum VoucherStatus {
+  PENDING
+  SENT
+  CLAIMED
+  REDEEMED
+  EXPIRED
+}
+
 // ─── Users & Orgs ─────────────────────────────���───────────────────────���───────
 
 model User {
@@ -336,6 +345,7 @@ model Workspace {
   igCommentEvents         IgCommentEvent[]
   workspaceBrandSettings  WorkspaceBrandSettings?
   workspaceMedia          WorkspaceMedia[]
+  vouchers               Voucher[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -544,6 +554,7 @@ model WhatsAppAccount {
   contactSubscriptions  ContactSubscription[]
   dripEnrollments       DripEnrollment[]
   subscribeForms        SubscribeForm[]
+  vouchers              Voucher[]
   aiSettings            WhatsAppAccountAiSettings?
   followUpSettings      WhatsAppFollowUpSettings?
 
@@ -834,6 +845,7 @@ model Contact {
   chatbotRuns        ChatbotRun[]
   inboxThreads       InboxThread[]
   subscriptions      ContactSubscription[]
+  vouchers           Voucher[]
 
   @@unique([workspaceId, phone])
   @@index([workspaceId])
@@ -1009,11 +1021,17 @@ model Template {
   sections    Json?
   variables   Json             @default("{}")
   mediaUrl    String?
-  isArchived  Boolean          @default(false)
-  usageCount  Int              @default(0)
-  tags        String[]         @default([])
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  isArchived   Boolean          @default(false)
+  usageCount   Int              @default(0)
+  tags         String[]         @default([])
+  // Meta WhatsApp template fields
+  metaId       String?
+  metaName     String?
+  metaStatus   String?          @default("NONE")
+  metaLanguage String           @default("en_US")
+  metaCategory String           @default("MARKETING")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaigns  Campaign[]
@@ -1861,4 +1879,40 @@ model WorkspaceMedia {
 
   @@index([workspaceId])
   @@index([workspaceId, createdAt])
+}
+
+
+// ─── Vouchers ─────────────────────────────────────────────────────────────────
+
+model Voucher {
+  id                String        @id @default(uuid()) @db.Uuid
+  workspaceId       String        @db.Uuid
+  contactId         String        @db.Uuid
+  whatsappAccountId String?       @db.Uuid
+
+  code              String        @unique
+  campaignName      String        @default("VIP Voucher")
+  valueZar          Int           @default(200)
+
+  status            VoucherStatus @default(PENDING)
+
+  sentAt            DateTime?
+  claimedAt         DateTime?
+  redeemedAt        DateTime?
+  expiresAt         DateTime
+
+  reminder1SentAt   DateTime?
+  reminder2SentAt   DateTime?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact           Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  whatsappAccount   WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([contactId])
+  @@index([code])
 }
