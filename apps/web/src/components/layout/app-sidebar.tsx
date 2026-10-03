@@ -37,6 +37,7 @@ import {
   MessageCircleMore,
   Palette,
   Camera,
+  TicketCheck,
 } from "lucide-react";
 
 // ─── Nav definitions ──────────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ const mainNav = [
   { href: "/contacts",     label: "Contacts",       icon: Users           },
   { href: "/subscribers",  label: "Subscribers",    icon: UserCheck       },
   { href: "/campaigns",    label: "Campaigns",      icon: Megaphone       },
+  { href: "/vouchers",     label: "Vouchers",       icon: TicketCheck    },
   { href: "/templates",    label: "Templates",      icon: FileText        },
   { href: "/media",        label: "Media Library",  icon: FileText        },
 ] satisfies NavEntry[];

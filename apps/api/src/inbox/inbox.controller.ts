@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Permissions } from '../common/decorators/permissions.decorator';
@@ -27,8 +28,21 @@ export class InboxController {
 
   @Get('threads')
   @Permissions('manage_inbox')
-  threads(@CurrentWorkspace() workspace: Workspace) {
-    return this.inbox.listThreads(workspace.id);
+  threads(
+    @CurrentWorkspace() workspace: Workspace,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+    @Query('status') status?: string,
+    @Query('channel') channel?: string,
+    @Query('unread_only') unreadOnly?: string,
+  ) {
+    return this.inbox.listThreads(workspace.id, {
+      limit: limit ? Math.min(parseInt(limit, 10), 100) : 50,
+      cursor: cursor || undefined,
+      status: status || undefined,
+      channel: channel || undefined,
+      unreadOnly: unreadOnly === 'true',
+    });
   }
 
   @Get('threads/:id/messages')

@@ -19,7 +19,7 @@ export interface Campaign {
   maxDelayMs: number;
   createdAt: string;
   updatedAt: string;
-  template?: { id: string; name: string };
+  template?: { id: string; name: string; metaId?: string | null; metaName?: string | null; metaStatus?: string | null; metaLanguage?: string | null; metaCategory?: string | null; };
   contactGroup?: { id: string; name: string };
 }
 
@@ -68,6 +68,12 @@ export interface Template {
   variables: Record<string, unknown>;
   mediaUrl?: string | null;
   createdAt: string;
+  // Meta WhatsApp template fields
+  metaId?: string | null;
+  metaName?: string | null;
+  metaStatus?: string | null;
+  metaLanguage?: string | null;
+  metaCategory?: string | null;
 }
 
 export interface AutoresponderRule {

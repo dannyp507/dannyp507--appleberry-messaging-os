@@ -14,10 +14,27 @@ export class InboxService {
     private readonly channelRouter: ChannelRouterService,
   ) {}
 
-  listThreads(workspaceId: string) {
-    return this.prisma.inboxThread.findMany({
-      where: { workspaceId },
+  async listThreads(
+    workspaceId: string,
+    opts: {
+      limit?: number;
+      cursor?: string;
+      status?: string;
+      channel?: string;
+      unreadOnly?: boolean;
+    } = {},
+  ) {
+    const limit = Math.min(opts.limit ?? 50, 100);
+    const where: any = { workspaceId };
+    if (opts.status && opts.status !== 'ALL') where.status = opts.status;
+    if (opts.channel && opts.channel !== 'ALL') where.channel = opts.channel;
+    if (opts.unreadOnly) where.unreadCount = { gt: 0 };
+
+    const threads = await this.prisma.inboxThread.findMany({
+      where,
       orderBy: { updatedAt: 'desc' },
+      take: limit + 1,
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
       include: {
         contact: { select: { id: true, firstName: true, lastName: true, phone: true, externalId: true } },
         assignedTo: { select: { id: true, name: true, email: true } },
@@ -31,6 +48,13 @@ export class InboxService {
         },
       },
     });
+
+    const hasMore = threads.length > limit;
+    return {
+      threads: hasMore ? threads.slice(0, limit) : threads,
+      nextCursor: hasMore ? threads[limit - 1].id : null,
+      hasMore,
+    };
   }
 
   async listMessages(workspaceId: string, threadId: string) {

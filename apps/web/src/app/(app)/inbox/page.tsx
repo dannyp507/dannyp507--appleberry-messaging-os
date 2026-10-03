@@ -17,7 +17,7 @@ import type { InboxMessage, InboxThread } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
 import { qk } from "@/lib/query-keys";
 import { useAuthStore } from "@/stores/auth-store";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import { AppleberryIcon } from "@/components/ui/appleberry-icon";
@@ -294,18 +294,42 @@ export default function InboxPage() {
   const [activeFilter, setActiveFilter]     = useState<FilterKey>("all");
   const [showInfoPanel, setShowInfoPanel]   = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef   = useRef<HTMLDivElement>(null);
 
   // ── Data ────────────────────────────────────────────────────────────────────
-  const { data: threads = [], isLoading } = useQuery({
-    queryKey: qk.inboxThreads,
-    queryFn: async () => {
-      const { data } = await api.get<InboxThread[]>("/inbox/threads");
+  const {
+    data: threadsData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: [...qk.inboxThreads, activeFilter],
+    queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
+      const params = new URLSearchParams({ limit: "50" });
+      if (pageParam) params.set("cursor", pageParam);
+      if (activeFilter === "whatsapp") params.set("channel", "WHATSAPP");
+      if (activeFilter === "facebook") params.set("channel", "MESSENGER");
+      if (activeFilter === "telegram") params.set("channel", "TELEGRAM");
+      if (activeFilter === "unread")   params.set("unread_only", "true");
+      const { data } = await api.get<{
+        threads: InboxThread[];
+        nextCursor: string | null;
+        hasMore: boolean;
+      }>(`/inbox/threads?${params.toString()}`);
       return data;
     },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   });
+
+  const threads = useMemo(
+    () => threadsData?.pages.flatMap((p) => p.threads) ?? [],
+    [threadsData],
+  );
 
   const { data: messages = [], isFetching: messagesFetching } = useQuery({
     queryKey: qk.inboxMessages(threadId ?? ""),
@@ -334,6 +358,22 @@ export default function InboxPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, threadId]);
+
+  // Infinite scroll — load more threads when sentinel enters view
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          void fetchNextPage();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // ── Navigation helpers ──────────────────────────────────────────────────────
   const prefetchMessages = useCallback((id: string) => {
@@ -389,22 +429,16 @@ export default function InboxPage() {
   const channelMeta  = active ? CHANNEL_META[active.channel]  : null;
   const statusMeta   = active ? (STATUS_META[active.status] ?? STATUS_META.OPEN) : null;
 
+  // Channel/unread filtering is now done server-side; only search is client-side
   const filteredThreads = useMemo(() => {
-    let result = threads;
-    if (activeFilter === "unread")   result = result.filter(threadHasUnread);
-    if (activeFilter === "whatsapp") result = result.filter((t) => t.channel === "WHATSAPP");
-    if (activeFilter === "facebook") result = result.filter((t) => t.channel === "MESSENGER");
-    if (activeFilter === "telegram") result = result.filter((t) => t.channel === "TELEGRAM");
-    if (search.trim()) {
-      const q = search.toLowerCase().trim();
-      result = result.filter(
-        (t) =>
-          `${t.contact.firstName} ${t.contact.lastName}`.toLowerCase().includes(q) ||
-          (t.messages?.[0]?.message ?? "").toLowerCase().includes(q),
-      );
-    }
-    return result;
-  }, [threads, activeFilter, search]);
+    if (!search.trim()) return threads;
+    const q = search.toLowerCase().trim();
+    return threads.filter(
+      (t) =>
+        `${t.contact.firstName} ${t.contact.lastName}`.toLowerCase().includes(q) ||
+        (t.messages?.[0]?.message ?? "").toLowerCase().includes(q),
+    );
+  }, [threads, search]);
 
   const messageGroups = useMemo(() => groupMessages(messages), [messages]);
   const unreadCount   = useMemo(() => threads.filter(threadHasUnread).length, [threads]);
@@ -561,6 +595,13 @@ export default function InboxPage() {
                     onClick={() => handleSelectThread(t.id)}
                   />
                 ))}
+
+            {/* Infinite scroll sentinel — triggers fetchNextPage when visible */}
+            <div ref={loadMoreRef} className="flex justify-center py-3">
+              {isFetchingNextPage && (
+                <Loader2 className="size-4 animate-spin text-[#9CA3AF]" />
+              )}
+            </div>
           </div>
         </ScrollArea>
       </div>
